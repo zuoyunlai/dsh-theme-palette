@@ -4,6 +4,13 @@
 
 ## 版本一览
 
+### 1.4.0
+- 多语言：简体中文 / 繁體中文 / English / 日本語；「自动」跟随宿主的 `documentElement.lang`
+- 配色名（黑白/暖砂/靛蓝/苔绿）、各档位文案、状态行都本地化，不是只翻标题
+- 宿主切换界面语言时用 MutationObserver 立刻重渲染
+- 自愈加重试退避（4s → 15s → 1m → 3m → 10m）并封顶：token 真被改名时不再每 4 秒重放
+- `tools/preview-settings.mjs` 支持 `--lang`
+
 ### 1.3.3
 - 文档拆分：README 只留用法与当前设计（759 → 210 行），版本记录移到 `CHANGELOG.md`，逐组件设计说明移到 `docs/DESIGN.md`
 - 修正 README 里过期的「当前版本 0.8.2」

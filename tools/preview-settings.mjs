@@ -11,6 +11,9 @@ import { fileURLToPath } from 'node:url'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '..')
+const argv = process.argv.slice(2)
+const li = argv.indexOf('--lang')
+const LANG = li >= 0 ? argv[li + 1] : 'auto'   // auto | zh-CN | zh-TW | en | ja
 const source = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
 
 let engine = null
@@ -20,7 +23,7 @@ const sandbox = {
     __DSH_THEME_PALETTE_DEV__: (api) => { engine = api },
   },
   localStorage: { getItem: () => null, setItem: () => {} },
-  document: { head: { appendChild() {} }, createElement: () => ({ dataset: {}, remove() {} }), querySelector: () => null, documentElement: { lang: 'zh' } },
+  document: { head: { appendChild() {} }, createElement: () => ({ dataset: {}, remove() {} }), querySelector: () => null, documentElement: { lang: LANG === 'auto' ? 'zh-CN' : LANG } },
   navigator: { language: 'zh' },
 }
 new Function('window', 'localStorage', 'document', 'navigator', source)(
@@ -106,6 +109,8 @@ const props = {
   getScrollMode: () => 'tinted', subscribeScroll: () => () => {}, setScrollMode: () => {},
   getControlMode: () => 'accent', subscribeControl: () => () => {}, setControlMode: () => {},
   getMdMode: () => 'on', subscribeMd: () => () => {}, setMdMode: () => {},
+  getLangPref: () => (LANG === 'auto' ? 'auto' : LANG), getLocale: () => (LANG === 'auto' ? 'zh-CN' : LANG),
+  subscribeLocale: () => () => {}, setLangPref: () => {},
   getHealth: () => ({ ok: true, checked: 5 }), subscribeHealth: () => () => {},
 }
 
@@ -123,7 +128,7 @@ html,body{margin:0;background:#0a0a0a;font-family:-apple-system,"Segoe UI","Micr
 .wrap{padding:18px;border-radius:16px;border:1px solid rgba(128,128,128,.3);background:${canvas};${style};color:var(--dsw-alias-label-primary)}
 </style><style>${engine.settingsCss}</style></head>
 <body${dark}><div class="page"><div class="wrap">${toHtml(body)}</div></div></body></html>`
-  const out = path.join(here, `preview-${mode}.html`)
+  const out = path.join(here, `preview-${mode}${LANG === 'auto' ? '' : '-' + LANG}.html`)
   fs.writeFileSync(out, html)
   console.log('✓ ' + out + '（' + Math.round(html.length / 1024) + ' KB）')
 }

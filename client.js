@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.3.3'
+    const PLUGIN_VERSION = '1.4.0'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -977,26 +977,63 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
     }
 
     /* ================= 文案 ================= */
-    function isZh() {
+    /* ================= 多语言 ================= */
+    /**
+     * 语言来源优先级：用户手选 > 宿主 documentElement.lang（locale 服务写的）> navigator.language。
+     * 宿主本身只有 zh/en 两套，但插件设置页可以多给几种；「自动」永远跟随宿主。
+     */
+    const LOCALE_KEY = 'dsh-theme-palette.lang.v1'
+    const LOCALES = ['zh-CN', 'zh-TW', 'en', 'ja']
+    // 语言名用它自己的文字写（中/繁/EN/JA），只有「自动」需要按界面语言翻译。
+    const LANG_OPTIONS = [
+      { id: 'auto' },
+      { id: 'zh-CN', label: '中' },
+      { id: 'zh-TW', label: '繁' },
+      { id: 'en', label: 'EN' },
+      { id: 'ja', label: 'JA' },
+    ]
+
+    function readLangPref() {
       try {
-        const lang = document.documentElement.lang || navigator.language || ''
-        return /^zh/i.test(lang)
-      } catch (err) { return true }
+        const raw = localStorage.getItem(LOCALE_KEY)
+        if (raw === 'auto' || LOCALES.indexOf(raw) !== -1) return raw
+      } catch (err) { /* 退回自动 */ }
+      return 'auto'
+    }
+
+    function writeLangPref(id) {
+      try { localStorage.setItem(LOCALE_KEY, id) } catch (err) { /* 忽略 */ }
+    }
+
+    function hostLocale() {
+      try {
+        const lang = (document.documentElement.lang || '').trim() || navigator.language || ''
+        if (/^zh-(hant|tw|hk|mo)/i.test(lang)) return 'zh-TW'
+        if (/^zh/i.test(lang)) return 'zh-CN'
+        if (/^ja/i.test(lang)) return 'ja'
+        if (/^en/i.test(lang)) return 'en'
+        return null
+      } catch (err) { return null }
+    }
+
+    function pickLocale(pref) {
+      if (pref !== 'auto') return pref
+      return hostLocale() || 'zh-CN'
     }
 
     const TEXT = {
-      zh: {
+      'zh-CN': {
         nav: '主题色',
         hint: '配色与明暗模式独立；切换后立即生效并保存在 localStorage。',
         md: 'Markdown 强调',
-        mdHint: '标题与加粗用「正文色混强调色」，比正文更有色；关掉则与正文同色。「更多选项」里。',
+        mdHint: '标题与加粗用「正文色混强调色」，比正文更有色；关掉则与正文同色。',
         control: '开关 / 勾选',
-        controlHint: '宿主的开关、复选框、单选都压在近黑/近白上，所以开态是黑白拨杆；开启后改用强调色。',
+        controlHint: '宿主的开关、复选框、单选都压在近黑/近白上；开启后改用强调色。',
         scroll: '滚动条',
-        scrollHint: '滚动条默认是中性灰；「跟随」上配色色相，「强调」用强调色。明暗关系不变。',
+        scrollHint: '默认中性灰；「跟随」上配色色相，「强调」用强调色。明暗关系不变。',
         scrollHintMono: '当前是黑白配色，没有色相可跟随，滚动条保持中性灰。',
         rightbar: '右侧栏底色',
-        rightbarHint: '右栏本来没有自己的背景，露的是会话区画布色；改为「同左栏」后与左侧栏一致。',
+        rightbarHint: '右栏本来没有自己的背景，露的是会话区画布色。',
         advanced: '更多选项',
         textSub: '正文与强调的着色程度',
         sidebarSub: '相对会话区的层次',
@@ -1004,14 +1041,50 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         mdSub: '标题与加粗是否着色',
         scrollSub: '滚动条与滑轨的色相',
         controlSub: '开关与复选框是否跟强调色',
+        langSub: '自动跟随宿主界面语言',
         surface: '面板表面',
-        surfaceHint: '决定侧栏与右栏相对会话区是「浮起」还是「凹陷」；两者都随配色变。',
+        surfaceHint: '决定侧栏与右栏相对会话区是「浮起」还是「凹陷」。',
         ok: '✓ 配色已生效',
         bad: '⚠ 部分 token 未生效（宿主可能改名），请查看控制台',
+        healed: '配色层被宿主丢过一次，已自动恢复 ',
+        healedSuffix: ' 次',
         text: '强度',
-        textHint: '让正文/次级文字带配色色味；对比度由求解器兜底，三档都满足 AA。',
+        textHint: '让正文/次级文字带配色色味；三档都满足 AA。',
         sidebar: '左侧栏底色',
-        sidebarHint: '让侧栏比会话区更浅（或更深），做出区块层次；深浅两个模式同时生效。',
+        sidebarHint: '让侧栏比会话区更浅（或更深），做出区块层次。',
+        lang: '语言',
+      },
+      'zh-TW': {
+        nav: '主題色',
+        hint: '配色與明暗模式獨立；切換後立即生效並存在 localStorage。',
+        md: 'Markdown 強調',
+        mdHint: '標題與粗體用「本文色混強調色」，比本文更有色；關掉則與本文同色。',
+        control: '開關 / 勾選',
+        controlHint: '宿主開關、核取方塊、單選都用近黑/近白；開啟後改用強調色。',
+        scroll: '捲軸',
+        scrollHint: '預設中性灰；「跟隨」上配色色相，「強調」用強調色。明暗關係不變。',
+        scrollHintMono: '目前是黑白配色，沒有色相可跟隨，捲軸保持中性灰。',
+        rightbar: '右側欄底色',
+        rightbarHint: '右欄本來沒有自己的背景，露的是會話區畫布色。',
+        advanced: '更多選項',
+        textSub: '本文與強調的著色程度',
+        sidebarSub: '相對會話區的層次',
+        rightbarSub: '面板底色',
+        mdSub: '標題與粗體是否著色',
+        scrollSub: '捲軸與軌道的色相',
+        controlSub: '開關與核取方塊是否跟強調色',
+        langSub: '自動跟隨宿主介面語言',
+        surface: '面板表面',
+        surfaceHint: '決定側欄與右欄相對會話區是「浮起」還是「凹陷」。',
+        ok: '✓ 配色已生效',
+        bad: '⚠ 部分 token 未生效（宿主可能改名），請看主控台',
+        healed: '配色層被宿主丟棄過一次，已自動恢復 ',
+        healedSuffix: ' 次',
+        text: '強度',
+        textHint: '讓本文/次級文字帶配色色味；三檔都符合 AA。',
+        sidebar: '左側欄底色',
+        sidebarHint: '讓側欄比會話區更淺（或更深），做出區塊層次。',
+        lang: '語言',
       },
       en: {
         nav: 'Color theme',
@@ -1019,12 +1092,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         md: 'Markdown emphasis',
         mdHint: 'Headings and bold mix the accent into body colour; off keeps them identical to body text.',
         control: 'Switches / checks',
-        controlHint: 'Switches, checkboxes and radios all use near-black/white in the host. Turn this on to use the accent colour.',
+        controlHint: 'Switches, checkboxes and radios use near-black/white in the host. Turn this on to use the accent colour.',
         scroll: 'Scrollbars',
-        scrollHint: 'Scrollbars ship neutral grey. Tint follows the palette hue; Accent uses the accent colour. Lightness is unchanged.',
+        scrollHint: 'Neutral grey by default. Tint follows the palette hue; Accent uses the accent colour. Lightness is unchanged.',
         scrollHintMono: 'Monochrome has no hue to follow; scrollbars stay neutral.',
         rightbar: 'Right panel surface',
-        rightbarHint: 'The right panel has no fill of its own; it shows the canvas. Set it to the left sidebar colour to match.',
+        rightbarHint: 'The right panel has no fill of its own; it shows the canvas.',
         advanced: 'More options',
         textSub: 'How strongly text follows the palette',
         sidebarSub: 'Layer relative to the conversation',
@@ -1032,14 +1105,98 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         mdSub: 'Tint headings and bold',
         scrollSub: 'Hue of the scrollbar',
         controlSub: 'Switches and checkboxes',
+        langSub: 'Follow the host interface language',
         surface: 'Panel surfaces',
-        surfaceHint: 'Whether the sidebars sit above or below the conversation area; both follow the palette.',
+        surfaceHint: 'Whether the sidebars sit above or below the conversation area.',
         ok: '✓ Palette applied',
         bad: '⚠ Some tokens did not apply (host may have renamed them); check the console',
+        healed: 'Palette layer was dropped by the host; restored ',
+        healedSuffix: 'x',
         text: 'Strength',
-        textHint: 'Tints body and secondary text toward the palette; all three levels still meet AA.',
+        textHint: 'Tints body and secondary text toward the palette; all three levels meet AA.',
         sidebar: 'Sidebar surface',
-        sidebarHint: 'Makes the sidebar lighter (or deeper) than the conversation area, in both color modes.',
+        sidebarHint: 'Makes the sidebar lighter (or deeper) than the conversation area.',
+        lang: 'Language',
+      },
+      ja: {
+        nav: 'カラーテーマ',
+        hint: 'ライト/ダークとは独立です。変更は即時反映され、localStorage に保存されます。',
+        md: 'Markdown の強調',
+        mdHint: '見出しと太字にアクセント色を混ぜます。オフにすると本文と同じ色になります。',
+        control: 'スイッチ / チェック',
+        controlHint: 'ホストのスイッチ・チェックボックスはほぼ白黒です。オンにするとアクセント色になります。',
+        scroll: 'スクロールバー',
+        scrollHint: '既定はニュートラルグレー。「追従」でテーマの色相、「アクセント」でアクセント色になります。',
+        scrollHintMono: 'モノクロには色相がないため、スクロールバーはグレーのままです。',
+        rightbar: '右パネルの背景',
+        rightbarHint: '右パネルは独自の背景を持たず、キャンバス色が見えています。',
+        advanced: 'その他のオプション',
+        textSub: '本文と強調の色づき具合',
+        sidebarSub: '会話エリアとの段差',
+        rightbarSub: 'パネルの背景',
+        mdSub: '見出しと太字を色づけする',
+        scrollSub: 'スクロールバーの色相',
+        controlSub: 'スイッチとチェックの色',
+        langSub: 'ホストの表示言語に合わせます',
+        surface: 'パネル表面',
+        surfaceHint: 'サイドバーが会話エリアより浮くか沈むかを決めます。',
+        ok: '✓ 配色を適用しました',
+        bad: '⚠ 一部の token が適用されていません（ホスト側で改名された可能性）。コンソールを確認してください',
+        healed: '配色レイヤーがホストに破棄されたため、自動で復元しました（',
+        healedSuffix: ' 回）',
+        text: '強さ',
+        textHint: '本文と副次テキストをテーマ色に寄せます。3 段階とも AA を満たします。',
+        sidebar: '左サイドバーの背景',
+        sidebarHint: 'サイドバーを会話エリアより明るく（または暗く）して段差を作ります。',
+        lang: '言語',
+      },
+    }
+
+    /** 配色名与各档位的显示名：id 不变，只换文案。 */
+    const LABELS = {
+      'zh-CN': {
+        scheme: { mono: '黑白', warm: '暖砂', indigo: '靛蓝', moss: '苔绿' },
+        desc: { mono: '无色调 · 默认', warm: '米白 + 棕调', indigo: '冷白 + 蓝调', moss: '浅灰绿 + 绿调' },
+        text: { neutral: '静', tinted: '标准', deep: '浓' },
+        sidebar: { light: '更浅', match: '同色', deep: '更深' },
+        rightbar: { sidebar: '同左栏', canvas: '跟随画布' },
+        scroll: { neutral: '中性', tinted: '跟随', accent: '强调' },
+        control: { accent: '主题色', mono: '黑白' },
+        md: { on: '着色', off: '同正文' },
+        lang: { auto: '自动' },
+      },
+      'zh-TW': {
+        scheme: { mono: '黑白', warm: '暖砂', indigo: '靛藍', moss: '苔綠' },
+        desc: { mono: '無色調 · 預設', warm: '米白 + 棕調', indigo: '冷白 + 藍調', moss: '淺灰綠 + 綠調' },
+        text: { neutral: '靜', tinted: '標準', deep: '濃' },
+        sidebar: { light: '更淺', match: '同色', deep: '更深' },
+        rightbar: { sidebar: '同左欄', canvas: '跟隨畫布' },
+        scroll: { neutral: '中性', tinted: '跟隨', accent: '強調' },
+        control: { accent: '主題色', mono: '黑白' },
+        md: { on: '著色', off: '同本文' },
+        lang: { auto: '自動' },
+      },
+      en: {
+        scheme: { mono: 'Mono', warm: 'Warm sand', indigo: 'Indigo', moss: 'Moss' },
+        desc: { mono: 'Neutral · default', warm: 'Cream + brown', indigo: 'Cool white + blue', moss: 'Grey-green' },
+        text: { neutral: 'Quiet', tinted: 'Standard', deep: 'Strong' },
+        sidebar: { light: 'Lighter', match: 'Same', deep: 'Deeper' },
+        rightbar: { sidebar: 'Match sidebar', canvas: 'Follow canvas' },
+        scroll: { neutral: 'Neutral', tinted: 'Tint', accent: 'Accent' },
+        control: { accent: 'Accent', mono: 'Mono' },
+        md: { on: 'Tinted', off: 'Body colour' },
+        lang: { auto: 'Auto' },
+      },
+      ja: {
+        scheme: { mono: 'モノクロ', warm: 'ウォームサンド', indigo: 'インディゴ', moss: 'モスグリーン' },
+        desc: { mono: '色なし · 既定', warm: 'クリーム + ブラウン', indigo: 'クールホワイト + ブルー', moss: 'グレーグリーン' },
+        text: { neutral: '控えめ', tinted: '標準', deep: '強め' },
+        sidebar: { light: '明るく', match: '同じ', deep: '暗く' },
+        rightbar: { sidebar: 'サイドバーに合わせる', canvas: 'キャンバスに従う' },
+        scroll: { neutral: 'ニュートラル', tinted: '追従', accent: 'アクセント' },
+        control: { accent: 'アクセント', mono: 'モノクロ' },
+        md: { on: '色づけ', off: '本文と同じ' },
+        lang: { auto: '自動' },
       },
     }
 
@@ -1054,9 +1211,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       const mdMode = React.useSyncExternalStore(props.subscribeMd, props.getMdMode)
       const health = React.useSyncExternalStore(props.subscribeHealth, props.getHealth)
       const [advanced, setAdvanced] = React.useState(false)
-      const txt = isZh() ? TEXT.zh : TEXT.en
+      const locale = React.useSyncExternalStore(props.subscribeLocale, props.getLocale)
+      const langPref = React.useSyncExternalStore(props.subscribeLocale, props.getLangPref)
+      const txt = TEXT[locale] || TEXT['zh-CN']
+      const lb = LABELS[locale] || LABELS['zh-CN']
 
-      const seg = (modes, value, onPick) => h(
+      const seg = (modes, value, onPick, labels) => h(
         'div',
         { className: 'dsh-tp-seg', role: 'group' },
         modes.map((mode) => h(
@@ -1068,7 +1228,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             'aria-pressed': mode.id === value,
             onClick: () => onPick(mode.id),
           },
-          mode.label,
+          (labels && labels[mode.id]) || mode.label,
         )),
       )
 
@@ -1101,8 +1261,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             h('span', { className: 'dsh-tp-thumb-side' }),
             h('span', { className: 'dsh-tp-thumb-main' }, h('b', null), h('b', null), h('b', null))),
           h('span', { className: 'dsh-tp-card-meta' },
-            h('span', { className: 'dsh-tp-card-name' }, scheme.label),
-            h('span', { className: 'dsh-tp-card-desc' }, scheme.desc)),
+            h('span', { className: 'dsh-tp-card-name' }, lb.scheme[scheme.id] || scheme.label),
+            h('span', { className: 'dsh-tp-card-desc' }, lb.desc[scheme.id] || scheme.desc)),
           h('span', { className: 'dsh-tp-check', 'aria-hidden': 'true' }, '✓'),
         )
       }
@@ -1115,14 +1275,14 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           h('span', { className: 'dsh-tp-badge' }, 'v' + PLUGIN_VERSION)),
         h('p', { className: 'dsh-tp-sub' }, txt.hint),
         h('div', { className: 'dsh-tp-grid' }, SCHEMES.map(card)),
-        row(txt.text, txt.textSub, seg(TEXT_MODES, textMode, props.setTextMode)),
-        row(txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode)),
-        row(txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode)),
+        row(txt.text, txt.textSub, seg(TEXT_MODES, textMode, props.setTextMode, lb.text)),
+        row(txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode, lb.sidebar)),
+        row(txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode, lb.rightbar)),
         health && !health.ok && h('p', { className: 'dsh-tp-status is-bad' }, txt.bad),
         health && health.ok && health.reapplies > 0 && h(
           'p',
           { className: 'dsh-tp-status' },
-          (isZh() ? '配色层被宿主丢过一次，已自动恢复 ' : 'Palette layer was dropped by the host; restored ') + health.reapplies + (isZh() ? ' 次' : 'x'),
+          txt.healed + health.reapplies + txt.healedSuffix,
         ),
         h('button', {
           type: 'button',
@@ -1133,9 +1293,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         advanced && h(
           'div',
           { className: 'dsh-tp-adv' },
-          row(txt.md, txt.mdSub, seg(MD_MODES, mdMode, props.setMdMode)),
-          row(txt.scroll, current === 'mono' ? txt.scrollHintMono : txt.scrollSub, seg(SCROLL_MODES, scrollMode, props.setScrollMode)),
-          row(txt.control, txt.controlSub, seg(CONTROL_MODES, controlMode, props.setControlMode)),
+          row(txt.lang, txt.langSub, seg(LANG_OPTIONS, langPref, props.setLangPref, lb.lang)),
+          row(txt.md, txt.mdSub, seg(MD_MODES, mdMode, props.setMdMode, lb.md)),
+          row(txt.scroll, current === 'mono' ? txt.scrollHintMono : txt.scrollSub, seg(SCROLL_MODES, scrollMode, props.setScrollMode, lb.scroll)),
+          row(txt.control, txt.controlSub, seg(CONTROL_MODES, controlMode, props.setControlMode, lb.control)),
         ),
       )
     }
@@ -1162,6 +1323,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         let scrollMode = readScrollStored()
         let controlMode = readControlStored()
         let mdMode = readMdStored()
+        let langPref = readLangPref()
+        const localeListeners = new Set()
+        const currentLocale = () => pickLocale(langPref)
+        const emitLocale = () => { for (const fn of localeListeners) { try { fn() } catch (err) { /* 忽略 */ } } }
         const listeners = new Set()
         const sidebarListeners = new Set()
         const textListeners = new Set()
@@ -1250,9 +1415,18 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
          * 这一层就没了 —— 表现正是"配色自己跳回默认"，而 localStorage 里的选择还在。
          * 这里定期（以及窗口重新可见/获焦时）回读 body：token 不在了就把最后一层重放。
          */
+        // 连续失败要退避：宿主真把 token 改名时，每 4 秒重放一次既刷日志、又会堆 override 层。
+        const HEAL_BACKOFF = [4000, 15000, 60000, 180000, 600000]
+        let healFails = 0
+        let lastHealAt = 0
+        let healDisabled = false
+
         const ensureApplied = (reason) => {
-          if (lastTokens === null) return
+          if (lastTokens === null || healDisabled) return
           if (Date.now() - lastAppliedAt < 900) return
+          const wait = HEAL_BACKOFF[Math.min(healFails, HEAL_BACKOFF.length - 1)]
+          if (healFails > 0 && Date.now() - lastHealAt < wait) return
+          lastHealAt = Date.now()
           let missing = false
           try {
             const style = getComputedStyle(document.body)
@@ -1263,7 +1437,16 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           } catch (err) {
             missing = true
           }
-          if (!missing) return
+          if (!missing) {
+            healFails = 0
+            return
+          }
+          if (healFails >= HEAL_BACKOFF.length) {
+            healDisabled = true
+            console.error('[dsh-theme-palette] 配色层反复失效（' + reapplyCount + ' 次），已停止自动重放；请检查宿主 token 是否改名')
+            return
+          }
+          healFails += 1
           reapplyCount += 1
           console.info('[dsh-theme-palette] 配色层不见了（' + reason + '），已重放第 ' + reapplyCount + ' 次')
           applyAll('self-heal:' + reason)
@@ -1340,6 +1523,24 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           applyAll()
           emitMd()
         }
+        const getLangPref = () => langPref
+        const getLocale = () => currentLocale()
+        const subscribeLocale = (fn) => {
+          localeListeners.add(fn)
+          return () => { localeListeners.delete(fn) }
+        }
+        const setLangPref = (id) => {
+          if (id !== 'auto' && LOCALES.indexOf(id) === -1) return
+          langPref = id
+          writeLangPref(id)
+          emitLocale()
+        }
+        // 宿主切换界面语言时（locale 服务会改 documentElement.lang），设置页跟着重渲染。
+        let langObserver = null
+        try {
+          langObserver = new MutationObserver(() => emitLocale())
+          langObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['lang'] })
+        } catch (err) { /* 没有 MutationObserver 就只在打开设置页时读一次 */ }
 
         // 开发期自动化接口：截图回归要从外部驱动「换配色 / 换明暗」，而这两件事
         // 平时只能点界面。暴露一组 setter，让 CDP 的 Runtime.evaluate 能直接调用。
@@ -1354,6 +1555,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               setScrollMode,
               setControlMode,
               getPreference: () => theme.getTheme().preference,
+              setLangPref,
+              locales: LOCALES,
               setTheme: (id) => theme.setTheme(id),
               schemes: SCHEMES.map((s) => s.id),
             })
@@ -1375,7 +1578,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           window.addEventListener('pageshow', healOnShow)
         } catch (err) { /* 无 DOM 时跳过 */ }
         try { ctx.on('theme/change', healOnTheme) } catch (err) { /* 事件名变了就只靠定时器 */ }
-        try { healTimer = setInterval(() => ensureApplied('interval'), 4000) } catch (err) { /* 无定时器环境 */ }
+        try {
+          healTimer = setInterval(() => ensureApplied('interval'), 4000)
+          if (healTimer && typeof healTimer.unref === 'function') healTimer.unref()
+        } catch (err) { /* 无定时器环境 */ }
 
         ctx.effect(() => {
           applyAll('boot')
@@ -1391,6 +1597,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               window.removeEventListener('pageshow', healOnShow)
             } catch (err) { /* 同上 */ }
             if (healTimer !== null) { clearInterval(healTimer); healTimer = null }
+            if (langObserver !== null) { langObserver.disconnect(); langObserver = null }
           }
         }, 'dsh-theme-palette: token layer + 右栏样式')
 
@@ -1402,7 +1609,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               // 内置节顺序：account -10 / general 0 / models 10 / plugins 15 / agent-presets 20；
               // 5 = 紧跟「通用」之后。
               order: 5,
-              label: () => (isZh() ? TEXT.zh.nav : TEXT.en.nav),
+              label: () => TEXT[pickLocale(readLangPref())].nav,
               inject: () => ({
                 getCurrent,
                 subscribe,
@@ -1425,6 +1632,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 getMdMode,
                 subscribeMd,
                 setMdMode,
+                getLangPref,
+                getLocale,
+                subscribeLocale,
+                setLangPref,
                 getHealth,
                 subscribeHealth,
               }),
