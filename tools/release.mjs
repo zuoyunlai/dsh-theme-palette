@@ -69,7 +69,9 @@ if (has('dry')) { console.log('\n干跑结束，没有发布。\n'); process.exi
 if (!has('skip-publish')) {
   console.log('\n发布中…')
   try {
-    const out = run(NPM, ['publish', `--registry=${REGISTRY}`], { stdio: ['ignore', 'pipe', 'inherit'] })
+    // Node 20+ 在 Windows 上不允许直接 spawn .cmd（CVE-2024-27980 的缓解），
+    // 必须走 shell；所以统一用 sh()，而不是 execFileSync。
+    const out = sh(`${NPM} publish --registry=${REGISTRY}`)
     if (out) console.log(out)
   } catch (err) {
     die('npm publish 失败：' + (err.stderr || err.message))
