@@ -500,7 +500,7 @@ alpha **浅色与内置一致、深色压到 0.6 倍**（见下）：
 dsh plugin --profile desktop add "E:\Documents\deepseek-harness\default-workspace\dsh-theme-palette"
 ```
 
-装完**必须重启 GUI**。`node_modules/@local/dsh-theme-palette` 是**副本**，改源码后要删掉副本再 `pnpm install`
+装完**必须重启 GUI**。`node_modules/dsh-theme-palette` 是**副本**，改源码后要删掉副本再 `pnpm install`
 （`pnpm add` 对已存在的 `file:` 目录不会刷新内容）。
 
 ## 结构

@@ -8,3 +8,4 @@ tools/preview-*.html
 .DS_Store
 Thumbs.db
 tools/preview.html
+*.tgz

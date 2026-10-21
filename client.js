@@ -20,7 +20,7 @@
  *      所有注册走 ctx.effect / ctx.slots。
  */
 window.__ModuleLoader__.load({
-  id: '@local/dsh-theme-palette',
+  id: 'dsh-theme-palette',
   factory(require) {
     'use strict'
 
@@ -179,7 +179,7 @@ window.__ModuleLoader__.load({
     ]
     const DEFAULT_RIGHTBAR = 'sidebar'
     const RIGHTBAR_KEY = 'dsh-theme-palette.rightbar.v1'
-    const RIGHTBAR_STYLE_ID = '@local/dsh-theme-palette/rightbar.css'
+    const RIGHTBAR_STYLE_ID = 'dsh-theme-palette/rightbar.css'
 
     /**
      * Markdown 的标题 / 加粗可否用比正文更「有色」的颜色。
@@ -784,7 +784,7 @@ window.__ModuleLoader__.load({
     ].join('')
 
     /* ================= 设置页样式（head 里第二条 CSS） ================= */
-    const SETTINGS_STYLE_ID = '@local/dsh-theme-palette/settings.css'
+    const SETTINGS_STYLE_ID = 'dsh-theme-palette/settings.css'
     const SETTINGS_CSS = `
 .dsh-tp{display:flex;flex-direction:column;gap:14px;width:100%;color:var(--dsw-alias-label-primary);box-sizing:border-box}
 .dsh-tp-head{display:flex;align-items:center;gap:8px}
@@ -834,7 +834,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         if (typeof document === 'undefined' || !document.head) return () => {}
         if (document.querySelector('style[data-plugin-css="' + RIGHTBAR_STYLE_ID + '"]')) return () => {}
         const tag = document.createElement('style')
-        tag.dataset.plugin = '@local/dsh-theme-palette'
+        tag.dataset.plugin = 'dsh-theme-palette'
         tag.dataset.pluginCss = RIGHTBAR_STYLE_ID
         tag.textContent = RIGHTBAR_CSS
         document.head.appendChild(tag)
@@ -850,7 +850,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         if (typeof document === 'undefined' || !document.head) return () => {}
         if (document.querySelector('style[data-plugin-css="' + SETTINGS_STYLE_ID + '"]')) return () => {}
         const tag = document.createElement('style')
-        tag.dataset.plugin = '@local/dsh-theme-palette'
+        tag.dataset.plugin = 'dsh-theme-palette'
         tag.dataset.pluginCss = SETTINGS_STYLE_ID
         tag.textContent = SETTINGS_CSS
         document.head.appendChild(tag)

@@ -5,4 +5,4 @@
 # ============================================================================
 - insert:
     - id: dsh-theme-palette
-      name: '@local/dsh-theme-palette'
+      name: 'dsh-theme-palette'
