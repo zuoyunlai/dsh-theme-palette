@@ -1,0 +1,8 @@
+# ============================================================================
+# dsh-theme-palette —— bundle patch
+# 把本插件的一行插进 Web / Desktop profile 的配置树。
+# 行名即包名；Client 半边由 package.json 的 dsh.client 段声明。
+# ============================================================================
+- insert:
+    - id: dsh-theme-palette
+      name: '@local/dsh-theme-palette'

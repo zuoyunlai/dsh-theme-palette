@@ -1,0 +1,9 @@
+node_modules/
+.pnpm-store/
+tools/out/
+tools/sheet.html
+tools/preview-*.html
+*.log
+*.bak
+.DS_Store
+Thumbs.db
