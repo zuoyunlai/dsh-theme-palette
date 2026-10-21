@@ -4,6 +4,12 @@
 
 ## 版本一览
 
+### 1.4.1
+- README 按 DSH 插件标准拆成五语：`README.md`（英文源）/ `README-zh.md` / `README-es.md` / `README-pt.md` / `README-hi.md`，章节结构完全一致
+- 补展示元数据：`locale/{en,zh}.json` 的 `meta.title`/`meta.description` + `exports` 暴露 `./locale/*.json` 与 `./icon`
+- 对齐官方工程门禁：`engines.node` → `^22.19.0 || >=24.0.0`、`packageManager` 钉 `pnpm@11.7.0`
+- `dsh-plugin-dev check`：**11 passed / 0 failed / 0 warned**
+
 ### 1.4.0
 - 多语言：简体中文 / 繁體中文 / English / 日本語；「自动」跟随宿主的 `documentElement.lang`
 - 配色名（黑白/暖砂/靛蓝/苔绿）、各档位文案、状态行都本地化，不是只翻标题

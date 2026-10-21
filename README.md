@@ -1,213 +1,87 @@
 # dsh-theme-palette
 
-DSH Web / Desktop 的主题配色插件：**4 套配色 × 明暗两模式**，两个轴互相独立。
+[English](README.md) · [中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
-入口：左下角头像 → **设置** → 左侧导航「**主题色**」→ 四张卡片（黑白 · 暖砂 · 靛蓝 · 苔绿）+ 一行「左侧栏底色」。
-选择即时生效，存在 `localStorage`。
+Theme palette for DeepSeek Harness (web & desktop): **4 palettes × light/dark**, two independent axes.
 
-当前版本 **1.3.3**。更新记录 [CHANGELOG.md](./CHANGELOG.md) · 逐组件设计说明 [docs/DESIGN.md](./docs/DESIGN.md)。
+## Compatibility
 
-## 特性
-
-- **4 套配色**（黑白 / 暖砂 / 靛蓝 / 苔绿）× **明暗两模式**，两个轴互相独立；
-- 色阶**整体重算**（OKLCH 重建 + 色域钳位 + 在真实承载面上求解对比度），不是换几个变量；
-- 覆盖 27,000+ 处 token 引用：正文、次级、三级、注释、链接、侧栏、卡片、气泡、主按钮、滚动条、开关、Markdown 标题/加粗、代码块；
-- 四种界面语言：简体中文 / 繁體中文 / English / 日本語（自动跟随宿主，也可手选）；
-- **自愈**：宿主丢弃 override 层时自动重放。
-
-## 使用
-
-左下角头像 → **设置** → 左侧导航「**主题色**」：
-
-| 项 | 选项 |
+| Surface | Status |
 |---|---|
-| 配色 | 黑白 · 暖砂 · 靛蓝 · 苔绿（卡片缩略图跟随明暗） |
-| 强度 | 静 / 标准 / 浓 —— 正文与强调的着色程度 |
-| 面板表面 | 左侧栏（更浅 / 同色 / 更深）、右侧栏（同左栏 / 跟随画布） |
-| 更多选项 | 语言、Markdown 强调、滚动条、开关/勾选 |
+| DSH desktop / web client | 0.2.x |
+| Node.js | ≥ 20 |
+| Changes to host source | none |
 
-选择即时生效，存在 `localStorage`；明暗仍由官方「外观」控制，两者独立。
+The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does not register a theme, patch the host, or touch the appearance preference.
 
-界面语言默认跟随宿主（`documentElement.lang`），也可以在「更多选项 → 语言」里手选；配色名与各档位文案都会跟着变。
+## What it does
 
-## 安装
+- **4 palettes** — Mono, Warm sand, Indigo, Moss — each adapting to light *and* dark independently;
+- the whole ramp is **recomputed**, not swapped: OKLCH rebuild → role-based chroma → **sRGB gamut clamp** → contrast solved on real surfaces;
+- 27,000+ token references covered: body, secondary, tertiary, captions, links, sidebars, cards, user bubble, primary button, scrollbars, switches, Markdown headings/bold, code blocks;
+- adjustable: text tint (3), sidebar depth (3), right panel (2), Markdown emphasis, scrollbars, switch colour;
+- **self-healing**: if the host drops the override layer, the palette is re-applied;
+- UI in 简体中文 / 繁體中文 / English / 日本語 (follows the host language, can be pinned).
 
-从 npm（推荐）：
+## Install
 
 ```bash
-# 方式 A：装进 DSH profile
+# from npm
 cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
 
-# 方式 B：用 DSH 的插件命令
-dsh plugin --profile desktop add dsh-theme-palette
+# or a specific version
+pnpm add dsh-theme-palette@1.4.0
 ```
 
-从 GitHub Release 的 tarball（npm 不可达时）：
+From the GitHub Release tarball:
 
 ```bash
-pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.3.1/dsh-theme-palette-1.3.1.tgz"
+pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.0/dsh-theme-palette-1.4.0.tgz"
 ```
 
-从源码（开发调试）：
+Then **restart the GUI** — a running process keeps the old module. Open it from avatar → Settings → **Color theme**.
 
-```bash
-git clone https://github.com/zuoyunlai/dsh-theme-palette.git
-dsh plugin --profile desktop add "$PWD/dsh-theme-palette"
-```
+## Configuration
 
-装完**必须重启 GUI**（运行中的进程仍持旧模块）。
-
-> 开发时注意：`node_modules/dsh-theme-palette` 是**副本**，改源码后要
-> `rm -rf node_modules/dsh-theme-palette && pnpm install` —— `pnpm add` 对已存在的
-> `file:` 目录不会刷新内容。
-
-安装后：左下角头像 → 设置 → 左侧「**主题色**」。
-
-## 配色怎么算
-
-1. **OKLCH 重建色阶**：保留每一步的感知亮度，只换色相与色度。
-2. **色度按 UI 角色给**：浅色底 0.013–0.024、中间灰 0.006、浅色正文 0.004、
-   深色层 0.014–0.028、深色正文 0.009–0.014。正文只给极低色度以保证字形锐利。
-   **深色层的色度必须按色相分别给**，不能三套共用一个数：绝对色度不决定观感，占比才决定 ——
-   L 0.23 处可用色域是暖砂 0.048 / 苔绿 0.061 / 靛蓝 0.157，同一个 0.016 会得到
-   35% / 23% / 11% 三种相对饱和度（暖砂发脏、靛蓝发灰）。现在三套分别落在 30% / 24% / 19%。
-   深色层的色度权重也**不随明度递减**（`800/850/875` = 1.0 / 1.0 / 0.95）：层与层之间只靠明度分层，
-   权重递减会让卡片/模块比画布灰 30–45%，读作「换了一种材质」。
-3. **近白端等量下移 0.032**（`L ≥ 0.92`）：不是压缩斜率。压缩会把「画布↔卡层」的 ΔL
-   从 0.031 压到 0.0147，而 `L<0.92` 那段又没压，明度节奏会在边界处断层。
-4. **对比度求解到真实承载面**：三级文字与链接大量落在卡层 `60`、悬浮层 `150`、深模块 `800` 上，
-   所以靶点用这些面而不是画布；上限 ±0.13（从 4.41 抬到 4.62 需要 ΔL≈0.096）。
-
-覆盖 **75 个 token / 套**：4 条静态色阶（19+16+10+12）+ 14 个**字面量**别名
-（边框 `border-l1..l4`、`bg-skeleton`、`menu-group-surface`、`interactive-bg-hover/-active/-hover-accent`、
-`button-tool-bar-*`、`bg-mask-drop` 等）+ 3 个侧栏 token。
-
-## 对比度（按真实承载面实测）
-
-暖砂一行为例（三套同构，差在 0.01 量级）：
-
-| 承载面 | 底 | 主文本 | 次文本 | 三级 | 链接 |
-|---|---|---|---|---|---|
-| 画布 `00` | `#fbf4e3` | 17.23 | 6.78 | 5.02 | 5.57 |
-| 卡层 `60` | `#f2ebdb` | 15.90 | 6.26 | 4.63 | 5.14 |
-| 深画布 `950` | `#1e1b14` | 14.98 | 11.39 | 8.02 | 7.36 |
-| 深层1 `875` | `#2c2922` | 12.65 | 9.62 | 6.77 | 6.22 |
-| 深卡 `850` | `#36332b` | 10.99 | 8.36 | 5.89 | 5.40 |
-| 深模块 `800` | `#403c35` | 9.56 | 7.27 | 5.12 | 4.70 |
-
-链接列取 `--dsw-alias-link`（从基准色派生出来的那一档），**不是**色阶中段 `500` ——
-见 §品牌基准色与链接。
-
-`875 / 850 / 800` 分别是宿主的 `bg-layer-1 / -2 / -3`（`bg-module-platform` 与 layer-3 同为 `800`），
-所以深色的三级文字与链接要按**最亮的那个面**（`800`）兜底，而不是按画布。
-
-**承诺范围**：`00 / 60 / 800 / 850 / 875 / 950` 全部 ≥ AA（三级与链接 4.62 起），
-正文在所有深色面上 ≥ 8.95（AAA 的 7 线有余量）。三套配色 **0 处低于下限**。
-
-`palette-dev.mjs` 把「合规下限」与「设计目标」分开记：低于 WCAG 线打 `✗` 并计数，
-只低于设计目标（深色正文 ≥ 10）打 `△`、不计违规。现在唯一带 `△` 的是 `800` 面的正文
-（8.95–9.56）—— 那是「最亮的深色面 + 近白文字」的固有代价，不是还没修好的违规。
-悬浮层 `150`（toast / tooltip / popover）**不在承诺内**：宿主在这些面上本来就用白字，
-在参数上补偿会把强调色冲淡；需要时由宿主自己保证。
-
-## 四套配色的落色
-
-| | 画布 | 卡层 | 正文 | 次文 | 三级 | 强调 | 深底 | 深卡 | 深正文 | 深强调 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| 暖砂 | `#fbf4e3` | `#f2ebdb` | `#12110d` | `#575551` | `#696967` | **`#a9683e`** | `#1e1b14` | `#36332b` | `#f5efe0` | `#c8a28b` |
-| 靛蓝 | `#eff5ff` | `#e7ebf6` | `#0f1114` | `#53555a` | `#676869` | **`#3f66a3`** | `#161c2a` | `#2e3443` | `#ebeff9` | `#95acd0` |
-| 苔绿 | `#eef7f0` | `#e6eee7` | `#0f120f` | `#525753` | `#686968` | **`#4f7a42`** | `#1a211b` | `#313933` | `#e7f3e9` | `#9cb695` |
-
-「强调」列是设计稿给的**基准色**（色阶 `500`），「深强调」是由它派生的深色侧强调（色阶 `400`）。
-
-深底三套的明度**故意不同**（L 0.223 / 0.227 / 0.239）：低色度下色相换不来区分度，
-三套原本都落在 0.230，结果暖砂↔苔绿在深色层上只差 ΔE 1.15（低于 JND 2，等于分不出）。
-错开明度后最小一对是 2.05。
-
-黑白走宿主原值（`#ffffff` / `#151517`），只叠侧栏档位 —— 它没有色调可继承。
-
-## 挂在哪一层
-
-注册 **`settings.section`**（设置侧栏独立一节）。官方内置节顺序 account -10 / general 0 / models 10 /
-plugins 15 / agent-presets 20，本插件 `order: 5`，紧跟「通用」之后。页面自己画标题（`h2` 18px/600），
-与官方 `AgentPresetSection` 一致 —— `settings.section` 只渲染侧栏条目（文字取 `label()`），不渲染内容标题。
-
-## 结构
-
-| 文件 | 作用 |
+| Item | Options |
 |---|---|
-| `client.js` | 客户端：OKLCH 引擎 + `overrideTokens` 覆盖层 + `settings.section` 页面 |
-| `index.js` | Host 半边，空实现 |
-| `cordis.patch.yml` | bundle 补丁：插入本插件那一行 |
-| `palette-dev.mjs` | 报表脚本：`node palette-dev.mjs`，**直接加载 client.js 的生产引擎** |
+| Palette | Mono · Warm sand · Indigo · Moss (thumbnails follow light/dark) |
+| Strength | Quiet / Standard / Strong — how much body text follows the palette |
+| Panel surfaces | Sidebar (Lighter / Same / Deeper), right panel (Match sidebar / Follow canvas) |
+| More options | Language, Markdown emphasis, scrollbars, switches/checks |
 
-`palette-dev.mjs` 通过 `window.__DSH_THEME_PALETTE_DEV__` 这个开发期钩子拿到
-`buildTokens / SCHEMES / SIDEBAR_MODES`，不再保留第二份配色实现 ——
-早先它自带一套旧引擎，报表和上线不是同一套。
+Every choice applies immediately and is stored in `localStorage`. Light/dark stays under the host’s Appearance control.
 
-## 调参
+## Palette engine
 
-```js
-{ id: 'warm', label: '暖砂', desc: '米白 + 棕调', tinted: true,
-  hue: 88, lightC: 0.024, midC: 0.006, textC: 0.004,     // 灰阶：色相 + 三档色度
-  darkC: 0.014, darkLift: 0.026, paperC: 0.014,          // 深色：层色度 / 明度错位 / 正文色度
-  accentHue: 52.4, accentC: 0.101, accentL: 0.58,        // 强调：色相 / 色度 / 基准档明度
-  accentScale: 1.0 }                                     // 整条强调色阶的明度倍率（保持 1.0）
+```
+OKLCH(L, C, hue) ──► gamut clamp (binary search on C) ──► sRGB hex
+        ▲
+        └── role chroma × intensity, then contrast solve on {canvas, card, sidebar, overlay}
 ```
 
-换强调色只改这三个数（`accentHue` / `accentC` / `accentL`），色阶其余档、深色侧强调、
-卡片预览色、`info` 按钮、焦点环全部自动跟随；链接会自己派生一条够 AA 的（见 §品牌基准色与链接）。
-把目标颜色换成 OKLCH 的现成方法：`toOklch('#a9683e')` → `[0.5799, 0.1012, 52.3]`，
-分别填进 `accentL` / `accentC` / `accentHue`，再用 `node palette-dev.mjs` 核 `500` 是否逐位对上
-（8-bit 取整偶尔差 1，把 `accentHue` 挪 0.1–0.5° 即可）。
+- semantic aliases keep `var(--dsw-static-neutral-bluish-NN)` chains, so anything following a token follows the palette;
+- light surfaces use steps 00–300, dark surfaces 800–950;
+- text floors are enforced at build time: body ≥ 12, secondary ≥ 6.1, tertiary/link ≥ 4.6, sidebar text ≥ 7, bubble text ≥ 7;
+- 432 configuration combos are checked by `node palette-dev.mjs`.
 
-深色三个数是**每套单独定的，不能抄**：
+Design notes, per-component rationale and the contrast tables live in [docs/DESIGN.md](docs/DESIGN.md). Release history: [CHANGELOG.md](CHANGELOG.md).
 
-| 套 | darkC | 占可用色域 | darkLift | 深底 L | paperC |
-|---|---|---|---|---|---|
-| 暖砂 | 0.014 | 30% | 0.026 | 0.223 | 0.014 |
-| 靛蓝 | 0.028 | 19% | 0.032 | 0.227 | 0.009 |
-| 苔绿 | 0.015 | 24% | 0.042 | 0.239 | 0.0125 |
-
-调参时先看**占比**再看数值：`darkC` 除以该 L 与色相下的 sRGB 可用色度上限，落在 20–30% 是
-「有色但不脏」；低于 15% 会读成灰（蓝色最容易踩），高于 40% 开始读成泥（黄色最容易踩）。
-
-加一套配色就往 `SCHEMES` 里加一条，卡片、覆盖层、对比度求解、报表全自动。
-文字着色倍率在 `TEXT_MODES` 里（`textScale` 管浅色正文、`paperScale` 管深色正文）。
-`accentScale` 保持 1.0 —— 它是乘性的，压低会把强调色浅端（`deepseek-50/100/200`）整条压塌，
-而这几个正是宿主的「选中态软底」。
-
-## 发版
+## Development
 
 ```bash
-node tools/release.mjs --dry      # 本地检查：语法 / 工作区 / 打包内容 / 版本是否已存在
-node tools/release.mjs            # 真发布（npm 已登录）+ 等 registry 放出 + 校验 latest
-node tools/release.mjs --tag      # 发布后再打 tag 并推 main + tag
+node palette-dev.mjs                  # token report for all palettes
+node tools/sheet.mjs                  # palette board → tools/sheet.html
+node tools/shoot-sheet.mjs            # screenshot the board (headless Chrome)
+node tools/compare.mjs --dir tools/out/<run>        # diff against baseline
+node tools/preview-settings.mjs --lang en           # render the settings page
+node tools/release.mjs --dry          # release preflight
+node tools/release.mjs --tag          # publish to npm + tag
 ```
 
-脚本要处理三件容易出错的事：本机 npm 默认源是 npmmirror（**必须显式指官方源**）；
-新包名的首次发布会进**暂存审核**（CLI 照打印 `+ pkg@ver`，但 registry 要过几分钟才 200）；
-`latest` 不保证自动前移。2026-10-21 实测：提交到放出约 **8 分钟**。
+Screenshot regression has two layers: the palette board (no auth needed) and the real desktop window via CDP (`tools/shoot-desktop.mjs`, needs `--remote-debugging-port`). See [tools/README.md](tools/README.md).
 
-## 已知边界
+## License
 
-- 悬浮层 `150` 上三级文字 4.22–4.27，不在承诺内（见上）。
-- **暖砂基准色上的白字只有 4.43**（靛蓝 5.77、苔绿 5.01）。宿主把 `deepseek-500` 当
-  `button-info-fill` 的填充色，若那里写白字，4.43 差 0.07 到 AA —— 这是 `#a9683e` 这个颜色
-  本身的属性（赭石色偏亮），不是参数能修的。要过就把该按钮的文字换成深端（`deepseek-900`
-  那侧）或改 15px 以下的字号策略。
-- **基准色与链接色是两条线**：`--dsw-static-deepseek-500` 是设计标准值（填充/焦点环/预览色），
-  `--dsw-alias-link` 是派生色。任何新加的 UI 若把 500 当**文字**用，都会踩 AA（暖砂 3.40）。
-- 深色最亮的承载面 `800`（layer-3 / module）上链接是 4.65（0.8.2 后 4.64–4.70），只比阈值高
-  0.02–0.08 —— 那是求解器靶点决定的（`MIN_LINK_DARK = 4.62`）。**以后若再抬 `darkLift`，
-  必须同步抬 `MIN_LINK_DARK`**，否则链接会在 AA 线上横跳。
-- `paperC` 只服务 `50` 号色，而 `50` 号在浅色侧同时是菜单表面的基色（`menu-surface-fill`）：
-  `paperScale` 任何放大都会顺带把浅色菜单染深。0.8.1 把 `paperC` 降下来后这个耦合的影响变小了，
-  但结构还在。真要解耦得让 `50` 号不再兼任「深色正文」与「浅色表面」。
-- 深色三档文字色拉不开（ΔE 0.4–1.0）是 sRGB 近白天花板决定的物理限制，
-  不是参数没调对 —— 别为拉档差去抬 `paperScale`。
-- 黑白配色完全走宿主值，含宿主本身的 3.71 / 4.23（AA 未达标）。要修需要给 mono 建一条
-  走引擎的色阶，属于观感变更，另行确认。
-- `blue` 与 `deepseek` 两条色阶被染到同一色相，信息态与品牌色不可分；需要时给 `blue` 单独的色度系数。
-- 渲染效果未在真实 GUI 里验证过（本机没有可控浏览器会话）。
+MIT © 2026 Zuoyunlai

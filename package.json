@@ -1,12 +1,12 @@
 {
   "name": "dsh-theme-palette",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "DSH 主题配色：4 套配色 × 明暗两模式，OKLCH 色域安全重建 + 真实承载面对比度求解，可调强度与面板表面。",
   "type": "module",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
-    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
   "files": [
@@ -25,13 +25,18 @@
     "tools/compare.mjs",
     "tools/release.mjs",
     "CHANGELOG.md",
-    "docs/DESIGN.md"
+    "docs/DESIGN.md",
+    "README-zh.md",
+    "README-es.md",
+    "README-pt.md",
+    "README-hi.md",
+    "locale"
   ],
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.0"
   },
   "engines": {
-    "node": ">=20"
+    "node": "^22.19.0 || >=24.0.0"
   },
   "dsh": {
     "bundle": {
@@ -67,5 +72,6 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
-  }
+  },
+  "packageManager": "pnpm@11.7.0"
 }
