@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.3.0'
+    const PLUGIN_VERSION = '1.3.1'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1119,6 +1119,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         row(txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode)),
         row(txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode)),
         health && !health.ok && h('p', { className: 'dsh-tp-status is-bad' }, txt.bad),
+        health && health.ok && health.reapplies > 0 && h(
+          'p',
+          { className: 'dsh-tp-status' },
+          (isZh() ? '配色层被宿主丢过一次，已自动恢复 ' : 'Palette layer was dropped by the host; restored ') + health.reapplies + (isZh() ? ' 次' : 'x'),
+        ),
         h('button', {
           type: 'button',
           className: 'dsh-tp-more',
@@ -1210,7 +1215,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 
         let disposeLayer = () => {}
         /** 按当前配色 + 侧栏档位重建覆盖层（换配色与换侧栏档位走同一条路）。 */
-        const applyAll = () => {
+        // 最近一次成功应用的 token 表与原因：自愈时据此重放，也用来解释"为什么又变回去了"。
+        let lastTokens = null
+        let lastAppliedAt = 0
+        let lastReason = 'init'
+        let reapplyCount = 0
+
+        const applyAll = (reason) => {
           const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
           const tokens = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode)
           let next = () => {}
@@ -1226,8 +1237,38 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           const prev = disposeLayer
           disposeLayer = next
           prev()
+          if (reason !== undefined) lastReason = reason
+          lastTokens = tokens
+          lastAppliedAt = Date.now()
           scheduleProbe(tokens)
         }
+        /**
+         * 自愈。
+         *
+         * 宿主的 theme.overrideTokens 把每一层的 disposer 挂在**调用方 fiber** 上
+         * （`ctx.effect(() => dispose, ...)`）：插件被卸载/重载、或 fiber 的 effect 被清理时，
+         * 这一层就没了 —— 表现正是"配色自己跳回默认"，而 localStorage 里的选择还在。
+         * 这里定期（以及窗口重新可见/获焦时）回读 body：token 不在了就把最后一层重放。
+         */
+        const ensureApplied = (reason) => {
+          if (lastTokens === null) return
+          if (Date.now() - lastAppliedAt < 900) return
+          let missing = false
+          try {
+            const style = getComputedStyle(document.body)
+            for (const name of TOKEN_PROBE) {
+              if (!(name in lastTokens)) continue
+              if (style.getPropertyValue(name).trim() === '') { missing = true; break }
+            }
+          } catch (err) {
+            missing = true
+          }
+          if (!missing) return
+          reapplyCount += 1
+          console.info('[dsh-theme-palette] 配色层不见了（' + reason + '），已重放第 ' + reapplyCount + ' 次')
+          applyAll('self-heal:' + reason)
+        }
+
         let health = null
         const healthListeners = new Set()
         const getHealth = () => health
@@ -1243,7 +1284,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             const next = probeApplied(tokens)
             if (next === null) return
             if (health !== null && health.ok === next.ok && health.checked === next.checked) return
-            health = next
+            health = { ...next, reapplies: reapplyCount }
             if (!next.ok) console.warn('[dsh-theme-palette] 有 token 没写进 body，宿主可能改名了')
             emitHealth()
           }
@@ -1321,11 +1362,36 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           console.warn('[dsh-theme-palette] dev hook attach 失败：', err)
         }
 
+        // 自愈的触发点：窗口回前台、获焦、页面恢复、主题事件、以及一个低频定时器。
+        const heal = (why) => () => { try { ensureApplied(why) } catch (err) { /* 自愈失败不影响主流程 */ } }
+        const healOnVisible = heal('visibility')
+        const healOnFocus = heal('focus')
+        const healOnShow = heal('pageshow')
+        const healOnTheme = heal('theme-change')
+        let healTimer = null
+        try {
+          document.addEventListener('visibilitychange', healOnVisible)
+          window.addEventListener('focus', healOnFocus)
+          window.addEventListener('pageshow', healOnShow)
+        } catch (err) { /* 无 DOM 时跳过 */ }
+        try { ctx.on('theme/change', healOnTheme) } catch (err) { /* 事件名变了就只靠定时器 */ }
+        try { healTimer = setInterval(() => ensureApplied('interval'), 4000) } catch (err) { /* 无定时器环境 */ }
+
         ctx.effect(() => {
-          applyAll()
+          applyAll('boot')
           const removeStyle = installRightbarStyle()
           const removeSettings = installSettingsStyle()
-          return () => { disposeLayer(); removeStyle(); removeSettings() }
+          return () => {
+            disposeLayer()
+            removeStyle()
+            removeSettings()
+            try {
+              document.removeEventListener('visibilitychange', healOnVisible)
+              window.removeEventListener('focus', healOnFocus)
+              window.removeEventListener('pageshow', healOnShow)
+            } catch (err) { /* 同上 */ }
+            if (healTimer !== null) { clearInterval(healTimer); healTimer = null }
+          }
         }, 'dsh-theme-palette: token layer + 右栏样式')
 
         ctx.slots.inject('settings.section', () =>

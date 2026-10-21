@@ -7,6 +7,48 @@ DSH Web / Desktop 的主题配色插件：**4 套配色 × 明暗两模式**，�
 
 当前版本 **0.8.2**（0.8.1 按深色专项审计重做深色侧，0.8.2 把强调色换成设计稿标准值；见 §修订记录）。
 
+## 为什么配色会自己跳回默认（v1.3.1）
+
+现象：设了暖砂，用了一阵（跑模型操作、切窗口、长时间放着），**突然变成黑白**，但设置页里
+「暖砂」还是选中的。原因在宿主的 override 生命周期：
+
+```js
+// ThemeRuntime（宿主）
+overrideTokens(source, tokens) {
+  const layer = { seq: this.overrideSeq++, tokens: validateOverrides(source, tokens) }
+  this.overrides.set(source, layer)
+  this.publish()
+  return () => { if (this.overrides.get(source) !== layer) return; this.overrides.delete(source); this.publish() }
+}
+```
+
+而插件侧拿到的是被 runner 包装过的版本 —— **每一层的 disposer 都被挂在调用方的 fiber 上**：
+
+```js
+const dispose = Reflect.apply(method, target, [id, tokens])
+ctx.effect(() => dispose, 'cordis-client-runner: dynamic theme override layer')
+```
+
+也就是说：**这一层的生命周期 = 插件 fiber 的生命周期**。插件被卸载/重载、或 fiber 的
+effect 被清理时，层就没了；`composeActive` 在 `overrides.size === 0` 时直接返回内置主题，
+于是页面**静默**变回默认色 —— localStorage 里的选择还在，设置页自然还显示暖砂。
+
+会触发 fiber 重载的典型情况：动态插件被宿主重载（改过插件文件/profile、宿主自我更新）、
+渲染进程恢复、以及某些"模型操作"引起的插件重载。
+
+**v1.3.1 的处理**：加了一个自愈环。窗口重新可见 / 获焦 / `pageshow` / `theme/change` /
+每 4 秒，回读 `body` 上的 5 个关键 token；不在了就把最后一层重放：
+
+```
+[dsh-theme-palette] 配色层不见了（visibility），已重放第 1 次
+```
+
+设置页顶部会显示"配色层被宿主丢过一次，已自动恢复 N 次"；健康时不产生任何写入。
+
+**另一种可能**（值得先分辨）：如果是 **localStorage 被清**（换 profile、清缓存），设置页会回到
+「黑白」选中态 —— 那种情况自愈救不回来，因为连"你想用哪套"都丢了。判据就是**设置页里选中的
+是不是你原来那套**。
+
 ## 设置页重排（v1.3.0）
 
 原来的设置页是六行"工程参数"堆在一起、每行都是同一种小药丸。v1.3.0 重做成四段：
@@ -569,6 +611,10 @@ dsh plugin --profile desktop add "E:\Documents\deepseek-harness\default-workspac
 - 侧栏深色放开下沉阻尼 —— 深色导轨边界 ΔE 0.49 → 1.86–2.10，与浅色同档对齐
 - 苔绿强调 `155°→165°` —— 与底色（h≈152）从 2° 拉开到 13°，链接不再只靠明度识别
 - 深色对比度：正文 14.40–14.98、三级 4.79 起、链接 4.65 起（0 处低于下限）
+
+**1.3.1**
+- 自愈：override 层被宿主丢掉时（插件 fiber 重载等）自动重放，设置页显示恢复次数
+- 触发点：visibilitychange / focus / pageshow / theme/change / 4s 定时；健康时零写入
 
 **1.3.0**
 - 设置页重排：2×2 缩略图卡片（随明暗切换）+ 段落式设置行 + 分段控件 + 版本徽标
