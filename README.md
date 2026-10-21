@@ -538,12 +538,49 @@ alpha **浅色与内置一致、深色压到 0.6 倍**（见下）：
 
 ## 安装
 
-```
-dsh plugin --profile desktop add "E:\Documents\deepseek-harness\default-workspace\dsh-theme-palette"
+从 npm（推荐）：
+
+```bash
+# 方式 A：装进 DSH profile
+cd ~/.dsh/profiles/desktop
+pnpm add dsh-theme-palette
+
+# 方式 B：用 DSH 的插件命令
+dsh plugin --profile desktop add dsh-theme-palette
 ```
 
-装完**必须重启 GUI**。`node_modules/dsh-theme-palette` 是**副本**，改源码后要删掉副本再 `pnpm install`
-（`pnpm add` 对已存在的 `file:` 目录不会刷新内容）。
+从 GitHub Release 的 tarball（npm 不可达时）：
+
+```bash
+pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.3.1/dsh-theme-palette-1.3.1.tgz"
+```
+
+从源码（开发调试）：
+
+```bash
+git clone https://github.com/zuoyunlai/dsh-theme-palette.git
+dsh plugin --profile desktop add "$PWD/dsh-theme-palette"
+```
+
+装完**必须重启 GUI**（运行中的进程仍持旧模块）。
+
+> 开发时注意：`node_modules/dsh-theme-palette` 是**副本**，改源码后要
+> `rm -rf node_modules/dsh-theme-palette && pnpm install` —— `pnpm add` 对已存在的
+> `file:` 目录不会刷新内容。
+
+安装后：左下角头像 → 设置 → 左侧「**主题色**」。
+
+## 发版
+
+```bash
+node tools/release.mjs --dry      # 本地检查：语法 / 工作区 / 打包内容 / 版本是否已存在
+node tools/release.mjs            # 真发布（npm 已登录）+ 等 registry 放出 + 校验 latest
+node tools/release.mjs --tag      # 发布后再打 tag 并推 main + tag
+```
+
+脚本要处理三件容易出错的事：本机 npm 默认源是 npmmirror（**必须显式指官方源**）；
+新包名的首次发布会进**暂存审核**（CLI 照打印 `+ pkg@ver`，但 registry 要过几分钟才 200）；
+`latest` 不保证自动前移。2026-10-21 实测：提交到放出约 **8 分钟**。
 
 ## 结构
 
@@ -611,6 +648,10 @@ dsh plugin --profile desktop add "E:\Documents\deepseek-harness\default-workspac
 - 侧栏深色放开下沉阻尼 —— 深色导轨边界 ΔE 0.49 → 1.86–2.10，与浅色同档对齐
 - 苔绿强调 `155°→165°` —— 与底色（h≈152）从 2° 拉开到 13°，链接不再只靠明度识别
 - 深色对比度：正文 14.40–14.98、三级 4.79 起、链接 4.65 起（0 处低于下限）
+
+**1.3.2**
+- README 安装说明改为 npm / Release tarball / 源码三条路径，去掉本机绝对路径
+- 新增 `tools/release.mjs`：一键发版（检查 → 发布 → 等 registry → 校验 latest → 可选打 tag）
 
 **1.3.1**
 - 自愈：override 层被宿主丢掉时（插件 fiber 重载等）自动重放，设置页显示恢复次数
