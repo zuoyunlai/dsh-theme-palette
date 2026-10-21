@@ -4,7 +4,7 @@
 
 DeepSeek Harness (वेब और डेस्कटॉप) के लिए थीम पैलेट: **4 पैलेट × लाइट/डार्क**, दो स्वतंत्र अक्ष।
 
-![सेटिंग्स पेज](assets/screenshot-settings-dark.png)
+![सेटिंग्स पेज](assets/screenshot-settings-light.png)
 
 ## Compatibility
 
