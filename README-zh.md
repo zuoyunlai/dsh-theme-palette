@@ -31,13 +31,13 @@ cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
 
 # 或指定版本
-pnpm add dsh-theme-palette@1.4.0
+pnpm add dsh-theme-palette@1.4.3
 ```
 
 从 GitHub Release 的 tarball：
 
 ```bash
-pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.0/dsh-theme-palette-1.4.0.tgz"
+pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.3/dsh-theme-palette-1.4.3.tgz"
 ```
 
 装完**必须重启 GUI**（运行中的进程仍持旧模块）。入口：左下角头像 → **设置** → 「**主题色**」。

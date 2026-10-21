@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.4.2'
+    const PLUGIN_VERSION = '1.4.3'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -171,7 +171,7 @@ window.__ModuleLoader__.load({
      * 右侧栏底色。宿主的右栏（ui-layout 的 RightbarColumn）**没有自己的背景**，
      * 露出的是 frame 的 --dsw-alias-bg-base（也就是会话区画布色），所以看着和中间一样。
      * 元素上有一个稳定钩子 `data-rightbar-col`，用一条 CSS 规则就能单独上色，
-     * 具体颜色由 token 层给的 --dsh-rightbar-fill 决定（默认直接引用左栏 token）。
+     * 具体颜色由 token 层给的 --dshtp-rightbar-fill 决定（默认直接引用左栏 token）。
      */
     const RIGHTBAR_MODES = [
       { id: 'sidebar', label: '同左栏' },
@@ -673,20 +673,20 @@ window.__ModuleLoader__.load({
       // 会得到一张近白卡片，而卡片文字是 label-primary（深色下近白）→ 白底白字。
       const accentHex = ramps.deepseek['500']
       const accentDark = ramps.deepseek['400']
-      pairs['--dsh-card-picked'] = {
+      pairs['--dshtp-card-picked'] = {
         light: mixHex(accentHex, ramps.bluish['00'], 0.10),
         dark: mixHex(accentDark, ramps.bluish['950'], 0.16),
       }
       const rightbarFill = rightbarMode === 'canvas'
         ? 'var(--dsw-alias-bg-base)'
         : 'var(--dsw-specific-sidebar-fill)'
-      pairs['--dsh-rightbar-fill'] = { light: rightbarFill, dark: rightbarFill }
+      pairs['--dshtp-rightbar-fill'] = { light: rightbarFill, dark: rightbarFill }
       // Markdown 强调色：标题 = 正文色混 40% 强调色；加粗 = 混 20%（比标题弱一档）
       if (scheme.tinted) {
         if (mdMode === 'off') {
           const inherit = { light: 'inherit', dark: 'inherit' }
-          pairs['--dsh-md-heading'] = inherit
-          pairs['--dsh-md-strong'] = inherit
+          pairs['--dshtp-md-heading'] = inherit
+          pairs['--dshtp-md-strong'] = inherit
         } else {
           // 加粗：只加色度、不动明度 —— 混色会把正文调亮（浅色下反而比正文更弱）。
           // 标题：再往中间推一点明度（浅色提亮 / 深色压暗），配合更大的字号拉开层级。
@@ -695,11 +695,11 @@ window.__ModuleLoader__.load({
             const acc = toOklch(accentHex)
             return fromOklch(clamp(L + lift, 0.05, 0.97), C + acc[1] * extraChroma, acc[2])
           }
-          pairs['--dsh-md-heading'] = {
+          pairs['--dshtp-md-heading'] = {
             light: tintText(ramps.bluish['1000'], ramps.deepseek['500'], 0.45, 0.065),
             dark: tintText(ramps.bluish['50'], ramps.deepseek['400'], 0.40, -0.030),
           }
-          pairs['--dsh-md-strong'] = {
+          pairs['--dshtp-md-strong'] = {
             light: tintText(ramps.bluish['1000'], ramps.deepseek['500'], 0.32, 0.012),
             dark: tintText(ramps.bluish['50'], ramps.deepseek['400'], 0.32, -0.010),
           }
@@ -708,11 +708,11 @@ window.__ModuleLoader__.load({
       // 代码块底色：宿主用 bg-layer-1，浅色下与画布同色（都指 00）→ 看不出边界。
       // 这里给它一档独立的"内嵌面板"色：卡层色 + 少量强调色相，保证与画布有可辨差。
       // mixHex(a, b, w) = a*w + b*(1-w)：a 是要掺进去的颜色，b 是底色。
-      pairs['--dsh-code-fill'] = {
+      pairs['--dshtp-code-fill'] = {
         light: mixHex(ramps.deepseek['500'], ramps.bluish['60'], 0.08),
         dark: mixHex(ramps.deepseek['400'], ramps.bluish['875'], 0.10),
       }
-      pairs['--dsh-code-inline'] = {
+      pairs['--dshtp-code-inline'] = {
         light: mixHex(ramps.deepseek['500'], ramps.bluish['50'], 0.05),
         dark: mixHex(ramps.deepseek['400'], ramps.bluish['900'], 0.07),
       }
@@ -771,16 +771,16 @@ window.__ModuleLoader__.load({
      * 全屏右栏时退回画布色 —— 那时右栏就是整块内容区，染成侧栏色会像只剩一条侧栏。
      */
     const RIGHTBAR_CSS = [
-      '[data-rightbar-col]{background:var(--dsh-rightbar-fill,var(--dsw-alias-bg-base))}',
+      '[data-rightbar-col]{background:var(--dshtp-rightbar-fill,var(--dsw-alias-bg-base))}',
       '[data-rightbar-fullscreen] [data-rightbar-col]{background:var(--dsw-alias-bg-base)}',
       // Markdown 标题/加粗：容器类是 CSS Modules 的 `_markdown_<hash>_<n>`，
       // 用「类名里含 _markdown_」做钩子（局部名稳定，比整串哈希耐版本）。
-      '[class*="_markdown_"] :where(h1,h2,h3,h4,h5,h6){color:var(--dsh-md-heading,inherit)}',
-      '[class*="_markdown_"] strong{color:var(--dsh-md-strong,inherit)}',
+      '[class*="_markdown_"] :where(h1,h2,h3,h4,h5,h6){color:var(--dshtp-md-heading,inherit)}',
+      '[class*="_markdown_"] strong{color:var(--dshtp-md-strong,inherit)}',
       // 代码块：宿主把底色写在 CSS Modules 的 .block 上（浅色与画布同为 00，看不出边界）。
       // 这里以 `.md-code-block` 提高一级特异性覆盖，不需要 !important。
-      '[class*="_markdown_"] .md-code-block{background:var(--dsh-code-fill,inherit)}',
-      '[class*="_markdown_"] :not(pre) > code{background:var(--dsh-code-inline,inherit)}',
+      '[class*="_markdown_"] .md-code-block{background:var(--dshtp-code-fill,inherit)}',
+      '[class*="_markdown_"] :not(pre) > code{background:var(--dshtp-code-inline,inherit)}',
     ].join('')
 
     /* ================= 设置页样式（head 里第二条 CSS） ================= */
@@ -795,7 +795,7 @@ window.__ModuleLoader__.load({
 @media (max-width:620px){.dsh-tp-grid{grid-template-columns:1fr}}
 .dsh-tp-card{position:relative;display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;cursor:pointer;padding:9px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:transparent;transition:background .12s ease,border-color .12s ease}
 .dsh-tp-card:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.dsh-tp-card.is-on{background:var(--dsh-card-picked,var(--dsw-alias-bg-module-platform));border-color:var(--t-accent-l)}
+.dsh-tp-card.is-on{background:var(--dshtp-card-picked,var(--dsw-alias-bg-module-platform));border-color:var(--t-accent-l)}
 body[data-ds-dark-theme] .dsh-tp-card.is-on{border-color:var(--t-accent-d)}
 .dsh-tp-thumb{display:flex;height:56px;border-radius:9px;overflow:hidden;border:.5px solid rgba(128,128,128,.28)}
 .dsh-tp-thumb-side{width:34%;background:var(--t-side-l)}
@@ -1302,8 +1302,20 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
     }
 
     /* ================= 插件 ================= */
+    /**
+     * 开发期接口默认**关闭**：只有在页面 URL 上显式带 `?dshThemeDev=1` 时才暴露。
+     * 这不是安全边界（同上下文脚本本就有同等权力），而是防止"谁先定义谁拿到全部 setter"
+     * 的默认开放；一旦宿主将来把插件放进受限上下文，它就是跨权限入口。
+     */
+    const DEV_OPT_IN = (() => {
+      try {
+        const search = typeof location !== 'undefined' && location ? String(location.search || '') : ''
+        return /(?:^|[?&])dshThemeDev=1(?:&|$)/.test(search)
+      } catch (err) { return false }
+    })()
+
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
-    if (typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
+    if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
       window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, contrast, toOklch, rampsFor, settingsCss: SETTINGS_CSS, cardColors })
     }
 
@@ -1543,11 +1555,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         } catch (err) { /* 没有 MutationObserver 就只在打开设置页时读一次 */ }
 
         // 开发期自动化接口：截图回归要从外部驱动「换配色 / 换明暗」，而这两件事
-        // 平时只能点界面。暴露一组 setter，让 CDP 的 Runtime.evaluate 能直接调用。
+        // 平时只能点界面。默认不暴露，必须 URL 带 ?dshThemeDev=1 才挂（见 DEV_OPT_IN）。
+        let detachDev = null
         try {
-          const dev = typeof window !== 'undefined' ? window.__DSH_THEME_PALETTE_DEV__ : undefined
+          const dev = DEV_OPT_IN && typeof window !== 'undefined' ? window.__DSH_THEME_PALETTE_DEV__ : undefined
           if (dev && typeof dev.attach === 'function') {
-            dev.attach({
+            const THEME_IDS = ['light', 'dark', 'system']
+            const attached = dev.attach({
               setPalette,
               setSidebarMode,
               setTextMode,
@@ -1557,9 +1571,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               getPreference: () => theme.getTheme().preference,
               setLangPref,
               locales: LOCALES,
-              setTheme: (id) => theme.setTheme(id),
+              // 和其它 setter 一样过白名单：任意字符串会原样进宿主主题状态并被持久化
+              setTheme: (id) => { if (THEME_IDS.indexOf(id) !== -1) theme.setTheme(id) },
               schemes: SCHEMES.map((s) => s.id),
             })
+            if (typeof attached === 'function') detachDev = attached
           }
         } catch (err) {
           console.warn('[dsh-theme-palette] dev hook attach 失败：', err)
@@ -1579,7 +1595,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         } catch (err) { /* 无 DOM 时跳过 */ }
         try { ctx.on('theme/change', healOnTheme) } catch (err) { /* 事件名变了就只靠定时器 */ }
         try {
-          healTimer = setInterval(() => ensureApplied('interval'), 4000)
+          healTimer = setInterval(() => {
+            // 页面不可见时不做样式回读：容器里长时间后台驻留时，4 秒一次 getComputedStyle 是纯浪费
+            try { if (document.visibilityState === 'hidden') return } catch (err) { /* 无该 API */ }
+            ensureApplied('interval')
+          }, 15000)
           if (healTimer && typeof healTimer.unref === 'function') healTimer.unref()
         } catch (err) { /* 无定时器环境 */ }
 
@@ -1597,6 +1617,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               window.removeEventListener('pageshow', healOnShow)
             } catch (err) { /* 同上 */ }
             if (healTimer !== null) { clearInterval(healTimer); healTimer = null }
+            if (typeof detachDev === 'function') { try { detachDev() } catch (err) { /* 忽略 */ } }
             if (langObserver !== null) { langObserver.disconnect(); langObserver = null }
           }
         }, 'dsh-theme-palette: token layer + 右栏样式')

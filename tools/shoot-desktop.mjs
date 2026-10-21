@@ -87,26 +87,34 @@ async function main() {
   fs.mkdirSync(outDir, { recursive: true })
   const manifest = []
 
-  for (const scheme of all) {
-    for (const mode of ['light', 'dark']) {
-      await evaluate(cdp, `window.__DSH_THEME_PALETTE_DEV__.setPalette(${JSON.stringify(scheme)})`)
-      await evaluate(cdp, `window.__DSH_THEME_PALETTE_DEV__.setTheme(${JSON.stringify(mode)})`)
-      await sleep(700) // 等 presenter 落样式 + 字体
-      const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
-      const buf = Buffer.from(shot.data, 'base64')
-      const name = `${scheme}-${mode}.png`
-      fs.writeFileSync(path.join(outDir, name), buf)
-      manifest.push({ name, scheme, mode, bytes: buf.length, sha256: createHash('sha256').update(buf).digest('hex').slice(0, 16) })
-      console.log(`✓ ${name}  ${(buf.length / 1024).toFixed(0)} KB`)
+  try {
+    for (const scheme of all) {
+      for (const mode of ['light', 'dark']) {
+        await evaluate(cdp, `window.__DSH_THEME_PALETTE_DEV__.setPalette(${JSON.stringify(scheme)})`)
+        await evaluate(cdp, `window.__DSH_THEME_PALETTE_DEV__.setTheme(${JSON.stringify(mode)})`)
+        await sleep(700) // 等 presenter 落样式 + 字体
+        const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
+        const buf = Buffer.from(shot.data, 'base64')
+        const name = `${scheme}-${mode}.png`
+        fs.writeFileSync(path.join(outDir, name), buf)
+        manifest.push({ name, scheme, mode, bytes: buf.length, sha256: createHash('sha256').update(buf).digest('hex').slice(0, 16) })
+        console.log(`✓ ${name}  ${(buf.length / 1024).toFixed(0)} KB`)
+      }
+    }
+  } finally {
+    // 还原用户原来的偏好（theme 会写进宿主设置，不还会改用户配置）。
+    // 放 finally：中途任何一张截图失败，也不能把宿主的明暗偏好留在被改写状态。
+    try {
+      await evaluate(cdp, `${api}.setPalette(${JSON.stringify(originalPalette)})`)
+      await evaluate(cdp, `${api}.setTheme(${JSON.stringify(originalPref)})`)
+      console.log(`已还原配色 ${originalPalette} / 明暗 ${originalPref}`)
+    } catch (err) {
+      console.error(`✗ 还原失败，请手动把配色改回 ${originalPalette}、明暗改回 ${originalPref}：` + err.message)
     }
   }
 
-  // 还原用户原来的偏好（theme 会写进宿主设置，不还会改用户配置）
-  await evaluate(cdp, `${api}.setPalette(${JSON.stringify(originalPalette)})`)
-  await evaluate(cdp, `${api}.setTheme(${JSON.stringify(originalPref)})`)
   fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify({ target: target.url, viewport: await evaluate(cdp, '[innerWidth, innerHeight]'), originalPreference: originalPref, originalPalette, shots: manifest }, null, 2) + '\n')
   console.log(`\n输出目录：${outDir}`)
-  console.log(`已还原明暗偏好：${original}`)
 }
 
 main().catch((e) => { console.error('✗ ' + e.message); process.exit(1) })

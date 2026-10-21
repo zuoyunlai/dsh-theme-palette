@@ -1,6 +1,6 @@
 {
   "name": "dsh-theme-palette",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "DSH 主题配色：4 套配色 × 明暗两模式，OKLCH 色域安全重建 + 真实承载面对比度求解，可调强度与面板表面。",
   "type": "module",
   "main": "index.js",
@@ -21,14 +21,6 @@
     "icon.svg",
     "README.md",
     "LICENSE",
-    "palette-dev.mjs",
-    "tools/sheet.mjs",
-    "tools/shoot-sheet.mjs",
-    "tools/shoot-html.mjs",
-    "tools/preview-settings.mjs",
-    "tools/shoot-desktop.mjs",
-    "tools/compare.mjs",
-    "tools/release.mjs",
     "CHANGELOG.md",
     "docs/DESIGN.md",
     "README-zh.md",
@@ -38,10 +30,13 @@
     "locale"
   ],
   "peerDependencies": {
-    "@deepseek-ai/cordis": "^4.0.0"
+    "@deepseek-ai/cordis": "^4.0.0",
+    "@deepseek-ai/dsh-client-ui-theme": "^0.2.1-rc.1",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.2.1-rc.1"
   },
   "engines": {
-    "node": "^22.19.0 || >=24.0.0"
+    "node": "^22.19.0 || >=24.0.0",
+    "dsh": ">=0.2.1-rc.1"
   },
   "dsh": {
     "bundle": {
@@ -78,5 +73,16 @@
     "access": "public",
     "registry": "https://registry.npmjs.org"
   },
-  "packageManager": "pnpm@11.7.0"
+  "packageManager": "pnpm@11.7.0",
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-theme": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-settings": {
+      "optional": true
+    }
+  }
 }

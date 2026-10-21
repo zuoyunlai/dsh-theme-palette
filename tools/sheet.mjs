@@ -27,11 +27,12 @@ const sandbox = {
     __DSH_THEME_PALETTE_DEV__: (api) => { engine = api },
   },
   localStorage: { getItem: () => null, setItem: () => {} },
+  location: { search: '?dshThemeDev=1' },
   document: { head: { appendChild() {} }, createElement: () => ({ dataset: {}, remove() {} }), querySelector: () => null, documentElement: { lang: 'zh' } },
   navigator: { language: 'zh' },
 }
-new Function('window', 'localStorage', 'document', 'navigator', source)(
-  sandbox.window, sandbox.localStorage, sandbox.document, sandbox.navigator,
+new Function('window', 'localStorage', 'document', 'navigator', 'location', source)(
+  sandbox.window, sandbox.localStorage, sandbox.document, sandbox.navigator, sandbox.location,
 )
 sandbox.def.factory(() => ({ createElement: () => null, useState: () => [null, () => {}], useSyncExternalStore: () => 'mono' }))
 if (!engine) throw new Error('生产引擎没有暴露 dev 钩子')
@@ -87,9 +88,9 @@ function palette(scheme, mode) {
     switchOn: pick('--dsw-alias-brand-primary', h.switchOn),
     scroll: stat('200', h.scroll),
     scrollHover: stat('300', h.scrollHover),
-    code: pick('--dsh-code-fill', isDarkFallback(h)),
-    codeInline: pick('--dsh-code-inline', h.card),
-    picked: pick('--dsh-card-picked', h.card),
+    code: pick('--dshtp-code-fill', isDarkFallback(h)),
+    codeInline: pick('--dshtp-code-inline', h.card),
+    picked: pick('--dshtp-card-picked', h.card),
   }
 }
 

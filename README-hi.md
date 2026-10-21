@@ -31,13 +31,13 @@ cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
 
 # या कोई विशेष संस्करण
-pnpm add dsh-theme-palette@1.4.0
+pnpm add dsh-theme-palette@1.4.3
 ```
 
 GitHub रिलीज़ के tarball से:
 
 ```bash
-pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.0/dsh-theme-palette-1.4.0.tgz"
+pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.3/dsh-theme-palette-1.4.3.tgz"
 ```
 
 इसके बाद **GUI को फिर से शुरू करें** — चल रहा प्रोसेस पुराना मॉड्यूल रखता है। खोलें: अवतार → सेटिंग्स → **Color theme**।

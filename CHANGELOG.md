@@ -4,6 +4,19 @@
 
 ## 版本一览
 
+### 1.4.3
+安全审计后的整改（`@应用安全工程师` 审计，逐条复核后落地）：
+
+- **文档**：`tools/README.md` 删掉「把 `--remote-debugging-port` 长期写进快捷方式」的建议，改为「只在截图那一次开、抓完即关」，并说明该端口无鉴权等价于渲染进程任意代码执行，同时给出 `--remote-debugging-pipe` 替代
+- **`tools/release.mjs` 去 shell 拼接**：name/version/tag 先过严格白名单，命令一律 `execFileSync(程序, 参数数组)`，npm 走 `node <npm-cli.js>`；registry 探测改用 `fetch`（不再 curl）；`--dry` 无副作用
+- **发布前校验**：`PLUGIN_VERSION` 必须等于 `package.json.version`；CI 下自动加 `--provenance`；配了 `user.signingkey` 时 tag 自动用 `-s`
+- **dev 钩子收口**：默认不暴露，必须 URL 带 `?dshThemeDev=1`；`attach` 返回的清理函数在插件卸载时调用；`setTheme` 补 `light/dark/system` 白名单（此前是唯一不校验输入的 setter）
+- **自愈定时器**：4s → 15s，且 `visibilityState === 'hidden'` 直接早退（不再后台空转样式回读）
+- **token 前缀**：`--dsh-*` → `--dshtp-*`（与宿主 `--dsh-content-*` 等命名解耦，避免跨插件碰撞）
+- **`tools/shoot-desktop.mjs`**：修收尾处引用未定义变量 `original` 的崩溃；还原动作移进 `try/finally`，中途失败也不会把用户明暗偏好留在被改写状态
+- **声明补齐**：peer 补 `dsh-client-ui-theme` / `dsh-client-ui-settings`（optional），`engines.dsh >= 0.2.1-rc.1`；`files` 移出 `palette-dev.mjs` 与 `tools/*`（发布面从 24 个文件降到 14 个）
+- **README 五语版本钉** 1.4.0 → 1.4.3
+
 ### 1.4.2
 - **修复启动崩溃**：1.4.1 为了展示元数据加了 `exports`，但漏了 `"./client"` —— 宿主 `client-modules` 找不到 client bundle 时会让 **required 插件 `modules` 启动失败**，整个 profile 的插件全部不加载（重启后界面报错、插件消失）
 - `exports` 现在显式列出 `./client`、`./client.js`、`./index.js`、`./cordis.patch.yml`、`./package.json`

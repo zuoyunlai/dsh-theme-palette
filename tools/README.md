@@ -31,7 +31,12 @@ node tools/compare.mjs --dir tools/out/<run> --update   # 认这次为新基线
 & "D:\Programs\DeepSeek Harness\DeepSeek Harness.exe" --remote-debugging-port=9333
 ```
 
-（想长期这样用：右键桌面快捷方式 → 属性 → 目标末尾加 ` --remote-debugging-port=9333`。）
+> ⚠️ **这个端口没有任何鉴权**：能连上它的人可以在渲染进程里执行任意代码（`Runtime.evaluate`），
+> 也能读到同 origin 的全部 `localStorage`（宿主会话凭据就在那儿）。所以：
+>
+> - **只在需要截图的那一次启动里开**，抓完立刻关掉重开（不要把它写进快捷方式常驻）；
+> - 只绑本机、不要在共享网络/远程桌面里开；
+> - 更安全的替代：`--remote-debugging-pipe`（走 stdio 而不是 TCP 端口，外部进程够不到）。
 
 然后：
 

@@ -22,9 +22,10 @@ const sandbox = {
   localStorage: { getItem: () => null, setItem: () => {} },
   document: { documentElement: { lang: 'zh' } },
   navigator: { language: 'zh' },
+  location: { search: '?dshThemeDev=1' },
 }
-new Function('window', 'localStorage', 'document', 'navigator', source)(
-  sandbox.window, sandbox.localStorage, sandbox.document, sandbox.navigator,
+new Function('window', 'localStorage', 'document', 'navigator', 'location', source)(
+  sandbox.window, sandbox.localStorage, sandbox.document, sandbox.navigator, sandbox.location,
 )
 sandbox.__def.factory(() => ({
   createElement: () => null,

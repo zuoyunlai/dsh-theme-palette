@@ -105,13 +105,13 @@ MIN_MAIN 从 15.5 放宽到 12：给“带色正文”留出明度空间，仍�
 
 ```css
 /* 插件注入到 <head>，用官方同一套 data-plugin-css 标记 */
-[data-rightbar-col]{background:var(--dsh-rightbar-fill,var(--dsw-alias-bg-base))}
+[data-rightbar-col]{background:var(--dshtp-rightbar-fill,var(--dsw-alias-bg-base))}
 [data-rightbar-fullscreen] [data-rightbar-col]{background:var(--dsw-alias-bg-base)}
 ```
 
 - 钩子是 `data-rightbar-col` —— ui-layout 里 `RightbarColumn` 上的**语义属性**，不是哈希类名，
   宿主升级时不会跟着变；
-- 颜色不经硬编码：token 层只给一个 `--dsh-rightbar-fill`，值是 `var(--dsw-specific-sidebar-fill)`
+- 颜色不经硬编码：token 层只给一个 `--dshtp-rightbar-fill`，值是 `var(--dsw-specific-sidebar-fill)`
   或 `var(--dsw-alias-bg-base)`，所以它会自动跟着「左侧栏底色」三档一起变；
 - 全屏右栏时退回画布色 —— 那时右栏就是整块内容区，染成侧栏色会像只剩一条侧栏。
 

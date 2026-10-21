@@ -25,9 +25,10 @@ const sandbox = {
   localStorage: { getItem: () => null, setItem: () => {} },
   document: { head: { appendChild() {} }, createElement: () => ({ dataset: {}, remove() {} }), querySelector: () => null, documentElement: { lang: LANG === 'auto' ? 'zh-CN' : LANG } },
   navigator: { language: 'zh' },
+  location: { search: '?dshThemeDev=1' },
 }
-new Function('window', 'localStorage', 'document', 'navigator', source)(
-  sandbox.window, sandbox.localStorage, sandbox.document, sandbox.navigator,
+new Function('window', 'localStorage', 'document', 'navigator', 'location', source)(
+  sandbox.window, sandbox.localStorage, sandbox.document, sandbox.navigator, sandbox.location,
 )
 const React = {
   createElement: (type, props, ...kids) => ({ type, props: props || {}, kids }),
@@ -95,7 +96,7 @@ function vars(mode) {
       '--dsw-alias-bg-layer-1': stat(steps.card, h.card),
       '--dsw-alias-bg-module-platform': stat(mode === 'dark' ? '800' : '60', h.card),
       '--dsw-alias-state-error-primary': '#ef4444',
-      '--dsh-card-picked': pick('--dsh-card-picked', h.card),
+      '--dshtp-card-picked': pick('--dshtp-card-picked', h.card),
     },
   }
 }

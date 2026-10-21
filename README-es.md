@@ -31,13 +31,13 @@ cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
 
 # o una versión concreta
-pnpm add dsh-theme-palette@1.4.0
+pnpm add dsh-theme-palette@1.4.3
 ```
 
 Desde el tarball del release de GitHub:
 
 ```bash
-pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.0/dsh-theme-palette-1.4.0.tgz"
+pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.3/dsh-theme-palette-1.4.3.tgz"
 ```
 
 Después **reinicia la interfaz**: un proceso en marcha conserva el módulo antiguo. Se abre en avatar → Ajustes → **Color theme**.
