@@ -4,7 +4,7 @@
 
 Theme palette for DeepSeek Harness (web & desktop): **4 palettes × light/dark**, two independent axes.
 
-![Settings page: four palettes, strength and panel surfaces](assets/screenshot-settings.png)
+![Settings page: four palettes, strength and panel surfaces](assets/screenshot-settings-dark.png)
 
 ## Compatibility
 

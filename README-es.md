@@ -4,7 +4,7 @@
 
 Paleta de tema para DeepSeek Harness (web y escritorio): **4 paletas × claro/oscuro**, dos ejes independientes.
 
-![Página de ajustes](assets/screenshot-settings.png)
+![Página de ajustes](assets/screenshot-settings-dark.png)
 
 ## Compatibility
 
