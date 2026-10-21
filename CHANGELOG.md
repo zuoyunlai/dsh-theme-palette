@@ -4,6 +4,11 @@
 
 ## 版本一览
 
+### 1.4.2
+- **修复启动崩溃**：1.4.1 为了展示元数据加了 `exports`，但漏了 `"./client"` —— 宿主 `client-modules` 找不到 client bundle 时会让 **required 插件 `modules` 启动失败**，整个 profile 的插件全部不加载（重启后界面报错、插件消失）
+- `exports` 现在显式列出 `./client`、`./client.js`、`./index.js`、`./cordis.patch.yml`、`./package.json`
+- `tools/release.mjs` 增加守卫：声明了 `dsh.client` 就必须能解析 `exports["./client"]`，否则发版前直接失败
+
 ### 1.4.1
 - README 按 DSH 插件标准拆成五语：`README.md`（英文源）/ `README-zh.md` / `README-es.md` / `README-pt.md` / `README-hi.md`，章节结构完全一致
 - 补展示元数据：`locale/{en,zh}.json` 的 `meta.title`/`meta.description` + `exports` 暴露 `./locale/*.json` 与 `./icon`

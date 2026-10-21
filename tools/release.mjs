@@ -12,7 +12,7 @@
  * 另外 latest 不保证自动前移，得验一次。
  */
 import { execFileSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -41,6 +41,19 @@ console.log(`\n发版 ${name}@${version}${has('dry') ? '（dry run）' : ''}\n`)
 
 // 1. 本地检查
 try { run(process.execPath, ['--check', 'client.js']); ok('client.js 语法') } catch { die('client.js 语法错误') }
+// 1b. dsh.client 必须配 exports["./client"] —— 缺了宿主 client-modules 会直接启动失败
+//     （2026-10-21 实测：加 exports 却漏掉 ./client 导致重启后整个 profile 起不来）
+{
+  const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+  if (manifest.dsh && manifest.dsh.client) {
+    const clientRel = manifest.exports && manifest.exports['./client']
+    if (!clientRel) die('dsh.client 已声明但 exports 缺 "./client"（宿主会报 exports no "./client" bundle）')
+    const rel = typeof clientRel === 'string' ? clientRel : clientRel.default
+    if (typeof rel !== 'string' || !existsSync(path.join(root, rel))) die('exports["./client"] 指向的文件不存在：' + rel)
+    ok('client 子路径可解析：exports["./client"] → ' + rel)
+  }
+}
+
 const dirty = sh('git status --porcelain')
 if (dirty) die('工作区不干净，先提交：\n' + dirty)
 ok('工作区干净')
