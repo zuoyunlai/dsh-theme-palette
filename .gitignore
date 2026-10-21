@@ -7,3 +7,4 @@ tools/preview-*.html
 *.bak
 .DS_Store
 Thumbs.db
+tools/preview.html
