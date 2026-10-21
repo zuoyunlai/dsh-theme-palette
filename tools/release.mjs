@@ -22,6 +22,9 @@ const args = process.argv.slice(2)
 const has = (f) => args.includes('--' + f)
 
 const REGISTRY = 'https://registry.npmjs.org'
+// Windows 上 `npm` 实际是 npm.cmd，execFileSync 不做 PATHEXT 解析，必须写全名。
+const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+const CURL = process.platform === 'win32' ? 'curl.exe' : 'curl'
 const pkg = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
 const { name, version } = pkg
 const tag = 'v' + version
@@ -51,7 +54,7 @@ try {
 
 // 2. 版本是否已在 registry
 let remote = null
-try { remote = JSON.parse(sh(`npm view ${name} versions --json --registry=${REGISTRY}`)) } catch { remote = null }
+try { remote = JSON.parse(sh(`${NPM} view ${name} versions --json --registry=${REGISTRY}`)) } catch { remote = null }
 const remoteList = Array.isArray(remote) ? remote : remote ? [remote] : []
 if (remoteList.includes(version)) {
   ok(`registry 上已有 ${version}`)
@@ -66,7 +69,7 @@ if (has('dry')) { console.log('\n干跑结束，没有发布。\n'); process.exi
 if (!has('skip-publish')) {
   console.log('\n发布中…')
   try {
-    const out = run('npm', ['publish', `--registry=${REGISTRY}`], { stdio: ['ignore', 'pipe', 'inherit'] })
+    const out = run(NPM, ['publish', `--registry=${REGISTRY}`], { stdio: ['ignore', 'pipe', 'inherit'] })
     if (out) console.log(out)
   } catch (err) {
     die('npm publish 失败：' + (err.stderr || err.message))
@@ -79,10 +82,8 @@ const started = Date.now()
 let live = false
 while (Date.now() - started < 10 * 60 * 1000) {
   try {
-    const code = sh(`curl -s -o NUL -w "%{http_code}" ${REGISTRY}/${name}/${version}`)
+    const code = sh(`${CURL} -s -o ${process.platform === 'win32' ? 'NUL' : '/dev/null'} -w "%{http_code}" ${REGISTRY}/${name}/${version}`)
     if (code.trim() === '200') { live = true; break }
-    const codeUnix = sh(`curl -s -o /dev/null -w "%{http_code}" ${REGISTRY}/${name}/${version}`)
-    if (codeUnix.trim() === '200') { live = true; break }
   } catch { /* 网络抖动继续等 */ }
   await new Promise((r) => setTimeout(r, 15000))
 }
@@ -90,12 +91,12 @@ if (!live) die('10 分钟内没出现在 registry —— 可能仍在审核，�
 ok(`registry 上已可下载 ${version}`)
 
 // 5. dist-tag
-const latest = sh(`npm view ${name} dist-tags.latest --registry=${REGISTRY}`).trim()
+const latest = sh(`${NPM} view ${name} dist-tags.latest --registry=${REGISTRY}`).trim()
 if (latest === version) ok(`latest = ${version}`)
 else {
   console.log(`  ! latest 指向 ${latest}，手工前移：npm dist-tag add ${name}@${version} latest --registry=${REGISTRY}`)
   try {
-    sh(`npm dist-tag add ${name}@${version} latest --registry=${REGISTRY}`)
+    sh(`${NPM} dist-tag add ${name}@${version} latest --registry=${REGISTRY}`)
     ok(`已前移 latest → ${version}`)
   } catch { console.log('  ! 前移失败，需要人工处理') }
 }
