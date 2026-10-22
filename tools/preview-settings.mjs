@@ -121,7 +121,7 @@ const props = {
   getHcMode: () => 'off', subscribeHc: () => () => {}, setHcMode: () => {},
   getConfigCode: () => 'dshs1.eyJ2IjoxLCJwIjoid2FybSIsInMiOiJkZWVwIiwidCI6InRpbnRlZCIsInIiOiJzaWRlYmFyIiwiYyI6InRpbnRlZCIsImsiOiJhY2NlbnQiLCJtIjoib24iLCJoIjoib2ZmIiwibCI6ImF1dG8ifQ',
   applyConfigCode: () => true,
-  getCustomColors: () => ({ bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' }),
+  getCustomColors: () => ({ bg: '#f5efe6', text: '#1d1a17', accent: process.env.PREVIEW_ACCENT || '#a9683e' }),
   setCustomColor: () => {},
   resetCustom: () => {},
   getLangPref: () => (LANG === 'auto' ? 'auto' : LANG), getLocale: () => (LANG === 'auto' ? 'zh-CN' : LANG),

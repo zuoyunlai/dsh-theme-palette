@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.5.2'
+    const PLUGIN_VERSION = '1.5.3'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -703,9 +703,12 @@ window.__ModuleLoader__.load({
 
     function buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode) {
       const hc = hcMode === true
-      const ramps = rampsFor(scheme, textMode || DEFAULT_TEXT, hc)
+      // 自定义配色必须先解引用：ramps 内部会派生参数，但 accent / scroll / control
+      // 这些直接读 params.accentHue、params.hue 的地方若拿到占位值，就会"不跟取色"
+      const params = scheme && scheme.custom === true ? customScheme(readCustom()) : scheme
+      const ramps = rampsFor(params, textMode || DEFAULT_TEXT, hc)
       const pairs = {}
-      if (!scheme.tinted) {
+      if (!params.tinted) {
         // 黑白：只输出「被求解改动过」的那几步 + 派生链接，不整条覆盖（保持宿主原貌）
         for (const step of ['400', '600', '700', '1000']) {
           pairs['--dsw-static-neutral-bluish-' + step] = { light: ramps.bluish[step], dark: ramps.bluish[step] }
@@ -719,7 +722,7 @@ window.__ModuleLoader__.load({
         pairs['--dsw-alias-button-primary-fill'] = { light: monoBtn, dark: ramps.bluish['1000'] }
       }
       // 其它配色：整条色阶 + 字面量别名覆盖。
-      if (scheme.tinted) {
+      if (params.tinted) {
         for (const [family, table] of Object.entries(ramps)) {
           for (const [step, value] of Object.entries(table)) {
             pairs['--dsw-static-' + (family === 'bluish' ? 'neutral-bluish-' : family + '-') + step] = {
@@ -731,13 +734,13 @@ window.__ModuleLoader__.load({
         const aliases = aliasOverrides(ramps, hc)
         for (const [name, pair] of Object.entries(aliases)) pairs[name] = pair
       }
-      const sidebar = sidebarTokens(ramps, sidebarMode, scheme.tinted)
+      const sidebar = sidebarTokens(ramps, sidebarMode, params.tinted)
       for (const [name, pair] of Object.entries(sidebar)) pairs[name] = pair
       // 右栏底色只给一个间接层：同左栏时直接引用左栏 token，跟随画布时引用画布 token。
       // 主按钮：浅色下宿主把 button-primary-fill 指到 state-error-primary（红），
       // 于是页面上有「红主按钮 + 强调色」两个主色。改成强调色，并压暗到按钮文字 ≥4.5。
       // 黑白配色在上面已经单独设过，这里跳过（它要按「更浅」档的画布兜底）。
-      if (scheme.tinted) {
+      if (params.tinted) {
         pairs['--dsw-alias-button-primary-fill'] = {
           light: darkenUntil(ramps.deepseek['500'], ramps.bluish['00'], 4.5),
           dark: ramps.deepseek['400'],
@@ -756,7 +759,7 @@ window.__ModuleLoader__.load({
         : 'var(--dsw-specific-sidebar-fill)'
       pairs['--dshtp-rightbar-fill'] = { light: rightbarFill, dark: rightbarFill }
       // Markdown 强调色：标题 = 正文色混 40% 强调色；加粗 = 混 20%（比标题弱一档）
-      if (scheme.tinted) {
+      if (params.tinted) {
         if (mdMode === 'off') {
           const inherit = { light: 'inherit', dark: 'inherit' }
           pairs['--dshtp-md-heading'] = inherit
@@ -790,7 +793,7 @@ window.__ModuleLoader__.load({
         light: mixHex(ramps.deepseek['500'], ramps.bluish['50'], 0.05),
         dark: mixHex(ramps.deepseek['400'], ramps.bluish['900'], 0.07),
       }
-      const scroll = scrollbarTokens(ramps, scheme, scrollMode)
+      const scroll = scrollbarTokens(ramps, params, scrollMode)
       for (const [name, pair] of Object.entries(scroll)) pairs[name] = pair
       // 开关/勾选/单选的共用支点：brand-primary 本来是近黑/近白，改成强调色。
       if (controlMode === 'accent') {
@@ -798,7 +801,7 @@ window.__ModuleLoader__.load({
       }
       // 黑白配色的浅色画布本身就是纯白，「更浅」无处可提 —— 改成把会话区压一档浅灰，
       // 侧栏保持纯白，同样得到区块层次（这是唯一需要动画布的情形）。
-      if (!scheme.tinted && sidebarMode === 'light') {
+      if (!params.tinted && sidebarMode === 'light') {
         pairs['--dsw-static-neutral-bluish-00'] = { light: '#fafafa', dark: BASE.bluish['00'] }
       }
       return pairs

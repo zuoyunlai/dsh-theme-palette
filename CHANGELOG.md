@@ -13,6 +13,19 @@
   复核宿主源码发现它带 `includePrerelease`，结论相反。现在这条判断固化进脚本，不再靠手算
 - 该改动只影响本地发版工具，**不进 npm 包**（`files` 不含 `tools/`），故不升版本号
 
+### 1.5.3
+修：选中「自定义」后滚动条不跟随取色。
+
+- **根因**：`scrollbarTokens()` 收到的是 `SCHEMES` 里的**占位** scheme 对象
+  （`accentHue` 恒为 60），而真正按三色派生出的参数只在 `rampsFor()` 内部解引用。
+  于是画布/强调色都对，唯独滚动条永远停在暖橙。
+- **修法**：`buildTokens()` 开头统一解引用一次（`params = scheme.custom ? customScheme(readCustom()) : scheme`），
+  之后所有读 `scheme.*` 的地方改用 `params`；`scrollbarTokens(ramps, params, mode)` 也改传解析后的对象。
+- **防复发**：新增 `tools/check-custom.mjs` —— 断言三种强调色必须产出三种滚动条颜色，
+  且三组自选色的正文/次文/三级对比度仍在限内（现在输出
+  `#2f6fd0→#bfd6f9  #a9683e→#f2cbb3  #4f7a42→#c2ddbb`）。
+- 顺带：`tools/preview-settings.mjs` 支持 `PREVIEW_ACCENT`，可预览任意强调色的自定义面板。
+
 ### 1.5.2
 设置页交互重排（用户反馈：自定义不该埋在「更多选项」里、取色看不到即时效果）：
 
