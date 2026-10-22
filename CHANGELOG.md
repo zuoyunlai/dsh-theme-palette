@@ -13,6 +13,11 @@
   复核宿主源码发现它带 `includePrerelease`，结论相反。现在这条判断固化进脚本，不再靠手算
 - 该改动只影响本地发版工具，**不进 npm 包**（`files` 不含 `tools/`），故不升版本号
 
+### 1.5.1
+- `dsh.compatibility.profiles` 补 `web`：在 web profile 上实测 5 张卡片（含「自定义」）正常显示，
+  与 desktop 一致；`dshOperations` 的 install/start 保持 `passed`，uninstall/rollback 仍如实 `unknown`
+- 只改声明，无运行时改动
+
 ### 1.5.0
 反哺 A-2 / A-3 / A-4 / A-5 —— 把"能调"扩成"可迁移、可自定义、可无障碍、可回归"：
 
