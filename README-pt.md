@@ -6,6 +6,8 @@ Paleta de tema para o DeepSeek Harness (web e desktop): **4 paletas × claro/esc
 
 ![Página de configuração](assets/screenshot-settings-light.png)
 
+*Render estático na largura real do painel (564 px de conteúdo).*
+
 ## Compatibility
 
 | Superfície | Estado |

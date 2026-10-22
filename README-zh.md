@@ -4,7 +4,9 @@
 
 DeepSeek Harness（Web / 桌面）的主题配色插件：**4 套配色 × 明暗两模式**，两个轴互相独立。
 
-![设置页：四套配色、强度与面板表面](assets/screenshot-settings-light.png)
+![设置页：五套配色、强度与面板表面](assets/screenshot-settings-light.png)
+
+*上图按真机面板宽度（内容区 564 px）静态渲染。*
 
 ## Compatibility
 

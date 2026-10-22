@@ -36,6 +36,9 @@
 - **A13** 加 `prefers-reduced-motion` 降级
 - **A14** `docs/DESIGN.md` 补「当前标定值」表（旧推演内容保留，注明以 `client.js` 为准）
 - **A15** 删掉 4 语共 36 条从未渲染的文案键与未被调用的 `swatches()`
+- **A10 证据链**：README 首图换成当前版本（5 张卡）的**静态渲染**，按真机内容宽 564 px 出图
+  （浅色 / 深色 / 自定义面板三张，`--scale 2` 即 1240 px 宽），并在五语 README 里注明「静态渲染」；
+  `screenshots.json` 同步为这三张
 - 工具：`tools/preview-settings.mjs` 新增 `--width`（默认按真机 564px 内容宽）与 `--adv`（默认折叠），
   token 跟随 `--palette`；新增 `tools/measure-preview.mjs`（量越界/行高/关键计算色，非 0 越界退出 1）
 

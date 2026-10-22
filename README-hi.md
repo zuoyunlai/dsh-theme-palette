@@ -6,6 +6,8 @@ DeepSeek Harness (वेब और डेस्कटॉप) के लिए �
 
 ![सेटिंग्स पेज](assets/screenshot-settings-light.png)
 
+*पैनल की वास्तविक चौड़ाई (564px सामग्री) पर स्थिर रेंडर।*
+
 ## Compatibility
 
 | सतह | स्थिति |
