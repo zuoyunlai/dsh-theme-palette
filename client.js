@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.5.1'
+    const PLUGIN_VERSION = '1.5.2'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -903,7 +903,18 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-input::placeholder{color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-mini{font:inherit;font-size:12.5px;line-height:20px;padding:5px 12px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);cursor:pointer}
 .dsh-tp-mini:hover{background:var(--dsw-alias-bg-layer-1)}
-.dsh-tp-color{width:28px;height:22px;padding:0;border:.5px solid var(--dsw-alias-border-l4);border-radius:6px;background:transparent;cursor:pointer}
+.dsh-tp-custom{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-tp-custom-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.dsh-tp-custom-head b{font-size:13.5px;font-weight:500}
+.dsh-tp-swatches{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:520px){.dsh-tp-swatches{grid-template-columns:1fr}}
+.dsh-tp-swatch{display:flex;flex-direction:column;gap:6px;cursor:pointer}
+.dsh-tp-color{width:100%;height:44px;padding:0;border:.5px solid var(--dsw-alias-border-l4);border-radius:10px;background:transparent;cursor:pointer}
+.dsh-tp-color::-webkit-color-swatch-wrapper{padding:3px}
+.dsh-tp-color::-webkit-color-swatch{border:none;border-radius:8px}
+.dsh-tp-swatch-name{font-size:12px;color:var(--dsw-alias-label-secondary)}
+.dsh-tp-hex{font:11.5px/1 ui-monospace,Consolas,monospace;color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-custom-hint{margin:0;font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-note{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status{margin:0;font-size:11.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status.is-bad{color:var(--dsw-alias-state-error-primary)}
@@ -1190,6 +1201,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         customHint: '取三个色的色相与色度；明度由引擎按明暗模式算，对比度仍由求解器兜底。',
         config: '配置',
         configHint: '导出这台机器的配色选择，或粘贴短码导入；导入会覆盖全部 8 项。',
+        reset: '恢复默认',
         copy: '复制',
         applyImport: '导入',
         copied: '已复制',
@@ -1233,6 +1245,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         customHint: '取三個色的色相與色度；明度由引擎依明暗模式計算，對比度仍由求解器兜底。',
         config: '設定',
         configHint: '匯出這台機器的配色選擇，或貼上短碼匯入；匯入會覆蓋全部 8 項。',
+        reset: '恢復預設',
         copy: '複製',
         applyImport: '匯入',
         copied: '已複製',
@@ -1276,6 +1289,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         customHint: 'Takes hue and chroma from three colours; lightness comes from the engine per mode and contrast is still solved.',
         config: 'Config',
         configHint: 'Export this machine’s choices, or paste a short code to import. Import overwrites all 8 settings.',
+        reset: 'Reset',
         copy: 'Copy',
         applyImport: 'Import',
         copied: 'Copied',
@@ -1319,6 +1333,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         customHint: '3 色の色相と彩度だけを使います。明度はモードごとにエンジンが決め、コントラストは従来どおり求解します。',
         config: '設定の共有',
         configHint: 'この端末の配色設定を書き出す／短いコードを貼り付けて読み込みます（8 項目すべて上書き）。',
+        reset: 'リセット',
         copy: 'コピー',
         applyImport: '読み込み',
         copied: 'コピーしました',
@@ -1426,6 +1441,34 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         control,
       )
 
+      const customColors = props.getCustomColors()
+      const customPanel = current === 'custom' && h(
+        'div',
+        { className: 'dsh-tp-custom' },
+        h('div', { className: 'dsh-tp-custom-head' },
+          h('b', null, txt.custom),
+          h('button', {
+            type: 'button',
+            className: 'dsh-tp-mini',
+            onClick: () => props.resetCustom(),
+          }, txt.reset)),
+        h('div', { className: 'dsh-tp-swatches' },
+          ['bg', 'text', 'accent'].map((field) => h('label', { key: field, className: 'dsh-tp-swatch' },
+            h('input', {
+              type: 'color',
+              className: 'dsh-tp-color',
+              value: customColors[field],
+              // input 是"拖动过程中"就触发，change 是"确认后"触发；两个都接，
+              // 拖动时实时看到整页变化，松手/确认后不会再跳一次
+              onInput: (e) => props.setCustomColor(field, e.target.value),
+              onChange: (e) => props.setCustomColor(field, e.target.value),
+              'aria-label': (lb.custom && lb.custom[field]) || field,
+            }),
+            h('span', { className: 'dsh-tp-swatch-name' }, (lb.custom && lb.custom[field]) || field),
+            h('code', { className: 'dsh-tp-hex' }, customColors[field])))),
+        h('p', { className: 'dsh-tp-custom-hint' }, txt.customHint),
+      )
+
       const card = (scheme) => {
         const picked = scheme.id === current
         const c = cardColors(scheme, textMode)
@@ -1462,6 +1505,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           h('span', { className: 'dsh-tp-badge' }, 'v' + PLUGIN_VERSION)),
         h('p', { className: 'dsh-tp-sub' }, txt.hint),
         h('div', { className: 'dsh-tp-grid' }, SCHEMES.map(card)),
+        customPanel,
         row(txt.text, txt.textSub, seg(TEXT_MODES, textMode, props.setTextMode, lb.text)),
         row(txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode, lb.sidebar)),
         row(txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode, lb.rightbar)),
@@ -1480,24 +1524,6 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         advanced && h(
           'div',
           { className: 'dsh-tp-adv' },
-          current === 'custom' && h(
-            'div',
-            { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-            h('div', { style: { fontSize: 14, lineHeight: '22px' } }, txt.custom),
-            h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } },
-              ['bg', 'text', 'accent'].map((field) => h('label', {
-                key: field,
-                style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--dsw-alias-label-secondary)' },
-              },
-                h('input', {
-                  type: 'color',
-                  className: 'dsh-tp-color',
-                  value: props.getCustomColors()[field],
-                  onChange: (e) => props.setCustomColor(field, e.target.value),
-                }),
-                (lb.custom && lb.custom[field]) || field))),
-            h('p', { style: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } }, txt.customHint),
-          ),
           row(txt.lang, txt.langSub, seg(LANG_OPTIONS, langPref, props.setLangPref, lb.lang)),
           h(
             'div',
@@ -1820,6 +1846,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           return true
         }
         const getCustomColors = () => readCustom()
+        const resetCustom = () => {
+          writeCustom(Object.assign({}, CUSTOM_DEFAULT))
+          applyAll('custom:reset')
+          emit()
+        }
         const setCustomColor = (field, hex) => {
           if (CUSTOM_FIELDS.indexOf(field) === -1) return
           if (typeof hex !== 'string' || !HEX_RE.test(hex)) return
@@ -1962,6 +1993,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 applyConfigCode,
                 getCustomColors,
                 setCustomColor,
+                resetCustom,
                 getLangPref,
                 getLocale,
                 subscribeLocale,

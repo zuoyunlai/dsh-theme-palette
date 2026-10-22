@@ -68,7 +68,10 @@ function toHtml(node) {
       // 否则 flexDirection 这类属性会被浏览器整条忽略（布局看起来"没生效"）
       const kebab = (k) => k.replace(/^--/, '--').replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())
       attrs.push(`style="${Object.entries(v).map(([sk, sv]) => `${kebab(sk)}:${esc(sv)}`).join(';')}"`)
-    } else if (k.startsWith('aria-') || k === 'role' || k === 'type') attrs.push(`${k}="${esc(v)}"`)
+    } else if (k === 'value') attrs.push(`value="${esc(v)}"`)
+    else if (k === 'placeholder') attrs.push(`placeholder="${esc(v)}"`)
+    else if (k === 'readOnly' && v) attrs.push('readonly')
+    else if (k.startsWith('aria-') || k === 'role' || k === 'type') attrs.push(`${k}="${esc(v)}"`)
   }
   if (VOID.has(type)) return `<${type} ${attrs.join(' ')}>`
   return `<${type}${attrs.length ? ' ' + attrs.join(' ') : ''}>${(kids || []).map(toHtml).join('')}</${type}>`
@@ -120,6 +123,7 @@ const props = {
   applyConfigCode: () => true,
   getCustomColors: () => ({ bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' }),
   setCustomColor: () => {},
+  resetCustom: () => {},
   getLangPref: () => (LANG === 'auto' ? 'auto' : LANG), getLocale: () => (LANG === 'auto' ? 'zh-CN' : LANG),
   subscribeLocale: () => () => {}, setLangPref: () => {},
   getHealth: () => ({ ok: true, checked: 5 }), subscribeHealth: () => () => {},

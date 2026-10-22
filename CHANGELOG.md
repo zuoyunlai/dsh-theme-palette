@@ -13,6 +13,19 @@
   复核宿主源码发现它带 `includePrerelease`，结论相反。现在这条判断固化进脚本，不再靠手算
 - 该改动只影响本地发版工具，**不进 npm 包**（`files` 不含 `tools/`），故不升版本号
 
+### 1.5.2
+设置页交互重排（用户反馈：自定义不该埋在「更多选项」里、取色看不到即时效果）：
+
+- **自定义配色提为一级区块**：选中「自定义」卡片后，面板直接出现在卡片网格下方，
+  不再需要展开「更多选项」
+- **取色实时生效**：同时接 `onInput`（拖动过程中）与 `onChange`（确认后），
+  一次 `buildTokens` 实测 **0.15 ms**，整页配色随取色实时变化，不需要"确认"动作
+- **色块放大**：`input[type=color]` 变成 44px 高的圆角色块（隐藏原生 swatch 边框），
+  下方显示字段名与十六进制值；三个色块一排，窄屏自动堆叠
+- **恢复默认**：面板右上角一键回到出厂三色
+- 修：预览渲染器不输出 `value`/`placeholder`/`readonly`，导致静态预览里色块是黑的、
+  导出码框是空的（真实应用不受影响）
+
 ### 1.5.1
 - `dsh.compatibility.profiles` 补 `web`：在 web profile 上实测 5 张卡片（含「自定义」）正常显示，
   与 desktop 一致；`dshOperations` 的 install/start 保持 `passed`，uninstall/rollback 仍如实 `unknown`
