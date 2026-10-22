@@ -870,7 +870,7 @@ window.__ModuleLoader__.load({
 .dsh-tp-sub{margin:-6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
 .dsh-tp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 @media (max-width:620px){.dsh-tp-grid{grid-template-columns:1fr}}
-.dsh-tp-card{position:relative;display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;cursor:pointer;padding:9px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:transparent;transition:background .12s ease,border-color .12s ease}
+.dsh-tp-card{position:relative;display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;color:var(--dsw-alias-label-primary);cursor:pointer;padding:9px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:transparent;transition:background .12s ease,border-color .12s ease}
 .dsh-tp-card:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-tp-card.is-on{background:var(--dshtp-card-picked,var(--dsw-alias-bg-module-platform));border-color:var(--t-accent-l)}
 body[data-ds-dark-theme] .dsh-tp-card.is-on{border-color:var(--t-accent-d)}
@@ -885,8 +885,8 @@ body[data-ds-dark-theme] .dsh-tp-thumb-main b{background:var(--t-text-d)}
 .dsh-tp-thumb-main b:nth-of-type(3){width:44%;background:var(--t-accent-l);opacity:.9}
 body[data-ds-dark-theme] .dsh-tp-thumb-main b:nth-of-type(3){background:var(--t-accent-d)}
 .dsh-tp-card-meta{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
-.dsh-tp-card-name{font-size:13.5px;font-weight:500}
-.dsh-tp-card-desc{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-card-name{font-size:14px;font-weight:500}
+.dsh-tp-card-desc{font-size:12px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-check{position:absolute;top:7px;right:7px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;background:var(--t-accent-l);color:var(--t-canvas-l);opacity:0;transition:opacity .12s ease}
 body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--t-canvas-d)}
 .dsh-tp-card.is-on .dsh-tp-check{opacity:1}
