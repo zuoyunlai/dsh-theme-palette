@@ -13,6 +13,22 @@
   复核宿主源码发现它带 `includePrerelease`，结论相反。现在这条判断固化进脚本，不再靠手算
 - 该改动只影响本地发版工具，**不进 npm 包**（`files` 不含 `tools/`），故不升版本号
 
+### 1.4.4
+- 补 `dsh.compatibility` 兼容性履历（反哺 A-1）：
+
+  ```json
+  "compatibility": {
+    "dsh": ">=0.2.1-rc.1",
+    "dshReleases": { "0.2.1-rc.2": "compatible" },
+    "dshOperations": { "0.2.1-rc.2": { "install": "passed", "start": "passed", "uninstall": "unknown", "rollback": "unknown" } },
+    "profiles": ["desktop"]
+  }
+  ```
+
+  说明：**宿主不读这个字段**（`client-modules`/`app-boot` 只读 `dsh.bundle`、`dsh.client`、`engines.dsh`），
+  它是给目录站/市场展示"哪些版本真的装过、启过、卸过"的。写入的都是**实测过的**事实：
+  0.2.1-rc.2 上装过、启动过；卸载/回滚没测，如实写 `unknown`；web profile 已安装但未重启验证，暂不列入。
+
 ### 1.4.3
 安全审计后的整改（`@应用安全工程师` 审计，逐条复核后落地）：
 
