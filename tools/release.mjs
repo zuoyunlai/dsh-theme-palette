@@ -23,6 +23,7 @@ const here = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(here, '..')
 const args = process.argv.slice(2)
 const has = (f) => args.includes('--' + f)
+const arg = (f, d = '') => { const i = args.indexOf('--' + f); return i >= 0 && args[i + 1] !== undefined ? args[i + 1] : d }
 
 const REGISTRY = 'https://registry.npmjs.org'
 /** npm 的 JS 入口（有它就不必经过 cmd.exe / sh）。 */
@@ -94,6 +95,51 @@ try { run(process.execPath, ['--check', 'client.js']); ok('client.js 语法') } 
     const rel = typeof clientRel === 'string' ? clientRel : clientRel.default
     if (typeof rel !== 'string' || !existsSync(path.join(root, rel))) die('exports["./client"] 指向的文件不存在：' + rel)
     ok('client 子路径可解析：exports["./client"] → ' + rel)
+  }
+}
+
+// 1d. 兼容性声明（engines.dsh / peer）——用**宿主自己的语义**校验
+//
+//     宿主 app-boot 里是：semver.satisfies(runtimeVersion, range, { includePrerelease: true })
+//     少了 includePrerelease 会得出完全相反的结论（0.3.0-rc.1 看似被拒、其实是放行）。
+//     这里不去猜：直接按宿主那行代码的口径算，并守住两条底线——
+//       · 不能把 0.1.x / 0.2.0 放进来（那一代不是 exports["./client"] 这套加载器）
+//       · 不能把未来的 0.2.2-rc.x / 0.3.x-rc.x 误拒（预发布分支缺失的经典坑）
+{
+  const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'))
+  const engines = manifest.engines || {}
+  const dshRange = typeof engines.dsh === 'string' ? engines.dsh : ''
+  const dshPeers = Object.entries(manifest.peerDependencies || {}).filter(([k]) => k === '@deepseek-ai/dsh' || k.startsWith('@deepseek-ai/dsh-'))
+  const meta = manifest.peerDependenciesMeta || {}
+  const hardPeers = dshPeers.filter(([k]) => !(meta[k] && meta[k].optional))
+
+  let semver = null
+  try { semver = (await import('semver')).default } catch { /* 没装就跳过，只告警 */ }
+  if (!semver) {
+    warn('没装 semver（npm i 后启用），跳过 engines.dsh 兼容性预检')
+  } else {
+    // 与宿主完全一致的判定
+    const sat = (v, range) => range.trim() !== '' && semver.satisfies(v, range, { includePrerelease: true })
+    if (!dshRange) {
+      if (hardPeers.length === 0) warn('既没声明 engines.dsh、也没有非可选 peer —— 宿主会"直接放行不读"，等于对任何版本都宣称兼容')
+      else warn('没声明 engines.dsh；宿主会退回读 peer 判定兼容性')
+    } else {
+      const mustReject = ['0.1.7-rc.2', '0.2.0-rc.2']
+      const mustAdmit = ['0.2.1-rc.1', '0.2.2-rc.1', '0.3.0-rc.1']
+      for (const v of mustReject) {
+        if (sat(v, dshRange)) die(`engines.dsh 过宽：${v} 也会被放行，但那一代不是 exports["./client"] 加载器，强装会启动失败`)
+      }
+      for (const v of mustAdmit) {
+        if (!sat(v, dshRange)) die(`engines.dsh 会在 ${v} 上误拒（缺预发布分支？宿主的 includePrerelease 语义下本应放行）`)
+      }
+      const hostArg = arg('host', process.env.DSH_VERSION || '')
+      if (hostArg) {
+        if (!sat(hostArg, dshRange)) die(`目标宿主 ${hostArg} 不在 engines.dsh (${dshRange}) 范围内`)
+        ok(`engines.dsh ${dshRange}：放行 ${hostArg}；同时拒绝 0.1.x/0.2.0、放行 0.2.2-rc 与 0.3-rc`)
+      } else {
+        ok(`engines.dsh ${dshRange}：拒绝 0.1.x/0.2.0、放行 0.2.2-rc 与 0.3-rc（传 --host <版本> 可断言具体宿主）`)
+      }
+    }
   }
 }
 
