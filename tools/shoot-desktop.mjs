@@ -59,10 +59,10 @@ async function pickPageTarget() {
   const res = await fetch(`http://127.0.0.1:${port}/json/list`)
   if (!res.ok) throw new Error('拿不到调试目标')
   const list = await res.json()
-  const pages = list.filter((t) => t.type === 'page' && /^https?:/.test(t.url))
+  // 桌面版主窗口的 URL 是 dsh-app://app/（自定义协议），不能只认 http(s)
+  const pages = list.filter((t) => t.type === 'page' && !/^devtools:/.test(t.url))
   if (pages.length === 0) throw new Error('没有找到页面目标（窗口是否已加载？）')
-  // 优先 dsh 的页面
-  return pages.find((t) => /dsh|127\.0\.0\.1|localhost/.test(t.url)) || pages[0]
+  return pages.find((t) => /dsh-app:|dsh|127\.0\.0\.1|localhost/.test(t.url)) || pages[0]
 }
 
 const evaluate = async (cdp, expression) => {
@@ -83,17 +83,19 @@ async function main() {
   await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
     source: `
       window.__DSH_THEME_PALETTE_DEV_REQUEST__ = true;
-      window.__DSH_THEME_PALETTE_DEV__ = function (x) {
-        if (x && typeof x.setPalette === 'function') window.__DSH_DEV_API__ = x;
-        else window.__DSH_ENGINE__ = x;
+      // 插件会先调 hook(引擎载荷)，再调 hook.attach(setter 集合)。
+      // 少 attach 方法的话插件会静默跳过 —— 这正是 1.4.4 之前 B 层回归跑不起来的原因。
+      window.__DSH_THEME_PALETTE_DEV__ = function (payload) { window.__DSH_ENGINE__ = payload };
+      window.__DSH_THEME_PALETTE_DEV__.attach = function (api) {
+        window.__DSH_DEV_API__ = api;
+        return function () { window.__DSH_DEV_API__ = null };
       };
     `,
   })
 
   // 2) 重载让它生效（插件在模块求值期读那个 flag）
-  const loaded = cdp.once('Page.loadEventFired')
   await cdp.send('Page.reload', { ignoreCache: false })
-  await loaded
+  await sleep(1500) // 让主文档重新求值；随后轮询 API 就绪
 
   // 3) 等插件把 setter 交上来（最多 20 秒）
   let ready = false

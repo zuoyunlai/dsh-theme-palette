@@ -9,3 +9,4 @@ tools/preview-*.html
 Thumbs.db
 tools/preview.html
 *.tgz
+tools/baseline-desktop/
