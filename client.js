@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.4.4'
+    const PLUGIN_VERSION = '1.5.0'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -126,16 +126,70 @@ window.__ModuleLoader__.load({
         accentHue: 139, accentC: 0.096, accentL: 0.5335, // 标准色 #4F7A42
         accentScale: 1.0,
       },
+      { id: 'custom', label: '自定义', desc: '三色派生', tinted: true, custom: true, hue: 60, darkHue: 60, lightC: 0.02, midC: 0.01, textC: 0.004, darkC: 0.014, darkLift: 0.03, paperC: 0.012, accentHue: 60, accentC: 0.1, accentL: 0.58, accentScale: 1 },
     ]
 
     /* 对比度下限：主文本 16 / 次文本 6 / 三级文本 4.6（AA）/ 链接 4.6 */
     /* 对比度下限：按**真实承载面**定（卡层/模块层比画布更难达标），不是按画布定。
        正文 15.5 / 次级 6.2 / 三级 4.62（AA）/ 链接 4.62（AA） */
+    /* ---------- 自定义配色（反哺 A-3）----------
+     * 只取三色的**色相与色度**，明度由引擎按明暗模式决定；
+     * 色度夹在安全区间，避免用户选纯白/纯黑时引擎退化。
+     */
+    const CUSTOM_KEY = 'dsh-theme-palette.custom.v1'
+    const CUSTOM_FIELDS = ['bg', 'text', 'accent']
+    const CUSTOM_DEFAULT = { bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' }
+    const HEX_RE = /^#[0-9a-f]{6}$/i
+
+    function readCustom() {
+      const out = Object.assign({}, CUSTOM_DEFAULT)
+      try {
+        const raw = localStorage.getItem(CUSTOM_KEY)
+        if (raw) {
+          const parsed = JSON.parse(raw)
+          for (const k of CUSTOM_FIELDS) if (parsed && typeof parsed[k] === 'string' && HEX_RE.test(parsed[k])) out[k] = parsed[k]
+        }
+      } catch (err) { /* 退回默认 */ }
+      return out
+    }
+
+    function writeCustom(next) {
+      try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(next)) } catch (err) { /* 忽略 */ }
+    }
+
+    function customScheme(colors) {
+      const bg = toOklch(colors.bg)
+      const tx = toOklch(colors.text)
+      const ac = toOklch(colors.accent)
+      const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
+      return {
+        id: 'custom', label: '自定义', desc: '三色派生', tinted: true, custom: true,
+        hue: bg[2], darkHue: bg[2],
+        lightC: clampN(bg[1] * 0.9, 0.008, 0.045), midC: 0.010,
+        textC: clampN(tx[1], 0.002, 0.030),
+        darkC: clampN(bg[1] * 0.75, 0.006, 0.035), darkLift: 0.030,
+        paperC: clampN(tx[1], 0.004, 0.030),
+        accentHue: ac[2], accentC: clampN(ac[1], 0.04, 0.18), accentL: ac[0], accentScale: 1.0,
+      }
+    }
+
     const MIN_MAIN = 12
     const MIN_SECONDARY = 6.2
     const MIN_TERTIARY = 4.62
     const MIN_LINK = 4.62
     const MIN_LINK_DARK = 4.62
+
+    /**
+     * 高对比模式（反哺 A-4）：把四档文字下限整体抬到 WCAG AAA 级别。
+     * 不改配色，只让求解器把文字压得更狠；默认关闭。
+     */
+    const FLOORS_HC = { main: 15, secondary: 9, tertiary: 7, link: 7, linkDark: 7 }
+    function floors(hc) {
+      return hc === true
+        ? FLOORS_HC
+        : { main: MIN_MAIN, secondary: MIN_SECONDARY, tertiary: MIN_TERTIARY, link: MIN_LINK, linkDark: MIN_LINK_DARK }
+    }
+    const HC_KEY = 'dsh-theme-palette.hc.v1'
 
     /**
      * 区块底色：左侧栏相对主画布的深浅档位。
@@ -191,6 +245,12 @@ window.__ModuleLoader__.load({
       { id: 'off', label: '同正文' },
     ]
     const DEFAULT_MD = 'on'
+    /** 高对比开关（反哺 A-4）：不改配色，把文字下限抬到 AAA。 */
+    const HC_MODES = [
+      { id: 'off', label: '关' },
+      { id: 'on', label: '开' },
+    ]
+    const DEFAULT_HC = 'off'
     const MD_KEY = 'dsh-theme-palette.md.v1'
 
     /**
@@ -415,21 +475,23 @@ window.__ModuleLoader__.load({
      * 对比度求解：前景达不到 target 就沿亮度往「离背景更远」的方向微调，
      * 最多挪 0.09（保持原有明暗层次，不把正文推成纯黑）。
      */
-    function solveForeground(hexes, step, bgHex, target) {
+    function solveForeground(hexes, step, bgHex, target, cap) {
+      const maxShift = typeof cap === "number" ? cap : 0.13
       const [L0, C, hue] = toOklch(hexes[step])
       const darker = luminance(hexes[step]) < luminance(bgHex)
       let L = L0
-      for (let i = 0; i < 40; i++) {
+      for (let i = 0; i < Math.ceil(maxShift / 0.004) + 4; i++) {
         const candidate = fromOklch(L, C, hue)
         if (contrast(candidate, bgHex) >= target) return candidate
         L += darker ? -0.004 : 0.004
         // 上限 0.13：三级文字要从 4.41 抬到 4.62 需要 ΔL≈0.096，旧的 0.09 会静默截断
-        if (Math.abs(L - L0) > 0.13) break
+        if (Math.abs(L - L0) > maxShift) break
       }
       return fromOklch(L, C, hue)
     }
 
-    function tuneRamps(ramps, scheme) {
+    function tuneRamps(ramps, scheme, hc) {
+      const F = floors(hc)
       // 靶点必须用**真实承载面**，不能用画布：三级文字与链接大量落在卡层(60)、
       // 悬浮层(150)、深色模块层(800)上，只对 00/950 求解会得到「画布达标、卡层不达标」。
       const lightCanvas = ramps.bluish['00']
@@ -437,20 +499,20 @@ window.__ModuleLoader__.load({
       const darkCanvas = ramps.bluish['950']
       const darkModule = ramps.bluish['800']
       const jobs = [
-        ['1000', lightCanvas, MIN_MAIN],
-        ['700', lightCard, MIN_SECONDARY],
-        ['600', lightCard, MIN_TERTIARY],
-        ['400', darkModule, MIN_TERTIARY],
+        ['1000', lightCanvas, F.main],
+        ['700', lightCard, F.secondary],
+        ['600', lightCard, F.tertiary],
+        ['400', darkModule, F.tertiary],
       ]
       for (const [step, bg, target] of jobs) {
         if (contrast(ramps.bluish[step], bg) >= target) continue
-        ramps.bluish[step] = solveForeground(ramps.bluish, step, bg, target)
+        ramps.bluish[step] = solveForeground(ramps.bluish, step, bg, target, hc ? 0.30 : 0.13)
       }
       // 链接按「最亮的深色承载面（800）」兜底。
       // 注意这里**只有 400**：浅色链接不走这条色阶的中段（500 是设计稿的标准色，
       // 不能被求解器按承载面改写），浅色链接在 aliasOverrides 里从 500 派生。
-      if (contrast(ramps.deepseek['400'], darkModule) < MIN_LINK_DARK) {
-        ramps.deepseek['400'] = solveForeground(ramps.deepseek, '400', darkModule, MIN_LINK_DARK)
+      if (contrast(ramps.deepseek['400'], darkModule) < F.linkDark) {
+        ramps.deepseek['400'] = solveForeground(ramps.deepseek, '400', darkModule, F.linkDark, hc ? 0.30 : 0.13)
       }
       return ramps
     }
@@ -464,11 +526,12 @@ window.__ModuleLoader__.load({
      * 这样宿主里 500 的其它用途（info 按钮填充、焦点环、deep-diving 文字、卡片预览色）
      * 全部保持标准值，只有「当文字用」的链接换一条。
      */
-    function lightLink(r) {
+    function lightLink(r, hc) {
+      const target = floors(hc).link
       if (r === BASE) return BASE.deepseek['500'] // 黑白配色没被覆盖，走宿主原值
       const bg = r.bluish['150']
-      if (contrast(r.deepseek['500'], bg) >= MIN_LINK) return r.deepseek['500']
-      return solveForeground(r.deepseek, '500', bg, MIN_LINK)
+      if (contrast(r.deepseek['500'], bg) >= target) return r.deepseek['500']
+      return solveForeground(r.deepseek, '500', bg, target, hc ? 0.30 : 0.13)
     }
 
     /* ================= token 组装 ================= */
@@ -478,26 +541,36 @@ window.__ModuleLoader__.load({
       const m = TEXT_MODES.find((x) => x.id === textMode) || TEXT_MODES[1]
       return { textScale: m.textScale, paperScale: m.paperScale, textLift: m.textLift || 0 }
     }
-    function rampsFor(scheme, textMode) {
+    function rampsFor(scheme, textMode, hc) {
+      const hcKey = hc === true ? ':hc' : ''
+      // 自定义配色：按当前三色派生参数，缓存键必须带上三色
+      let params = scheme
+      let customKey = ''
+      if (scheme && scheme.custom === true) {
+        const colors = readCustom()
+        params = customScheme(colors)
+        customKey = ':' + colors.bg + colors.text + colors.accent
+      }
       // 黑白配色：色相/色度都是 0，但**仍然过一次引擎** —— 否则它会保留宿主的三级 3.71、
       // 链接 4.23（都没到 AA），而它正是默认配色。引擎在这里只做两件事：原样重建（C=0）+ 求解对比度。
-      if (!scheme.tinted) {
-        const monoKey = 'mono:aa'
+      if (!params.tinted) {
+        const monoKey = 'mono:aa' + hcKey
         let mono = rampCache.get(monoKey)
         if (mono === undefined) {
           const clone = (o) => Object.fromEntries(Object.entries(o))
           mono = tuneRamps(
             { bluish: clone(BASE.bluish), neutral: clone(BASE.neutral), deepseek: clone(BASE.deepseek), blue: clone(BASE.blue) },
             scheme,
+            hc,
           )
           rampCache.set(monoKey, mono)
         }
         return mono
       }
-      const key = scheme.id + ':' + textMode
+      const key = params.id + ':' + textMode + hcKey + customKey
       let cached = rampCache.get(key)
       if (cached === undefined) {
-        cached = tuneRamps(buildRamps(scheme, scalesFor(textMode)), scheme)
+        cached = tuneRamps(buildRamps(params, scalesFor(textMode)), params, hc)
         rampCache.set(key, cached)
       }
       return cached
@@ -508,7 +581,7 @@ window.__ModuleLoader__.load({
      * 不跟着色阶走，必须单独覆盖，否则暖底上会出现冷灰发丝线。
      * 值按「浅色 / 深色」给一对（overrideTokens 的硬性要求）。
      */
-    function aliasOverrides(r) {
+    function aliasOverrides(r, hc) {
       const ink = r.bluish['1000'] // 浅色模式的墨色
       const paper = r.bluish['50'] // 深色模式的纸白
       const grey = r.bluish['700'] // 悬浮在媒体上的工具条用中性灰
@@ -517,7 +590,7 @@ window.__ModuleLoader__.load({
            宿主 `--dsw-alias-link` 指 deepseek-500（浅）/ 400（深），而 500 是品牌基准色。
            标准值当正文链接时过不了 AA（暖砂 #A9683E 在 150 面上 3.46），所以浅色链接
            用同色相的派生色；深色链接直接用 400（已由求解器兜到 4.62 起）。 */
-        '--dsw-alias-link': { light: lightLink(r), dark: r.deepseek['400'] },
+        '--dsw-alias-link': { light: lightLink(r, hc), dark: r.deepseek['400'] },
 
         '--dsw-alias-border-l1': { light: withAlpha(ink, 0.04), dark: withAlpha(paper, 0.06) },
         '--dsw-alias-border-l2': { light: withAlpha(ink, 0.10), dark: withAlpha(paper, 0.12) },
@@ -628,8 +701,9 @@ window.__ModuleLoader__.load({
       }
     }
 
-    function buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode) {
-      const ramps = rampsFor(scheme, textMode || DEFAULT_TEXT)
+    function buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode) {
+      const hc = hcMode === true
+      const ramps = rampsFor(scheme, textMode || DEFAULT_TEXT, hc)
       const pairs = {}
       if (!scheme.tinted) {
         // 黑白：只输出「被求解改动过」的那几步 + 派生链接，不整条覆盖（保持宿主原貌）
@@ -637,7 +711,7 @@ window.__ModuleLoader__.load({
           pairs['--dsw-static-neutral-bluish-' + step] = { light: ramps.bluish[step], dark: ramps.bluish[step] }
         }
         pairs['--dsw-static-deepseek-500'] = { light: ramps.deepseek['500'], dark: ramps.deepseek['500'] }
-        pairs['--dsw-alias-link'] = { light: lightLink(ramps), dark: BASE.deepseek['400'] }
+        pairs['--dsw-alias-link'] = { light: lightLink(ramps, hc), dark: BASE.deepseek['400'] }
         // 主按钮同理：宿主浅色是红（对白字 4.34，差 0.16 才到 AA），压暗一档到 4.5
         // 注意：「更浅」档会把画布压到 #fafafa，按钮还要在最暗的那版画布上达标，
         // 所以按 #f5f5f5 兜底而不是纯白。
@@ -654,7 +728,7 @@ window.__ModuleLoader__.load({
             }
           }
         }
-        const aliases = aliasOverrides(ramps)
+        const aliases = aliasOverrides(ramps, hc)
         for (const [name, pair] of Object.entries(aliases)) pairs[name] = pair
       }
       const sidebar = sidebarTokens(ramps, sidebarMode, scheme.tinted)
@@ -825,6 +899,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-more{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12.5px;color:var(--dsw-alias-label-tertiary);background:0 0;border:0;padding:6px 0 2px;cursor:pointer;align-self:flex-start;transition:color .12s}
 .dsh-tp-more:hover{color:var(--dsw-alias-label-primary)}
 .dsh-tp-adv{display:flex;flex-direction:column}
+.dsh-tp-input{flex:1 1 220px;min-width:0;font:12px/20px ui-monospace,Consolas,monospace;padding:5px 9px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dsh-tp-input::placeholder{color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-mini{font:inherit;font-size:12.5px;line-height:20px;padding:5px 12px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);cursor:pointer}
+.dsh-tp-mini:hover{background:var(--dsw-alias-bg-layer-1)}
+.dsh-tp-color{width:28px;height:22px;padding:0;border:.5px solid var(--dsw-alias-border-l4);border-radius:6px;background:transparent;cursor:pointer}
+.dsh-tp-note{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status{margin:0;font-size:11.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status.is-bad{color:var(--dsw-alias-state-error-primary)}
 `
@@ -976,6 +1056,58 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       try { localStorage.setItem(MD_KEY, id) } catch (err) { /* 同理 */ }
     }
 
+    function readHcStored() {
+      try {
+        const raw = localStorage.getItem(HC_KEY)
+        if (raw === 'on' || raw === 'off') return raw
+      } catch (err) { /* 退回默认 */ }
+      return DEFAULT_HC
+    }
+
+    function writeHcStored(id) {
+      try { localStorage.setItem(HC_KEY, id) } catch (err) { /* 同理 */ }
+    }
+
+    /* ---------- 配置导入/导出（反哺 A-2）----------
+     * 短码格式：`dshs1.` + base64url(JSON)，字段全部用单字母，
+     * 导入时逐项对照模式表校验，任何一项不认识就整体拒绝（不猜、不部分应用）。
+     */
+    const CONFIG_PREFIX = 'dshs1.'
+
+    function encodeConfig(state) {
+      const raw = { v: 1, p: state.palette, s: state.sidebar, t: state.text, r: state.rightbar, c: state.scroll, k: state.control, m: state.md, h: state.hc, l: state.lang }
+      try {
+        const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(raw))))
+        return CONFIG_PREFIX + b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+      } catch (err) { return '' }
+    }
+
+    const hasId = (list, id) => list.some((x) => x.id === id)
+
+    function decodeConfig(code) {
+      if (typeof code !== 'string') return null
+      const text = code.trim()
+      if (!text.startsWith(CONFIG_PREFIX)) return null
+      try {
+        let b64 = text.slice(CONFIG_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/')
+        while (b64.length % 4 !== 0) b64 += '='
+        const raw = JSON.parse(decodeURIComponent(escape(atob(b64))))
+        if (!raw || raw.v !== 1) return null
+        const next = {
+          palette: SCHEMES.some((sc) => sc.id === raw.p) ? raw.p : null,
+          sidebar: hasId(SIDEBAR_MODES, raw.s) ? raw.s : null,
+          text: hasId(TEXT_MODES, raw.t) ? raw.t : null,
+          rightbar: hasId(RIGHTBAR_MODES, raw.r) ? raw.r : null,
+          scroll: hasId(SCROLL_MODES, raw.c) ? raw.c : null,
+          control: hasId(CONTROL_MODES, raw.k) ? raw.k : null,
+          md: hasId(MD_MODES, raw.m) ? raw.m : null,
+          hc: hasId(HC_MODES, raw.h) ? raw.h : null,
+          lang: raw.l === 'auto' || LOCALES.indexOf(raw.l) !== -1 ? raw.l : null,
+        }
+        return Object.values(next).every((v) => v !== null) ? next : null
+      } catch (err) { return null }
+    }
+
     /* ================= 文案 ================= */
     /* ================= 多语言 ================= */
     /**
@@ -1053,6 +1185,17 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         sidebar: '左侧栏底色',
         sidebarHint: '让侧栏比会话区更浅（或更深），做出区块层次。',
         lang: '语言',
+        hc: '高对比',
+        custom: '自定义配色',
+        customHint: '取三个色的色相与色度；明度由引擎按明暗模式算，对比度仍由求解器兜底。',
+        config: '配置',
+        configHint: '导出这台机器的配色选择，或粘贴短码导入；导入会覆盖全部 8 项。',
+        copy: '复制',
+        applyImport: '导入',
+        copied: '已复制',
+        importOk: '已导入',
+        importBad: '短码无效，已忽略',
+        hcSub: '把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三级 ≥7）',
       },
       'zh-TW': {
         nav: '主題色',
@@ -1085,6 +1228,17 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         sidebar: '左側欄底色',
         sidebarHint: '讓側欄比會話區更淺（或更深），做出區塊層次。',
         lang: '語言',
+        hc: '高對比',
+        custom: '自訂配色',
+        customHint: '取三個色的色相與色度；明度由引擎依明暗模式計算，對比度仍由求解器兜底。',
+        config: '設定',
+        configHint: '匯出這台機器的配色選擇，或貼上短碼匯入；匯入會覆蓋全部 8 項。',
+        copy: '複製',
+        applyImport: '匯入',
+        copied: '已複製',
+        importOk: '已匯入',
+        importBad: '短碼無效，已忽略',
+        hcSub: '把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三級 ≥7）',
       },
       en: {
         nav: 'Color theme',
@@ -1117,6 +1271,17 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         sidebar: 'Sidebar surface',
         sidebarHint: 'Makes the sidebar lighter (or deeper) than the conversation area.',
         lang: 'Language',
+        hc: 'High contrast',
+        custom: 'Custom palette',
+        customHint: 'Takes hue and chroma from three colours; lightness comes from the engine per mode and contrast is still solved.',
+        config: 'Config',
+        configHint: 'Export this machine’s choices, or paste a short code to import. Import overwrites all 8 settings.',
+        copy: 'Copy',
+        applyImport: 'Import',
+        copied: 'Copied',
+        importOk: 'Imported',
+        importBad: 'Invalid code, ignored',
+        hcSub: 'Raises text floors to AAA (body ≥15, secondary ≥9, tertiary ≥7)',
       },
       ja: {
         nav: 'カラーテーマ',
@@ -1149,14 +1314,25 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         sidebar: '左サイドバーの背景',
         sidebarHint: 'サイドバーを会話エリアより明るく（または暗く）して段差を作ります。',
         lang: '言語',
+        hc: 'ハイコントラスト',
+        custom: 'カスタム配色',
+        customHint: '3 色の色相と彩度だけを使います。明度はモードごとにエンジンが決め、コントラストは従来どおり求解します。',
+        config: '設定の共有',
+        configHint: 'この端末の配色設定を書き出す／短いコードを貼り付けて読み込みます（8 項目すべて上書き）。',
+        copy: 'コピー',
+        applyImport: '読み込み',
+        copied: 'コピーしました',
+        importOk: '読み込みました',
+        importBad: '無効なコードです',
+        hcSub: '本文の下限を AAA に引き上げます（本文 ≥15、副次 ≥9、三次 ≥7）',
       },
     }
 
     /** 配色名与各档位的显示名：id 不变，只换文案。 */
     const LABELS = {
       'zh-CN': {
-        scheme: { mono: '黑白', warm: '暖砂', indigo: '靛蓝', moss: '苔绿' },
-        desc: { mono: '无色调 · 默认', warm: '米白 + 棕调', indigo: '冷白 + 蓝调', moss: '浅灰绿 + 绿调' },
+        scheme: { mono: '黑白', warm: '暖砂', indigo: '靛蓝', moss: '苔绿', custom: '自定义' },
+        desc: { mono: '无色调 · 默认', warm: '米白 + 棕调', indigo: '冷白 + 蓝调', moss: '浅灰绿 + 绿调', custom: '三色派生 · 你的配色' },
         text: { neutral: '静', tinted: '标准', deep: '浓' },
         sidebar: { light: '更浅', match: '同色', deep: '更深' },
         rightbar: { sidebar: '同左栏', canvas: '跟随画布' },
@@ -1164,10 +1340,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         control: { accent: '主题色', mono: '黑白' },
         md: { on: '着色', off: '同正文' },
         lang: { auto: '自动' },
+        hc: { off: '关', on: '开' },
+        custom: { bg: '底色', text: '文字', accent: '强调' },
       },
       'zh-TW': {
-        scheme: { mono: '黑白', warm: '暖砂', indigo: '靛藍', moss: '苔綠' },
-        desc: { mono: '無色調 · 預設', warm: '米白 + 棕調', indigo: '冷白 + 藍調', moss: '淺灰綠 + 綠調' },
+        scheme: { mono: '黑白', warm: '暖砂', indigo: '靛藍', moss: '苔綠', custom: '自訂' },
+        desc: { mono: '無色調 · 預設', warm: '米白 + 棕調', indigo: '冷白 + 藍調', moss: '淺灰綠 + 綠調', custom: '三色派生 · 你的配色' },
         text: { neutral: '靜', tinted: '標準', deep: '濃' },
         sidebar: { light: '更淺', match: '同色', deep: '更深' },
         rightbar: { sidebar: '同左欄', canvas: '跟隨畫布' },
@@ -1175,10 +1353,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         control: { accent: '主題色', mono: '黑白' },
         md: { on: '著色', off: '同本文' },
         lang: { auto: '自動' },
+        hc: { off: '關', on: '開' },
+        custom: { bg: '底色', text: '文字', accent: '強調' },
       },
       en: {
-        scheme: { mono: 'Mono', warm: 'Warm sand', indigo: 'Indigo', moss: 'Moss' },
-        desc: { mono: 'Neutral · default', warm: 'Cream + brown', indigo: 'Cool white + blue', moss: 'Grey-green' },
+        scheme: { mono: 'Mono', warm: 'Warm sand', indigo: 'Indigo', moss: 'Moss', custom: 'Custom' },
+        desc: { mono: 'Neutral · default', warm: 'Cream + brown', indigo: 'Cool white + blue', moss: 'Grey-green', custom: 'Derived from your three colours' },
         text: { neutral: 'Quiet', tinted: 'Standard', deep: 'Strong' },
         sidebar: { light: 'Lighter', match: 'Same', deep: 'Deeper' },
         rightbar: { sidebar: 'Match sidebar', canvas: 'Follow canvas' },
@@ -1186,10 +1366,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         control: { accent: 'Accent', mono: 'Mono' },
         md: { on: 'Tinted', off: 'Body colour' },
         lang: { auto: 'Auto' },
+        hc: { off: 'Off', on: 'On' },
+        custom: { bg: 'Surface', text: 'Text', accent: 'Accent' },
       },
       ja: {
-        scheme: { mono: 'モノクロ', warm: 'ウォームサンド', indigo: 'インディゴ', moss: 'モスグリーン' },
-        desc: { mono: '色なし · 既定', warm: 'クリーム + ブラウン', indigo: 'クールホワイト + ブルー', moss: 'グレーグリーン' },
+        scheme: { mono: 'モノクロ', warm: 'ウォームサンド', indigo: 'インディゴ', moss: 'モスグリーン', custom: 'カスタム' },
+        desc: { mono: '色なし · 既定', warm: 'クリーム + ブラウン', indigo: 'クールホワイト + ブルー', moss: 'グレーグリーン', custom: '3 色から派生' },
         text: { neutral: '控えめ', tinted: '標準', deep: '強め' },
         sidebar: { light: '明るく', match: '同じ', deep: '暗く' },
         rightbar: { sidebar: 'サイドバーに合わせる', canvas: 'キャンバスに従う' },
@@ -1197,6 +1379,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         control: { accent: 'アクセント', mono: 'モノクロ' },
         md: { on: '色づけ', off: '本文と同じ' },
         lang: { auto: '自動' },
+        hc: { off: 'オフ', on: 'オン' },
+        custom: { bg: '背景', text: '本文', accent: 'アクセント' },
       },
     }
 
@@ -1209,7 +1393,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       const scrollMode = React.useSyncExternalStore(props.subscribeScroll, props.getScrollMode)
       const controlMode = React.useSyncExternalStore(props.subscribeControl, props.getControlMode)
       const mdMode = React.useSyncExternalStore(props.subscribeMd, props.getMdMode)
+      const hcMode = React.useSyncExternalStore(props.subscribeHc, props.getHcMode)
       const health = React.useSyncExternalStore(props.subscribeHealth, props.getHealth)
+      const [importText, setImportText] = React.useState('')
+      const [importState, setImportState] = React.useState(null)
       const [advanced, setAdvanced] = React.useState(false)
       const locale = React.useSyncExternalStore(props.subscribeLocale, props.getLocale)
       const langPref = React.useSyncExternalStore(props.subscribeLocale, props.getLangPref)
@@ -1293,8 +1480,66 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         advanced && h(
           'div',
           { className: 'dsh-tp-adv' },
+          current === 'custom' && h(
+            'div',
+            { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+            h('div', { style: { fontSize: 14, lineHeight: '22px' } }, txt.custom),
+            h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' } },
+              ['bg', 'text', 'accent'].map((field) => h('label', {
+                key: field,
+                style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--dsw-alias-label-secondary)' },
+              },
+                h('input', {
+                  type: 'color',
+                  className: 'dsh-tp-color',
+                  value: props.getCustomColors()[field],
+                  onChange: (e) => props.setCustomColor(field, e.target.value),
+                }),
+                (lb.custom && lb.custom[field]) || field))),
+            h('p', { style: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } }, txt.customHint),
+          ),
           row(txt.lang, txt.langSub, seg(LANG_OPTIONS, langPref, props.setLangPref, lb.lang)),
+          h(
+            'div',
+            { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+            h('div', { style: { fontSize: 14, lineHeight: '22px' } }, txt.config),
+            h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
+              h('input', {
+                className: 'dsh-tp-input',
+                readOnly: true,
+                value: props.getConfigCode(),
+                onFocus: (e) => { try { e.target.select() } catch (err) { /* 忽略 */ } },
+                'aria-label': txt.config,
+              }),
+              h('button', {
+                type: 'button',
+                className: 'dsh-tp-mini',
+                onClick: () => {
+                  const code = props.getConfigCode()
+                  try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code)
+                  } catch (err) { /* 剪贴板不可用时靠手选 */ }
+                  setImportState('copied')
+                },
+              }, txt.copy)),
+            h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
+              h('input', {
+                className: 'dsh-tp-input',
+                placeholder: 'dshs1.…',
+                value: importText,
+                onChange: (e) => { setImportText(e.target.value); setImportState(null) },
+              }),
+              h('button', {
+                type: 'button',
+                className: 'dsh-tp-mini',
+                onClick: () => setImportState(props.applyConfigCode(importText) ? 'ok' : 'bad'),
+              }, txt.applyImport),
+              importState && h('span', { className: 'dsh-tp-note' },
+                importState === 'ok' ? txt.importOk : importState === 'copied' ? txt.copied : txt.importBad)),
+            h('p', { style: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } }, txt.configHint),
+          ),
           row(txt.md, txt.mdSub, seg(MD_MODES, mdMode, props.setMdMode, lb.md)),
+          row(txt.hc, txt.hcSub, seg(HC_MODES, hcMode, props.setHcMode, lb.hc)),
           row(txt.scroll, current === 'mono' ? txt.scrollHintMono : txt.scrollSub, seg(SCROLL_MODES, scrollMode, props.setScrollMode, lb.scroll)),
           row(txt.control, txt.controlSub, seg(CONTROL_MODES, controlMode, props.setControlMode, lb.control)),
         ),
@@ -1309,6 +1554,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
      */
     const DEV_OPT_IN = (() => {
       try {
+        // 两种开启方式：URL 带 ?dshThemeDev=1，或页面脚本在插件加载前设好
+        // window.__DSH_THEME_PALETTE_DEV_REQUEST__ = true（CDP 用 Page.addScriptToEvaluateOnNewDocument 注入，
+        // 这是 tools/shoot-desktop.mjs 的唯一入口 —— 之前缺这个入口，B 层回归实际上跑不起来）
+        if (typeof window !== 'undefined' && window.__DSH_THEME_PALETTE_DEV_REQUEST__ === true) return true
         const search = typeof location !== 'undefined' && location ? String(location.search || '') : ''
         return /(?:^|[?&])dshThemeDev=1(?:&|$)/.test(search)
       } catch (err) { return false }
@@ -1335,6 +1584,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         let scrollMode = readScrollStored()
         let controlMode = readControlStored()
         let mdMode = readMdStored()
+        let hcMode = readHcStored()
+        const getConfigCode = () => encodeConfig({ palette: current, sidebar: sidebarMode, text: textMode, rightbar: rightbarMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref })
         let langPref = readLangPref()
         const localeListeners = new Set()
         const currentLocale = () => pickLocale(langPref)
@@ -1346,6 +1597,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         const scrollListeners = new Set()
         const controlListeners = new Set()
         const mdListeners = new Set()
+        const hcListeners = new Set()
 
         const getCurrent = () => current
         const getSidebarMode = () => sidebarMode
@@ -1354,6 +1606,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         const getScrollMode = () => scrollMode
         const getControlMode = () => controlMode
         const getMdMode = () => mdMode
+        const getHcMode = () => hcMode
         const subscribe = (fn) => {
           listeners.add(fn)
           return () => { listeners.delete(fn) }
@@ -1389,6 +1642,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         const emitScroll = () => { for (const fn of scrollListeners) { try { fn() } catch (err) { /* 同理 */ } } }
         const emitControl = () => { for (const fn of controlListeners) { try { fn() } catch (err) { /* 同理 */ } } }
         const emitMd = () => { for (const fn of mdListeners) { try { fn() } catch (err) { /* 同理 */ } } }
+        const subscribeHc = (fn) => {
+          hcListeners.add(fn)
+          return () => { hcListeners.delete(fn) }
+        }
+        const emitHc = () => { for (const fn of hcListeners) { try { fn() } catch (err) { /* 同理 */ } } }
 
         let disposeLayer = () => {}
         /** 按当前配色 + 侧栏档位重建覆盖层（换配色与换侧栏档位走同一条路）。 */
@@ -1400,7 +1658,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 
         const applyAll = (reason) => {
           const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
-          const tokens = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode)
+          const tokens = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode === 'on')
           let next = () => {}
           if (tokens !== undefined) {
             try {
@@ -1535,6 +1793,48 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           applyAll()
           emitMd()
         }
+        /** 导入：整份校验通过才落地；返回 true/false 供 UI 显示结果 */
+        const applyConfigCode = (code) => {
+          const cfg = decodeConfig(code)
+          if (!cfg) return false
+          current = cfg.palette
+          sidebarMode = cfg.sidebar
+          textMode = cfg.text
+          rightbarMode = cfg.rightbar
+          scrollMode = cfg.scroll
+          controlMode = cfg.control
+          mdMode = cfg.md
+          hcMode = cfg.hc
+          langPref = cfg.lang
+          writeStored(current)
+          writeSidebarStored(sidebarMode)
+          writeTextStored(textMode)
+          writeRightbarStored(rightbarMode)
+          writeScrollStored(scrollMode)
+          writeControlStored(controlMode)
+          writeMdStored(mdMode)
+          writeHcStored(hcMode)
+          writeLangPref(langPref)
+          applyAll('import')
+          emit(); emitSidebar(); emitText(); emitRightbar(); emitScroll(); emitControl(); emitMd(); emitHc(); emitLocale()
+          return true
+        }
+        const getCustomColors = () => readCustom()
+        const setCustomColor = (field, hex) => {
+          if (CUSTOM_FIELDS.indexOf(field) === -1) return
+          if (typeof hex !== 'string' || !HEX_RE.test(hex)) return
+          const next = Object.assign(readCustom(), { [field]: hex })
+          writeCustom(next)
+          applyAll('custom:' + field)
+          emit()
+        }
+        const setHcMode = (id) => {
+          if (!HC_MODES.some((m) => m.id === id)) return
+          hcMode = id
+          writeHcStored(id)
+          applyAll()
+          emitHc()
+        }
         const getLangPref = () => langPref
         const getLocale = () => currentLocale()
         const subscribeLocale = (fn) => {
@@ -1570,6 +1870,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               setControlMode,
               getPreference: () => theme.getTheme().preference,
               setLangPref,
+              setHcMode,
+              getHcMode,
               locales: LOCALES,
               // 和其它 setter 一样过白名单：任意字符串会原样进宿主主题状态并被持久化
               setTheme: (id) => { if (THEME_IDS.indexOf(id) !== -1) theme.setTheme(id) },
@@ -1653,6 +1955,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 getMdMode,
                 subscribeMd,
                 setMdMode,
+                getHcMode,
+                subscribeHc,
+                setHcMode,
+                getConfigCode,
+                applyConfigCode,
+                getCustomColors,
+                setCustomColor,
                 getLangPref,
                 getLocale,
                 subscribeLocale,

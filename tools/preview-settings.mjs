@@ -14,6 +14,8 @@ const root = path.resolve(here, '..')
 const argv = process.argv.slice(2)
 const li = argv.indexOf('--lang')
 const LANG = li >= 0 ? argv[li + 1] : 'auto'   // auto | zh-CN | zh-TW | en | ja
+const pi = argv.indexOf('--palette')
+const PALETTE = pi >= 0 ? argv[pi + 1] : 'warm'   // mono | warm | indigo | moss | custom
 const source = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
 
 let engine = null
@@ -62,7 +64,10 @@ function toHtml(node) {
     if (v == null || k === 'kids' || k === 'children') continue
     if (k === 'className') attrs.push(`class="${esc(v)}"`)
     else if (k === 'style' && typeof v === 'object') {
-      attrs.push(`style="${Object.entries(v).map(([sk, sv]) => `${sk}:${esc(sv)}`).join(';')}"`)
+      // React 的 style 对象是 camelCase；预览是静态 HTML，必须转成 kebab-case，
+      // 否则 flexDirection 这类属性会被浏览器整条忽略（布局看起来"没生效"）
+      const kebab = (k) => k.replace(/^--/, '--').replace(/[A-Z]/g, (m) => '-' + m.toLowerCase())
+      attrs.push(`style="${Object.entries(v).map(([sk, sv]) => `${kebab(sk)}:${esc(sv)}`).join(';')}"`)
     } else if (k.startsWith('aria-') || k === 'role' || k === 'type') attrs.push(`${k}="${esc(v)}"`)
   }
   if (VOID.has(type)) return `<${type} ${attrs.join(' ')}>`
@@ -102,7 +107,7 @@ function vars(mode) {
 }
 
 const props = {
-  getCurrent: () => scheme.id,
+  getCurrent: () => PALETTE,
   subscribe: () => () => {}, setPalette: () => {},
   getSidebarMode: () => 'deep', subscribeSidebar: () => () => {}, setSidebarMode: () => {},
   getTextMode: () => 'tinted', subscribeText: () => () => {}, setTextMode: () => {},
@@ -110,6 +115,11 @@ const props = {
   getScrollMode: () => 'tinted', subscribeScroll: () => () => {}, setScrollMode: () => {},
   getControlMode: () => 'accent', subscribeControl: () => () => {}, setControlMode: () => {},
   getMdMode: () => 'on', subscribeMd: () => () => {}, setMdMode: () => {},
+  getHcMode: () => 'off', subscribeHc: () => () => {}, setHcMode: () => {},
+  getConfigCode: () => 'dshs1.eyJ2IjoxLCJwIjoid2FybSIsInMiOiJkZWVwIiwidCI6InRpbnRlZCIsInIiOiJzaWRlYmFyIiwiYyI6InRpbnRlZCIsImsiOiJhY2NlbnQiLCJtIjoib24iLCJoIjoib2ZmIiwibCI6ImF1dG8ifQ',
+  applyConfigCode: () => true,
+  getCustomColors: () => ({ bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' }),
+  setCustomColor: () => {},
   getLangPref: () => (LANG === 'auto' ? 'auto' : LANG), getLocale: () => (LANG === 'auto' ? 'zh-CN' : LANG),
   subscribeLocale: () => () => {}, setLangPref: () => {},
   getHealth: () => ({ ok: true, checked: 5 }), subscribeHealth: () => () => {},
@@ -129,7 +139,7 @@ html,body{margin:0;background:#0a0a0a;font-family:-apple-system,"Segoe UI","Micr
 .wrap{padding:18px;border-radius:16px;border:1px solid rgba(128,128,128,.3);background:${canvas};${style};color:var(--dsw-alias-label-primary)}
 </style><style>${engine.settingsCss}</style></head>
 <body${dark}><div class="page"><div class="wrap">${toHtml(body)}</div></div></body></html>`
-  const out = path.join(here, `preview-${mode}${LANG === 'auto' ? '' : '-' + LANG}.html`)
+  const out = path.join(here, `preview-${mode}${PALETTE === 'warm' ? '' : '-' + PALETTE}${LANG === 'auto' ? '' : '-' + LANG}.html`)
   fs.writeFileSync(out, html)
   console.log('✓ ' + out + '（' + Math.round(html.length / 1024) + ' KB）')
 }

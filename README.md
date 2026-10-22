@@ -22,6 +22,7 @@ The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does
 - the whole ramp is **recomputed**, not swapped: OKLCH rebuild → role-based chroma → **sRGB gamut clamp** → contrast solved on real surfaces;
 - 27,000+ token references covered: body, secondary, tertiary, captions, links, sidebars, cards, user bubble, primary button, scrollbars, switches, Markdown headings/bold, code blocks;
 - adjustable: text tint (3), sidebar depth (3), right panel (2), Markdown emphasis, scrollbars, switch colour;
+- **custom palette** (pick surface / text / accent — the engine keeps its contrast guarantees), **config export/import** via a `dshs1.` code, **high-contrast** mode, and 4 UI languages;
 - **self-healing**: if the host drops the override layer, the palette is re-applied;
 - UI in 简体中文 / 繁體中文 / English / 日本語 (follows the host language, can be pinned).
 

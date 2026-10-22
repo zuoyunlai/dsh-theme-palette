@@ -77,10 +77,34 @@ async function main() {
   await cdp.send('Page.enable')
   await cdp.send('Runtime.enable')
 
-  const ready = await evaluate(cdp, "!!(window.__DSH_THEME_PALETTE_DEV__ && window.__DSH_THEME_PALETTE_DEV__.attach)")
-  if (!ready) throw new Error('插件未暴露自动化接口（版本 < 1.0.1？或插件没加载）')
+  // 1) 在页面脚本运行**之前**注入开关与收集器。
+  //    插件默认不暴露开发接口（需 ?dshThemeDev=1 或 window.__DSH_THEME_PALETTE_DEV_REQUEST__），
+  //    桌面 app 的 URL 我们改不了，所以用 CDP 的 addScriptToEvaluateOnNewDocument。
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument', {
+    source: `
+      window.__DSH_THEME_PALETTE_DEV_REQUEST__ = true;
+      window.__DSH_THEME_PALETTE_DEV__ = function (x) {
+        if (x && typeof x.setPalette === 'function') window.__DSH_DEV_API__ = x;
+        else window.__DSH_ENGINE__ = x;
+      };
+    `,
+  })
 
-  const api = 'window.__DSH_THEME_PALETTE_DEV__'
+  // 2) 重载让它生效（插件在模块求值期读那个 flag）
+  const loaded = cdp.once('Page.loadEventFired')
+  await cdp.send('Page.reload', { ignoreCache: false })
+  await loaded
+
+  // 3) 等插件把 setter 交上来（最多 20 秒）
+  let ready = false
+  for (let i = 0; i < 40; i++) {
+    ready = await evaluate(cdp, '!!(window.__DSH_DEV_API__ && typeof window.__DSH_DEV_API__.setPalette === "function")')
+    if (ready) break
+    await sleep(500)
+  }
+  if (!ready) throw new Error('插件未交出自动化接口（检查插件是否已加载、是否 >= 1.4.4）')
+
+  const api = 'window.__DSH_DEV_API__'
   const all = only.length ? only : await evaluate(cdp, `${api}.schemes`)
   const originalPref = await evaluate(cdp, `${api}.getPreference()`)
   const originalPalette = await evaluate(cdp, "localStorage.getItem('dsh-theme-palette.v1') || 'mono'")
@@ -90,8 +114,8 @@ async function main() {
   try {
     for (const scheme of all) {
       for (const mode of ['light', 'dark']) {
-        await evaluate(cdp, `window.__DSH_THEME_PALETTE_DEV__.setPalette(${JSON.stringify(scheme)})`)
-        await evaluate(cdp, `window.__DSH_THEME_PALETTE_DEV__.setTheme(${JSON.stringify(mode)})`)
+        await evaluate(cdp, `${api}.setPalette(${JSON.stringify(scheme)})`)
+        await evaluate(cdp, `${api}.setTheme(${JSON.stringify(mode)})`)
         await sleep(700) // 等 presenter 落样式 + 字体
         const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
         const buf = Buffer.from(shot.data, 'base64')
