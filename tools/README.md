@@ -58,6 +58,18 @@ window.__DSH_THEME_PALETTE_DEV__.setTheme('dark')
 > 为什么不用 `--profile desktop --dump-config` 之类：那验的是配置层，不是渲染层，
 > 而配色的问题全都长在渲染层（色域、层次、对比度）。
 
+**脚本自己完成三件事，不需要手工注入**（2026-10-22 实测跑通）：
+
+1. CDP `Page.addScriptToEvaluateOnNewDocument` 注入 `window.__DSH_THEME_PALETTE_DEV_REQUEST__ = true`
+   和一个带 `.attach` 方法的收集器 —— 插件的开发接口默认关闭，桌面版 URL 又改不了，
+   这是唯一入口（缺 `.attach` 时插件会静默跳过，这正是 1.4.4 之前 B 层跑不起来的原因）；
+2. `Page.reload` 后轮询 `window.__DSH_DEV_API__` 就绪（最多 20s）；
+3. 逐套配色 × 浅/深 抓图，**结束时把你原来的配色与明暗偏好还原**（`try/finally`）。
+
+实测：5 套 × 浅/深 = 10 张，每张 0.7 MB 左右；基线存 `tools/baseline-desktop/`
+（7.2 MB，已进 `.gitignore`，留在本地做回归）。
+
+
 ## 什么时候跑
 
 - 改 `SCHEMES` / `TEXT_MODES` / `SIDEBAR_MODES` 等参数之后；
