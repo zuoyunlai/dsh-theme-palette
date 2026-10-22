@@ -16,6 +16,11 @@ const li = argv.indexOf('--lang')
 const LANG = li >= 0 ? argv[li + 1] : 'auto'   // auto | zh-CN | zh-TW | en | ja
 const pi = argv.indexOf('--palette')
 const PALETTE = pi >= 0 ? argv[pi + 1] : 'warm'   // mono | warm | indigo | moss | custom
+const wi = argv.indexOf('--width')
+// 真机设置页内容宽 = min(800, vw-48) - 236；桌面默认 564。默认按真机宽渲染，避免"预览比真机宽 21%"
+const CONTENT_W = wi >= 0 ? Number(argv[wi + 1]) : 564
+const ai = argv.indexOf('--adv')
+const ADV = ai >= 0 ? argv[ai + 1] !== '0' : false   // 默认折叠，与真机一致
 const source = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
 
 let engine = null
@@ -34,7 +39,7 @@ new Function('window', 'localStorage', 'document', 'navigator', 'location', sour
 )
 const React = {
   createElement: (type, props, ...kids) => ({ type, props: props || {}, kids }),
-  useState: (v) => (typeof v === 'boolean' ? [true, () => {}] : [v, () => {}]),
+  useState: (v) => (typeof v === 'boolean' ? [ADV, () => {}] : [v, () => {}]),
   useSyncExternalStore: (sub, get) => get(),
 }
 const plugin = sandbox.def.factory(() => React)
@@ -71,6 +76,7 @@ function toHtml(node) {
     } else if (k === 'value') attrs.push(`value="${esc(v)}"`)
     else if (k === 'placeholder') attrs.push(`placeholder="${esc(v)}"`)
     else if (k === 'readOnly' && v) attrs.push('readonly')
+    else if (k === 'lang') attrs.push(`lang="${esc(v)}"`)
     else if (k.startsWith('aria-') || k === 'role' || k === 'type') attrs.push(`${k}="${esc(v)}"`)
   }
   if (VOID.has(type)) return `<${type} ${attrs.join(' ')}>`
@@ -78,7 +84,7 @@ function toHtml(node) {
 }
 
 const { buildTokens, cardColors } = engine
-const scheme = engine.SCHEMES.find((s) => s.id === 'warm')
+const scheme = engine.SCHEMES.find((s) => s.id === PALETTE) || engine.SCHEMES.find((s) => s.id === 'warm')
 
 /** 一个模式下设置页会用到的 token → CSS 变量 */
 function vars(mode) {
@@ -139,7 +145,7 @@ for (const mode of ['light', 'dark']) {
   const html = `<!doctype html><html lang="zh"><head><meta charset="utf-8">
 <title>设置页预览 · ${mode}</title><style>
 html,body{margin:0;background:#0a0a0a;font-family:-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
-.page{width:720px;padding:16px}
+.page{width:${CONTENT_W + 56}px;padding:16px}
 .wrap{padding:18px;border-radius:16px;border:1px solid rgba(128,128,128,.3);background:${canvas};${style};color:var(--dsw-alias-label-primary)}
 </style><style>${engine.settingsCss}</style></head>
 <body${dark}><div class="page"><div class="wrap">${toHtml(body)}</div></div></body></html>`

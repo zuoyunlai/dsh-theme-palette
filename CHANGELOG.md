@@ -13,6 +13,32 @@
   复核宿主源码发现它带 `includePrerelease`，结论相反。现在这条判断固化进脚本，不再靠手算
 - 该改动只影响本地发版工具，**不进 npm 包**（`files` 不含 `tools/`），故不升版本号
 
+### 1.6.0
+视觉与可访问性整改（依据 2026-10-22 第三方 UI 视觉验收审计，60/100）：
+
+- **A2 配置块重做**：改用 `.dsh-tp-field` 容器（与普通行同节奏），导出/导入各占一行，
+  反馈文案就地显示（复制→复制按钮旁，导入→导入按钮旁），导出框加 `text-overflow:ellipsis`
+- **A3 复制不再谎报**：`await navigator.clipboard.writeText()`，失败或无 API 时显示
+  「复制失败，请手选后 Ctrl+C」，不再无条件报成功
+- **A4 布局从视口断点改容器驱动**：卡片 `repeat(auto-fit,minmax(196px,1fr))`、色块 `minmax(86px,1fr)`、
+  行与分段控件 `flex-wrap`；日语长标签改短（右栏「サイドバー / キャンバス」、滚动条「無彩 / 追従 / 強調」）。
+  实测 4 语 × 内容宽 564/336/216：**越界元素 0**（改前日语 216px 溢出 61px）
+- **A5 语言属性**：`<section lang>` 跟随手选语言，`auto` 时回落宿主 `documentElement.lang`
+- **A6 分段控件有名字**：`role="radiogroup"` + `aria-labelledby` 指向行标题，选项改
+  `role="radio" aria-checked`（8 组 22 个按钮）
+- **A7 反馈可播报**：复制/导入/自愈状态挂 `role="status" aria-live="polite"`，错误用 `alert`；
+  导入框补 `aria-label`
+- **A8 自定义面板层级**：面板底改 `bg-layer-1`（按钮不再与面板同底 1.00:1）、说明文字提到
+  `label-secondary` 12px；色值从只读 `<code>` 改为**可输入 hex**（回车/失焦生效，非法值忽略）
+- **A9 缩略图跟随侧栏档位**：`cardColors()` 接收 `sidebarMode`，不再写死默认档
+- **A11** 黑白配色下「滚动条」「开关」置灰禁用（点了也不会有变化）
+- **A12** 卡片与分段按钮 `:focus-visible{outline-offset:2px}`，焦点环不再与选中边框贴死
+- **A13** 加 `prefers-reduced-motion` 降级
+- **A14** `docs/DESIGN.md` 补「当前标定值」表（旧推演内容保留，注明以 `client.js` 为准）
+- **A15** 删掉 4 语共 36 条从未渲染的文案键与未被调用的 `swatches()`
+- 工具：`tools/preview-settings.mjs` 新增 `--width`（默认按真机 564px 内容宽）与 `--adv`（默认折叠），
+  token 跟随 `--palette`；新增 `tools/measure-preview.mjs`（量越界/行高/关键计算色，非 0 越界退出 1）
+
 ### 1.5.3
 修：选中「自定义」后滚动条不跟随取色。
 

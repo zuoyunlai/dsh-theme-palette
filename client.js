@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.5.3'
+    const PLUGIN_VERSION = '1.6.0'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -807,16 +807,10 @@ window.__ModuleLoader__.load({
       return pairs
     }
 
-    /* ================= 卡片预览色 ================= */
-    function swatches(scheme, textMode) {
-      if (!scheme.tinted) return ['#ffffff', '#e5e5e5', '#0f1115']
-      const r = rampsFor(scheme, textMode || DEFAULT_TEXT)
-      return [r.bluish['00'], r.bluish['100'], r.deepseek['500']]
-    }
-
+    
 
     /** 卡片缩略图用的一小组颜色（画布/侧栏/文字/强调），按当前强度档取。 */
-    function cardColors(scheme, textMode) {
+    function cardColors(scheme, textMode, sidebarMode) {
       const r = rampsFor(scheme, textMode || DEFAULT_TEXT)
       if (!r) {
         return {
@@ -824,7 +818,7 @@ window.__ModuleLoader__.load({
           dark: { canvas: '#151517', side: '#1b1b1c', text: '#f9fafb', accent: '#7aaaff' },
         }
       }
-      const side = sidebarTokens(r, DEFAULT_SIDEBAR, scheme.tinted)
+      const side = sidebarTokens(r, sidebarMode || DEFAULT_SIDEBAR, scheme.tinted)
       return {
         light: {
           canvas: r.bluish['00'],
@@ -868,10 +862,10 @@ window.__ModuleLoader__.load({
 .dsh-tp-head h2{margin:0;font-size:18px;font-weight:600;letter-spacing:.2px}
 .dsh-tp-badge{margin-left:auto;font:11px/1.7 ui-monospace,Consolas,monospace;color:var(--dsw-alias-label-tertiary);border:.5px solid var(--dsw-alias-border-l4);border-radius:999px;padding:0 8px}
 .dsh-tp-sub{margin:-6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
-.dsh-tp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-@media (max-width:620px){.dsh-tp-grid{grid-template-columns:1fr}}
+.dsh-tp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:10px}
 .dsh-tp-card{position:relative;display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;color:var(--dsw-alias-label-primary);cursor:pointer;padding:9px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:transparent;transition:background .12s ease,border-color .12s ease}
 .dsh-tp-card:hover{background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-tp-card:focus-visible{outline-offset:2px}
 .dsh-tp-card.is-on{background:var(--dshtp-card-picked,var(--dsw-alias-bg-module-platform));border-color:var(--t-accent-l)}
 body[data-ds-dark-theme] .dsh-tp-card.is-on{border-color:var(--t-accent-d)}
 .dsh-tp-thumb{display:flex;height:56px;border-radius:9px;overflow:hidden;border:.5px solid rgba(128,128,128,.28)}
@@ -890,15 +884,16 @@ body[data-ds-dark-theme] .dsh-tp-thumb-main b:nth-of-type(3){background:var(--t-
 .dsh-tp-check{position:absolute;top:7px;right:7px;width:16px;height:16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;line-height:1;background:var(--t-accent-l);color:var(--t-canvas-l);opacity:0;transition:opacity .12s ease}
 body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--t-canvas-d)}
 .dsh-tp-card.is-on .dsh-tp-check{opacity:1}
-.dsh-tp-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:.5px solid var(--dsw-alias-border-l2)}
+.dsh-tp-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:.5px solid var(--dsw-alias-border-l2);flex-wrap:wrap}
 .dsh-tp-row-label{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
 .dsh-tp-row-label b{font-size:13.5px;font-weight:500}
 .dsh-tp-row-label span{font-size:11.5px;color:var(--dsw-alias-label-tertiary);line-height:16px}
-.dsh-tp-seg{display:inline-flex;gap:2px;padding:2px;border-radius:10px;background:var(--dsw-alias-interactive-bg-hover);flex:none}
+.dsh-tp-seg{display:inline-flex;flex-wrap:wrap;gap:2px;padding:2px;border-radius:10px;background:var(--dsw-alias-interactive-bg-hover);flex:none;max-width:100%}
 .dsh-tp-seg button{font:inherit;font-size:12.5px;line-height:20px;cursor:pointer;border:0;border-radius:8px;padding:5px 12px;background:transparent;color:var(--dsw-alias-label-secondary);white-space:nowrap;transition:background .12s,color .12s}
 .dsh-tp-seg button:hover{color:var(--dsw-alias-label-primary)}
 .dsh-tp-seg button.is-on{background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);box-shadow:0 1px 2px rgba(0,0,0,.10)}
-@media (max-width:520px){.dsh-tp-row{flex-direction:column;align-items:stretch;gap:8px}.dsh-tp-seg{justify-content:space-between}.dsh-tp-seg button{flex:1;text-align:center}}
+.dsh-tp-seg button:focus-visible{outline-offset:2px}
+.dsh-tp-seg button[disabled]{opacity:.45;cursor:default}
 .dsh-tp-more{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12.5px;color:var(--dsw-alias-label-tertiary);background:0 0;border:0;padding:6px 0 2px;cursor:pointer;align-self:flex-start;transition:color .12s}
 .dsh-tp-more:hover{color:var(--dsw-alias-label-primary)}
 .dsh-tp-adv{display:flex;flex-direction:column}
@@ -906,21 +901,27 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-input::placeholder{color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-mini{font:inherit;font-size:12.5px;line-height:20px;padding:5px 12px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);cursor:pointer}
 .dsh-tp-mini:hover{background:var(--dsw-alias-bg-layer-1)}
-.dsh-tp-custom{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover)}
+.dsh-tp-custom{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1)}
 .dsh-tp-custom-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .dsh-tp-custom-head b{font-size:13.5px;font-weight:500}
-.dsh-tp-swatches{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-@media (max-width:520px){.dsh-tp-swatches{grid-template-columns:1fr}}
+.dsh-tp-swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:10px}
 .dsh-tp-swatch{display:flex;flex-direction:column;gap:6px;cursor:pointer}
 .dsh-tp-color{width:100%;height:44px;padding:0;border:.5px solid var(--dsw-alias-border-l4);border-radius:10px;background:transparent;cursor:pointer}
 .dsh-tp-color::-webkit-color-swatch-wrapper{padding:3px}
 .dsh-tp-color::-webkit-color-swatch{border:none;border-radius:8px}
 .dsh-tp-swatch-name{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dsh-tp-hex{font:11.5px/1 ui-monospace,Consolas,monospace;color:var(--dsw-alias-label-tertiary)}
-.dsh-tp-custom-hint{margin:0;font-size:11.5px;line-height:17px;color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-hexinput{width:100%;box-sizing:border-box;font:11.5px/16px ui-monospace,Consolas,monospace;padding:3px 6px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
+.dsh-tp-hexinput:focus-visible{outline-offset:1px}
+.dsh-tp-custom-hint{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .dsh-tp-note{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status{margin:0;font-size:11.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status.is-bad{color:var(--dsw-alias-state-error-primary)}
+.dsh-tp-field{display:flex;flex-direction:column;gap:8px;padding:11px 0;border-top:.5px solid var(--dsw-alias-border-l2)}
+.dsh-tp-field-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dsh-tp-field-title{font-size:13.5px;font-weight:500}
+.dsh-tp-input{text-overflow:ellipsis}
+@media (prefers-reduced-motion:reduce){.dsh-tp-card,.dsh-tp-seg button,.dsh-tp-more,.dsh-tp-check,.dsh-tp-mini{transition:none}}
 `
 
     function installRightbarStyle() {
@@ -1172,14 +1173,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         nav: '主题色',
         hint: '配色与明暗模式独立；切换后立即生效并保存在 localStorage。',
         md: 'Markdown 强调',
-        mdHint: '标题与加粗用「正文色混强调色」，比正文更有色；关掉则与正文同色。',
         control: '开关 / 勾选',
-        controlHint: '宿主的开关、复选框、单选都压在近黑/近白上；开启后改用强调色。',
         scroll: '滚动条',
-        scrollHint: '默认中性灰；「跟随」上配色色相，「强调」用强调色。明暗关系不变。',
         scrollHintMono: '当前是黑白配色，没有色相可跟随，滚动条保持中性灰。',
         rightbar: '右侧栏底色',
-        rightbarHint: '右栏本来没有自己的背景，露的是会话区画布色。',
         advanced: '更多选项',
         textSub: '正文与强调的着色程度',
         sidebarSub: '相对会话区的层次',
@@ -1188,16 +1185,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         scrollSub: '滚动条与滑轨的色相',
         controlSub: '开关与复选框是否跟强调色',
         langSub: '自动跟随宿主界面语言',
-        surface: '面板表面',
-        surfaceHint: '决定侧栏与右栏相对会话区是「浮起」还是「凹陷」。',
-        ok: '✓ 配色已生效',
         bad: '⚠ 部分 token 未生效（宿主可能改名），请查看控制台',
         healed: '配色层被宿主丢过一次，已自动恢复 ',
         healedSuffix: ' 次',
         text: '强度',
-        textHint: '让正文/次级文字带配色色味；三档都满足 AA。',
         sidebar: '左侧栏底色',
-        sidebarHint: '让侧栏比会话区更浅（或更深），做出区块层次。',
         lang: '语言',
         hc: '高对比',
         custom: '自定义配色',
@@ -1208,6 +1200,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         copy: '复制',
         applyImport: '导入',
         copied: '已复制',
+        copyFail: '复制失败，请手选后 Ctrl+C',
         importOk: '已导入',
         importBad: '短码无效，已忽略',
         hcSub: '把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三级 ≥7）',
@@ -1216,14 +1209,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         nav: '主題色',
         hint: '配色與明暗模式獨立；切換後立即生效並存在 localStorage。',
         md: 'Markdown 強調',
-        mdHint: '標題與粗體用「本文色混強調色」，比本文更有色；關掉則與本文同色。',
         control: '開關 / 勾選',
-        controlHint: '宿主開關、核取方塊、單選都用近黑/近白；開啟後改用強調色。',
         scroll: '捲軸',
-        scrollHint: '預設中性灰；「跟隨」上配色色相，「強調」用強調色。明暗關係不變。',
         scrollHintMono: '目前是黑白配色，沒有色相可跟隨，捲軸保持中性灰。',
         rightbar: '右側欄底色',
-        rightbarHint: '右欄本來沒有自己的背景，露的是會話區畫布色。',
         advanced: '更多選項',
         textSub: '本文與強調的著色程度',
         sidebarSub: '相對會話區的層次',
@@ -1232,16 +1221,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         scrollSub: '捲軸與軌道的色相',
         controlSub: '開關與核取方塊是否跟強調色',
         langSub: '自動跟隨宿主介面語言',
-        surface: '面板表面',
-        surfaceHint: '決定側欄與右欄相對會話區是「浮起」還是「凹陷」。',
-        ok: '✓ 配色已生效',
         bad: '⚠ 部分 token 未生效（宿主可能改名），請看主控台',
         healed: '配色層被宿主丟棄過一次，已自動恢復 ',
         healedSuffix: ' 次',
         text: '強度',
-        textHint: '讓本文/次級文字帶配色色味；三檔都符合 AA。',
         sidebar: '左側欄底色',
-        sidebarHint: '讓側欄比會話區更淺（或更深），做出區塊層次。',
         lang: '語言',
         hc: '高對比',
         custom: '自訂配色',
@@ -1252,6 +1236,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         copy: '複製',
         applyImport: '匯入',
         copied: '已複製',
+        copyFail: '複製失敗，請手選後 Ctrl+C',
         importOk: '已匯入',
         importBad: '短碼無效，已忽略',
         hcSub: '把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三級 ≥7）',
@@ -1260,14 +1245,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         nav: 'Color theme',
         hint: 'Independent of light/dark mode. Applies immediately and is saved to localStorage.',
         md: 'Markdown emphasis',
-        mdHint: 'Headings and bold mix the accent into body colour; off keeps them identical to body text.',
         control: 'Switches / checks',
-        controlHint: 'Switches, checkboxes and radios use near-black/white in the host. Turn this on to use the accent colour.',
         scroll: 'Scrollbars',
-        scrollHint: 'Neutral grey by default. Tint follows the palette hue; Accent uses the accent colour. Lightness is unchanged.',
         scrollHintMono: 'Monochrome has no hue to follow; scrollbars stay neutral.',
         rightbar: 'Right panel surface',
-        rightbarHint: 'The right panel has no fill of its own; it shows the canvas.',
         advanced: 'More options',
         textSub: 'How strongly text follows the palette',
         sidebarSub: 'Layer relative to the conversation',
@@ -1276,16 +1257,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         scrollSub: 'Hue of the scrollbar',
         controlSub: 'Switches and checkboxes',
         langSub: 'Follow the host interface language',
-        surface: 'Panel surfaces',
-        surfaceHint: 'Whether the sidebars sit above or below the conversation area.',
-        ok: '✓ Palette applied',
         bad: '⚠ Some tokens did not apply (host may have renamed them); check the console',
         healed: 'Palette layer was dropped by the host; restored ',
         healedSuffix: 'x',
         text: 'Strength',
-        textHint: 'Tints body and secondary text toward the palette; all three levels meet AA.',
         sidebar: 'Sidebar surface',
-        sidebarHint: 'Makes the sidebar lighter (or deeper) than the conversation area.',
         lang: 'Language',
         hc: 'High contrast',
         custom: 'Custom palette',
@@ -1296,6 +1272,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         copy: 'Copy',
         applyImport: 'Import',
         copied: 'Copied',
+        copyFail: 'Copy failed — select the code and press Ctrl+C',
         importOk: 'Imported',
         importBad: 'Invalid code, ignored',
         hcSub: 'Raises text floors to AAA (body ≥15, secondary ≥9, tertiary ≥7)',
@@ -1304,14 +1281,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         nav: 'カラーテーマ',
         hint: 'ライト/ダークとは独立です。変更は即時反映され、localStorage に保存されます。',
         md: 'Markdown の強調',
-        mdHint: '見出しと太字にアクセント色を混ぜます。オフにすると本文と同じ色になります。',
         control: 'スイッチ / チェック',
-        controlHint: 'ホストのスイッチ・チェックボックスはほぼ白黒です。オンにするとアクセント色になります。',
         scroll: 'スクロールバー',
-        scrollHint: '既定はニュートラルグレー。「追従」でテーマの色相、「アクセント」でアクセント色になります。',
         scrollHintMono: 'モノクロには色相がないため、スクロールバーはグレーのままです。',
         rightbar: '右パネルの背景',
-        rightbarHint: '右パネルは独自の背景を持たず、キャンバス色が見えています。',
         advanced: 'その他のオプション',
         textSub: '本文と強調の色づき具合',
         sidebarSub: '会話エリアとの段差',
@@ -1320,16 +1293,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         scrollSub: 'スクロールバーの色相',
         controlSub: 'スイッチとチェックの色',
         langSub: 'ホストの表示言語に合わせます',
-        surface: 'パネル表面',
-        surfaceHint: 'サイドバーが会話エリアより浮くか沈むかを決めます。',
-        ok: '✓ 配色を適用しました',
         bad: '⚠ 一部の token が適用されていません（ホスト側で改名された可能性）。コンソールを確認してください',
         healed: '配色レイヤーがホストに破棄されたため、自動で復元しました（',
         healedSuffix: ' 回）',
         text: '強さ',
-        textHint: '本文と副次テキストをテーマ色に寄せます。3 段階とも AA を満たします。',
         sidebar: '左サイドバーの背景',
-        sidebarHint: 'サイドバーを会話エリアより明るく（または暗く）して段差を作ります。',
         lang: '言語',
         hc: 'ハイコントラスト',
         custom: 'カスタム配色',
@@ -1340,6 +1308,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         copy: 'コピー',
         applyImport: '読み込み',
         copied: 'コピーしました',
+        copyFail: 'コピーできません。選択して Ctrl+C してください',
         importOk: '読み込みました',
         importBad: '無効なコードです',
         hcSub: '本文の下限を AAA に引き上げます（本文 ≥15、副次 ≥9、三次 ≥7）',
@@ -1392,8 +1361,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         desc: { mono: '色なし · 既定', warm: 'クリーム + ブラウン', indigo: 'クールホワイト + ブルー', moss: 'グレーグリーン', custom: '3 色から派生' },
         text: { neutral: '控えめ', tinted: '標準', deep: '強め' },
         sidebar: { light: '明るく', match: '同じ', deep: '暗く' },
-        rightbar: { sidebar: 'サイドバーに合わせる', canvas: 'キャンバスに従う' },
-        scroll: { neutral: 'ニュートラル', tinted: '追従', accent: 'アクセント' },
+        rightbar: { sidebar: 'サイドバー', canvas: 'キャンバス' },
+        scroll: { neutral: '無彩', tinted: '追従', accent: '強調' },
         control: { accent: 'アクセント', mono: 'モノクロ' },
         md: { on: '色づけ', off: '本文と同じ' },
         lang: { auto: '自動' },
@@ -1415,32 +1384,42 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       const health = React.useSyncExternalStore(props.subscribeHealth, props.getHealth)
       const [importText, setImportText] = React.useState('')
       const [importState, setImportState] = React.useState(null)
+      const [copyState, setCopyState] = React.useState(null)
       const [advanced, setAdvanced] = React.useState(false)
       const locale = React.useSyncExternalStore(props.subscribeLocale, props.getLocale)
       const langPref = React.useSyncExternalStore(props.subscribeLocale, props.getLangPref)
+      const langAttr = langPref !== 'auto'
+        ? langPref
+        : ((typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) || 'zh-CN')
       const txt = TEXT[locale] || TEXT['zh-CN']
       const lb = LABELS[locale] || LABELS['zh-CN']
 
-      const seg = (modes, value, onPick, labels) => h(
+      // A6：读屏需要知道"这是哪个设置的选项组"；单选用 radio 语义更准
+      const seg = (modes, value, onPick, labels, labelId, disabled) => h(
         'div',
-        { className: 'dsh-tp-seg', role: 'group' },
+        { className: 'dsh-tp-seg', role: 'radiogroup', 'aria-labelledby': labelId, 'aria-disabled': disabled ? 'true' : undefined },
         modes.map((mode) => h(
           'button',
           {
             key: mode.id,
             type: 'button',
+            role: 'radio',
             className: mode.id === value ? 'is-on' : undefined,
-            'aria-pressed': mode.id === value,
-            onClick: () => onPick(mode.id),
+            'aria-checked': mode.id === value,
+            'aria-disabled': disabled ? 'true' : undefined,
+            disabled: disabled === true,
+            onClick: () => { if (!disabled) onPick(mode.id) },
           },
           (labels && labels[mode.id]) || mode.label,
         )),
       )
 
-      const row = (titleText, subText, control) => h(
+      const rowId = (key) => 'dsh-tp-row-' + key
+      const row = (key, titleText, subText, control) => h(
         'div',
         { className: 'dsh-tp-row' },
-        h('div', { className: 'dsh-tp-row-label' }, h('b', null, titleText), h('span', null, subText)),
+        h('div', { className: 'dsh-tp-row-label', id: rowId(key) + '-desc' },
+          h('b', { id: rowId(key) }, titleText), h('span', null, subText)),
         control,
       )
 
@@ -1468,13 +1447,21 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               'aria-label': (lb.custom && lb.custom[field]) || field,
             }),
             h('span', { className: 'dsh-tp-swatch-name' }, (lb.custom && lb.custom[field]) || field),
-            h('code', { className: 'dsh-tp-hex' }, customColors[field])))),
+            h('input', {
+              key: customColors[field],
+              className: 'dsh-tp-hexinput',
+              defaultValue: customColors[field],
+              spellCheck: false,
+              'aria-label': ((lb.custom && lb.custom[field]) || field) + ' HEX',
+              onBlur: (e) => props.setCustomColor(field, e.target.value.trim()),
+              onKeyDown: (e) => { if (e.key === 'Enter') props.setCustomColor(field, e.target.value.trim()) },
+            })))),
         h('p', { className: 'dsh-tp-custom-hint' }, txt.customHint),
       )
 
       const card = (scheme) => {
         const picked = scheme.id === current
-        const c = cardColors(scheme, textMode)
+        const c = cardColors(scheme, textMode, sidebarMode)
         return h(
           'button',
           {
@@ -1502,16 +1489,16 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 
       return h(
         'section',
-        { className: 'dsh-tp' },
+        { className: 'dsh-tp', lang: langAttr },
         h('div', { className: 'dsh-tp-head' },
           h('h2', null, txt.nav),
           h('span', { className: 'dsh-tp-badge' }, 'v' + PLUGIN_VERSION)),
         h('p', { className: 'dsh-tp-sub' }, txt.hint),
         h('div', { className: 'dsh-tp-grid' }, SCHEMES.map(card)),
         customPanel,
-        row(txt.text, txt.textSub, seg(TEXT_MODES, textMode, props.setTextMode, lb.text)),
-        row(txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode, lb.sidebar)),
-        row(txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode, lb.rightbar)),
+        row('text', txt.text, txt.textSub, seg(TEXT_MODES, textMode, props.setTextMode, lb.text, rowId('text'))),
+        row('sidebar', txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode, lb.sidebar, rowId('sidebar'))),
+        row('rightbar', txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode, lb.rightbar, rowId('rightbar'))),
         health && !health.ok && h('p', { className: 'dsh-tp-status is-bad' }, txt.bad),
         health && health.ok && health.reapplies > 0 && h(
           'p',
@@ -1527,35 +1514,43 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         advanced && h(
           'div',
           { className: 'dsh-tp-adv' },
-          row(txt.lang, txt.langSub, seg(LANG_OPTIONS, langPref, props.setLangPref, lb.lang)),
+          row('lang', txt.lang, txt.langSub, seg(LANG_OPTIONS, langPref, props.setLangPref, lb.lang, rowId('lang'))),
           h(
             'div',
-            { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
-            h('div', { style: { fontSize: 14, lineHeight: '22px' } }, txt.config),
-            h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
+            { className: 'dsh-tp-field' },
+            h('div', { className: 'dsh-tp-field-title', id: rowId('config') }, txt.config),
+            h('div', { className: 'dsh-tp-field-row' },
               h('input', {
                 className: 'dsh-tp-input',
                 readOnly: true,
                 value: props.getConfigCode(),
+                title: props.getConfigCode(),
                 onFocus: (e) => { try { e.target.select() } catch (err) { /* 忽略 */ } },
-                'aria-label': txt.config,
+                'aria-label': txt.config + ' — ' + txt.copy,
               }),
               h('button', {
                 type: 'button',
                 className: 'dsh-tp-mini',
-                onClick: () => {
+                onClick: async () => {
                   const code = props.getConfigCode()
                   try {
-                    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(code)
-                  } catch (err) { /* 剪贴板不可用时靠手选 */ }
-                  setImportState('copied')
+                    if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') throw new Error('no clipboard api')
+                    await navigator.clipboard.writeText(code)
+                    setCopyState('copied')
+                  } catch (err) {
+                    // 剪贴板可能被拒（无安全上下文/权限）；不能谎报成功
+                    setCopyState('fail')
+                  }
                 },
-              }, txt.copy)),
-            h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' } },
+              }, txt.copy),
+              copyState && h('span', { className: 'dsh-tp-note', role: 'status', 'aria-live': 'polite' },
+                copyState === 'copied' ? txt.copied : txt.copyFail)),
+            h('div', { className: 'dsh-tp-field-row' },
               h('input', {
                 className: 'dsh-tp-input',
                 placeholder: 'dshs1.…',
                 value: importText,
+                'aria-label': txt.applyImport,
                 onChange: (e) => { setImportText(e.target.value); setImportState(null) },
               }),
               h('button', {
@@ -1563,14 +1558,14 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 className: 'dsh-tp-mini',
                 onClick: () => setImportState(props.applyConfigCode(importText) ? 'ok' : 'bad'),
               }, txt.applyImport),
-              importState && h('span', { className: 'dsh-tp-note' },
-                importState === 'ok' ? txt.importOk : importState === 'copied' ? txt.copied : txt.importBad)),
-            h('p', { style: { margin: 0, fontSize: 12, lineHeight: '18px', color: 'var(--dsw-alias-label-tertiary)' } }, txt.configHint),
+              importState && h('span', { className: 'dsh-tp-note', role: importState === 'bad' ? 'alert' : 'status', 'aria-live': 'polite' },
+                importState === 'ok' ? txt.importOk : txt.importBad)),
+            h('p', { className: 'dsh-tp-custom-hint' }, txt.configHint),
           ),
-          row(txt.md, txt.mdSub, seg(MD_MODES, mdMode, props.setMdMode, lb.md)),
-          row(txt.hc, txt.hcSub, seg(HC_MODES, hcMode, props.setHcMode, lb.hc)),
-          row(txt.scroll, current === 'mono' ? txt.scrollHintMono : txt.scrollSub, seg(SCROLL_MODES, scrollMode, props.setScrollMode, lb.scroll)),
-          row(txt.control, txt.controlSub, seg(CONTROL_MODES, controlMode, props.setControlMode, lb.control)),
+          row('md', txt.md, txt.mdSub, seg(MD_MODES, mdMode, props.setMdMode, lb.md, rowId('md'))),
+          row('hc', txt.hc, txt.hcSub, seg(HC_MODES, hcMode, props.setHcMode, lb.hc, rowId('hc'))),
+          row('scroll', txt.scroll, current === 'mono' ? txt.scrollHintMono : txt.scrollSub, seg(SCROLL_MODES, scrollMode, props.setScrollMode, lb.scroll, rowId('scroll'), current === 'mono')),
+          row('control', txt.control, txt.controlSub, seg(CONTROL_MODES, controlMode, props.setControlMode, lb.control, rowId('control'), current === 'mono')),
         ),
       )
     }
