@@ -99,7 +99,7 @@ The five that surprised us most during the 1.7.0 audit — each one was found by
 - **A white accent produced a white link** (1.13:1). The contrast solver only ever walked away from the background in one direction, so an accent brighter than the background kept moving toward white.
 - **Picking a colour changed the page but not the panel.** The component subscribed to the palette id, which never changes when a colour does — React compared the snapshots, saw no difference, and skipped the re-render.
 - **Sharing a configuration did not share the colours.** The short code carried the modes but not the three custom colours, so importing on another machine reported success and silently kept the local values.
-- **Dark module surfaces have a hard ceiling.** Even pure white reaches only about 10.99:1 on the deepest panel surface, so the 12:1 (high-contrast 15:1) target is physically unreachable there. We clamp to what the surface allows and label it "surface-limited" instead of quietly missing.
+- **Dark module surfaces have a hard ceiling.** Even pure white reaches only about 10.99:1 on the deepest panel surface, so the 10:1 (high-contrast 15:1) target is physically unreachable there. We clamp to what the surface allows and label it "surface-limited" instead of quietly missing.
 - **A selector we thought was dead was alive.** The audit initially reported the `_markdown_` hooks as broken; the contract test against the shipped CSS proved otherwise. The finding was wrong, not the code.
 
 ## Sharing

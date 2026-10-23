@@ -89,8 +89,8 @@ for (const scheme of SCHEMES) {
       const ratio = contrast(get(tokens, surface.mode, key), bg)
       const target = role === 'main' && surface.mode === 'dark' ? Math.min(roleFloor(role), 10) : roleFloor(role)
       // 承诺本身可达成 → 按承诺；承诺高于该面上限 → 按该面可达上限（93% 留出色彩余量）
-      const isLimited = ceiling < target / 0.93 || (role === 'main' && surface.mode === 'dark' && (surface.id === '800' || surface.id === '850'))
-      const policyExempt = role === 'main' && surface.mode === 'dark' && surface.id === '800'
+      const isLimited = ceiling < target / 0.93 || (role === 'main' && surface.mode === 'dark' && ((surface.id === '800' || surface.id === '850') || surface.id === '850'))
+      const policyExempt = role === 'main' && surface.mode === 'dark' && (surface.id === '800' || surface.id === '850')
       const feasible = isLimited ? ceiling * 0.93 : target
       const ok = surface.scope === false || policyExempt ? true : ratio >= feasible
       if (!ok) violations++

@@ -98,7 +98,7 @@ As cinco mais surpreendentes da auditoria da 1.7.0 — cada uma foi encontrada p
 - **Um acento branco gerava um link branco** (1.13:1). O solucionador de contraste andava só numa direção, afastando-se do fundo, então um acento mais claro que o fundo continuava indo para o branco.
 - **Escolher uma cor mudava a página mas não o painel.** O componente inscrevia-se no id da paleta, que não muda quando a cor muda; o React comparou os snapshots, viu que não havia diferença e pulou o re-render.
 - **Compartilhar uma configuração não compartilhava as cores.** O código curto carregava os modos mas não as três cores personalizadas, então importar em outra máquina informava sucesso e mantinha os valores locais.
-- **Superfícies modulares escuras têm um teto.** Mesmo o branco puro chega a apenas ~10.99:1 na superfície mais profunda, então a meta de 12:1 (15:1 em alto contraste) é fisicamente inalcançável ali. Ajustamos ao máximo alcançável e rotulamos.
+- **Superfícies modulares escuras têm um teto.** Mesmo o branco puro chega a apenas ~10.99:1 na superfície mais profunda, então a meta de 10:1 (15:1 em alto contraste) é fisicamente inalcançável ali. Ajustamos ao máximo alcançável e rotulamos.
 - **Um seletor que achávamos morto estava vivo.** A auditoria inicialmente o reportou como quebrado; o teste de contrato contra o CSS publicado provou o contrário. O achado estava errado, não o código.
 
 ## Sharing
