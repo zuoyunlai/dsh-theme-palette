@@ -10,3 +10,6 @@ Thumbs.db
 tools/preview.html
 *.tgz
 tools/baseline-desktop/
+
+# 主题包导出产物（可重建）
+dist/

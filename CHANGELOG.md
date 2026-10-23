@@ -4,6 +4,23 @@
 
 ## 版本一览
 
+### 1.8.0
+依据 [竞品调研](../../_audit-theme-palette-20261023/竞品调研-2026-10-23.md) 的差距反哺：把工程严谨变成可见、可分享、可验证的东西（不改求解器）。
+
+- **对比度矩阵**：设置页新增可折叠「对比度」区，4 个前景角色 × 7 个承载面的实测/目标/表面受限三态；
+  `CONTRAST_SURFACES` / `CONTRAST_ROLES` 成为唯一定义，`palette-dev.mjs` 改为消费同一份（消除两套口径）
+- **「试试示例」**：导入区一键填入演示短码并触发预览；码由生产 `encodeConfig` 运行时生成，schema 演进自动跟随
+- **五语 README 叙事**：新增 `## Pitfalls we hit`（1.7.0 的 5 条审计事故）与 `## Trade-offs`
+  （明确不做玻璃/壁纸/市场/AI 生色），标题逐字一致由脚本断言
+- **五语 `## Sharing`**：放一条真实示例短码（生产编码器生成 + `decodeConfig` 往返自检），说明它包含三色
+- **截图资产重建**：4 张（浅/深/自定义面板含解释性校正/高对比），`screenshots.json` 3→4
+- **主题包导出（单向）**：`npm run packs` 导出 `dsh-dream-skin/pack` 格式 8 个包（4 配色 × 明暗，每包 90 tokens），
+  全部通过正文/画布对比度自检；**不实现导入**——导入会绕过对比度求解器
+- 工具：`preview-settings` 支持 `--notice/--hc/--out`，透传 `id/scope/title/data-*`；
+  新增 `sample-code` / `insert-readme-sections` / `insert-readme-gallery` / `export-theme-pack`；
+  `check-ui` 扩到 69+ 断言（矩阵、示例码可解码、五语标题一致、单一 SURFACES 定义）
+- 无存储键变更；无求解器行为变更
+
 ### 1.7.0
 依据 2026-10-23 审计反哺（对 DSH 0.2.1-rc.2 实际 token 与承载面核实）：
 
