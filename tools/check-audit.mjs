@@ -200,9 +200,27 @@ console.log('\n9) 三套预置的字体体系统一（1.8.2）')
       check(dh <= 12, `${id} 深正文色相偏离 darkHue ${dh.toFixed(1)}° ≤ 12°`)
     }
   }
-  const ratio = (arr) => Math.max(...arr.map((x) => x[1])) / Math.min(...arr.map((x) => x[1]))
-  check(ratio(bodyC) <= 1.25, `三套浅色正文字色度比 ${ratio(bodyC).toFixed(2)} ≤ 1.25（${bodyC.map((x) => x[0] + ':' + x[1].toFixed(3)).join(' ')}）`)
-  check(ratio(darkBodyC) <= 1.5, `三套深色正文字色度比 ${ratio(darkBodyC).toFixed(2)} ≤ 1.5（${darkBodyC.map((x) => x[0] + ':' + x[1].toFixed(3)).join(' ')}）`)
+  // 1.9.0 起三套直接采用参考实现的 ink 目标，不再要求"色度相等"（参考本身各套 ink 色度不同）
+  const INK = {
+    warm: ['#2b2622', '#f5efe8'],
+    indigo: ['#1a2330', '#eef3fa'],
+    moss: ['#1f2a22', '#eef5ef'],
+  }
+  {
+    const dE = (a, b) => {
+      const lab = (hex) => { const [L, C, h] = toOklch(hex); return [L, C * Math.cos(h * Math.PI / 180), C * Math.sin(h * Math.PI / 180)] }
+      const x = lab(a), y = lab(b)
+      return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) * 100
+    }
+    for (const [id, [inkLight, inkDark]] of Object.entries(INK)) {
+      const scheme = SCHEMES.find((s) => s.id === id)
+      const t = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', false)
+      const got = t['--dsw-static-neutral-bluish-1000'].light
+      const gotDark = t['--dsw-static-neutral-bluish-50'].dark
+      check(dE(got, inkLight) <= 4, `${id} 浅色正文对上参考 ink ${got} vs ${inkLight}（ΔE ${dE(got, inkLight).toFixed(1)} ≤ 4）`)
+      check(dE(gotDark, inkDark) <= 4, `${id} 深色正文对上参考 ink ${gotDark} vs ${inkDark}（ΔE ${dE(gotDark, inkDark).toFixed(1)} ≤ 4）`)
+    }
+  }
 }
 
 console.log('\n10) 菜单面 / 文件 diff / 诊断（1.8.3）')

@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.8.4'
+    const PLUGIN_VERSION = '1.9.0'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -128,6 +128,17 @@ window.__ModuleLoader__.load({
       },
       { id: 'custom', label: '自定义', desc: '三色派生', tinted: true, custom: true, hue: 60, darkHue: 60, lightC: 0.02, midC: 0.01, textC: 0.004, darkC: 0.014, darkLift: 0.03, paperC: 0.012, accentHue: 60, accentC: 0.1, accentL: 0.58, accentScale: 1 },
     ]
+
+    /**
+     * 参考实现（web.yily.top）的 surface token 精确对齐。
+     * 参数化色阶只能逼近，这里对三套预置做表面级覆写：页面/卡片/控件/深色四层取参考值，
+     * 中间层按 60→150 的明度插值，避免边框/悬浮态跳变。custom 不走这张表。
+     */
+    const SURFACE_TARGETS = {
+      warm: { '00': '#fdfbf7', '60': '#f5eee3', '150': '#e9dfd0', '950': '#1a1613', '875': '#221d19', '850': '#2b241f', '800': '#4a3f36' },
+      indigo: { '00': '#f8fafc', '60': '#eef2f8', '150': '#e0e7f0', '950': '#121924', '875': '#18212e', '850': '#1b2533', '800': '#2c3a4e' },
+      moss: { '00': '#f9fbf7', '60': '#edf3e8', '150': '#dee8d8', '950': '#131b16', '875': '#1a241d', '850': '#1d2a22', '800': '#2f3f34' },
+    }
 
     /* 对比度下限：主文本 16 / 次文本 6 / 三级文本 4.6（AA）/ 链接 4.6 */
     /* 对比度下限：按**真实承载面**定（卡层/模块层比画布更难达标），不是按画布定。
@@ -553,6 +564,20 @@ window.__ModuleLoader__.load({
           out[step] = fromOklch(clamp(Lout, 0.06, 0.96), c, scheme.accentHue)
         }
         return out
+      }
+      const T = SURFACE_TARGETS[scheme.id]
+      if (scheme.tinted && T) {
+        for (const step of ['00', '60', '150', '950', '875', '850', '800']) {
+          if (T[step]) bluish[step] = T[step]
+        }
+        // 60→150 之间按 OKLCH 插值，保证 75/100/200 与两端连续
+        const [l60, c60, h60] = toOklch(T['60'])
+        const [l150, c150, h150] = toOklch(T['150'])
+        const dh = ((h150 - h60 + 540) % 360) - 180
+        const lerp = (t) => fromOklch(l60 + (l150 - l60) * t, c60 + (c150 - c60) * t, h60 + dh * t)
+        bluish['75'] = lerp(0.25)
+        bluish['100'] = lerp(0.55)
+        bluish['200'] = lerp(0.90)
       }
       return { bluish, neutral, deepseek: accent(BASE.deepseek), blue: accent(BASE.blue) }
     }
@@ -1038,6 +1063,40 @@ window.__ModuleLoader__.load({
       // 侧栏保持纯白，同样得到区块层次（这是唯一需要动画布的情形）。
       if (!params.tinted && sidebarMode === 'light') {
         pairs['--dsw-static-neutral-bluish-00'] = { light: '#fafafa', dark: BASE.bluish['00'] }
+      }
+      /* ---- 参考实现的 ink / link 精确对齐（1.9.0）----
+       * 参考的 ink 比我们求解结果更浅、更中性；这里直接取参考值，
+       * 但仍过一遍对比度下限：达不到的目标文字沿远离背景方向微调（只动明度，不动色相）。
+       * 三级文字在控件面上若参考本身不达 AA，会略微变深 —— 这是唯一允许偏离参考的地方。
+       */
+      const TEXT_TARGETS = {
+        warm: { light: { 1000: '#2b2622', 700: '#6b625a', 600: '#8c8177', link: '#8a5233' }, dark: { 50: '#f5efe8', 300: '#c4b8ac', 400: '#9a8d80', link: '#e6c4a0' } },
+        indigo: { light: { 1000: '#1a2330', 700: '#516074', 600: '#74839a', link: '#345286' }, dark: { 50: '#eef3fa', 300: '#b7c5d8', 400: '#8a9bb2', link: '#a6bfe3' } },
+        moss: { light: { 1000: '#1f2a22', 700: '#55645a', 600: '#7a8a7e', link: '#406236' }, dark: { 50: '#eef5ef', 300: '#b8c8bc', 400: '#8ba091', link: '#aed0a2' } },
+      }
+      const TT = TEXT_TARGETS[scheme.id]
+      if (scheme.tinted && TT) {
+        const fit = (hex, bgs, target) => {
+          const dir = contrast('#ffffff', bgs[0]) >= contrast('#000000', bgs[0]) ? 1 : -1
+          const [L0, C0, h0] = toOklch(hex)
+          let L = L0
+          for (let i = 0; i < 200; i++) {
+            const c = fromOklch(clamp(L, 0.02, 0.99), C0, h0)
+            if (bgs.every((b) => contrast(c, b) >= target)) return c
+            L += dir * 0.003
+          }
+          return fromOklch(clamp(L, 0.02, 0.99), C0, h0)
+        }
+        const lightBgs = ['00', '60', '150'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].light)
+        const darkBgs = ['950', '875', '850', '800'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].dark)
+        const F = floors(hc)
+        pairs['--dsw-static-neutral-bluish-1000'].light = fit(TT.light['1000'], lightBgs, F.main)
+        pairs['--dsw-static-neutral-bluish-700'].light = fit(TT.light['700'], lightBgs, F.secondary)
+        pairs['--dsw-static-neutral-bluish-600'].light = fit(TT.light['600'], lightBgs, F.tertiary)
+        pairs['--dsw-static-neutral-bluish-50'].dark = fit(TT.dark['50'], darkBgs, F.main)
+        pairs['--dsw-static-neutral-bluish-300'].dark = fit(TT.dark['300'], darkBgs, F.secondary)
+        pairs['--dsw-static-neutral-bluish-400'].dark = fit(TT.dark['400'], darkBgs, F.tertiary)
+        pairs['--dsw-alias-link'] = { light: fit(TT.light.link, lightBgs, F.link), dark: fit(TT.dark.link, darkBgs, F.link) }
       }
       return pairs
     }
