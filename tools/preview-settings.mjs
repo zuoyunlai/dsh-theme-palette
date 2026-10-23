@@ -21,6 +21,15 @@ const wi = argv.indexOf('--width')
 const CONTENT_W = wi >= 0 ? Number(argv[wi + 1]) : 564
 const ai = argv.indexOf('--adv')
 const ADV = ai >= 0 ? argv[ai + 1] !== '0' : false   // 默认折叠，与真机一致
+// 一次性升级提示默认只在"已有配置的老用户"出现；出图时用 --notice 强制显示
+const ni = argv.indexOf('--notice')
+const NOTICE = ni >= 0 ? argv[ni + 1] !== '0' : false
+// --hc：强制高对比档（用于高对比截图）
+const hi = argv.indexOf('--hc')
+const HC = hi >= 0 && argv[hi + 1] !== '0'
+// --out <basename>：自定义输出前缀，便于一次出多张不同构型的图
+const oi = argv.indexOf('--out')
+const OUT_BASE = oi >= 0 ? argv[oi + 1] : ''
 const source = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
 
 let engine = null
@@ -124,7 +133,7 @@ const props = {
   getScrollMode: () => 'tinted', subscribeScroll: () => () => {}, setScrollMode: () => {},
   getControlMode: () => 'accent', subscribeControl: () => () => {}, setControlMode: () => {},
   getMdMode: () => 'on', subscribeMd: () => () => {}, setMdMode: () => {},
-  getHcMode: () => 'off', subscribeHc: () => () => {}, setHcMode: () => {},
+  getHcMode: () => (HC ? 'on' : 'off'), subscribeHc: () => () => {}, setHcMode: () => {},
   getConfigCode: () => 'dshs1.eyJ2IjoxLCJwIjoid2FybSIsInMiOiJkZWVwIiwidCI6InRpbnRlZCIsInIiOiJzaWRlYmFyIiwiYyI6InRpbnRlZCIsImsiOiJhY2NlbnQiLCJtIjoib24iLCJoIjoib2ZmIiwibCI6ImF1dG8ifQ',
   applyConfigCode: () => true,
   getCustomColors: () => ({ bg: '#f5efe6', text: '#1d1a17', accent: process.env.PREVIEW_ACCENT || '#a9683e' }),
@@ -142,8 +151,9 @@ const props = {
     },
   }),
   subscribeNotice: () => () => {},
-  getNoticePending: () => process.env.PREVIEW_NOTICE === '1',
+  getNoticePending: () => NOTICE || process.env.PREVIEW_NOTICE === '1',
   dismissNotice: () => {},
+  getSampleCode: () => 'dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiciI6InNpZGViYXIiLCJjIjoidGludGVkIiwiayI6ImFjY2VudCIsIm0iOiJvbiIsImgiOiJvZmYiLCJsIjoiemgtQ04iLCJ4Ijp7ImJnIjoiI2Y1ZWZlNiIsInRleHQiOiIjMWQxYTE3IiwiYWNjZW50IjoiIzNmNjZhMyJ9fQ',
   resetCustom: () => {},
   getLangPref: () => (LANG === 'auto' ? 'auto' : LANG), getLocale: () => (LANG === 'auto' ? 'zh-CN' : LANG),
   subscribeLocale: () => () => {}, setLangPref: () => {},
@@ -164,7 +174,11 @@ html,body{margin:0;background:#0a0a0a;font-family:-apple-system,"Segoe UI","Micr
 .wrap{padding:18px;border-radius:16px;border:1px solid rgba(128,128,128,.3);background:${canvas};${style};color:var(--dsw-alias-label-primary)}
 </style><style>${engine.settingsCss}</style></head>
 <body${dark}><div class="page"><div class="wrap">${toHtml(body)}</div></div></body></html>`
-  const out = path.join(here, `preview-${mode}${PALETTE === 'warm' ? '' : '-' + PALETTE}${LANG === 'auto' ? '' : '-' + LANG}.html`)
+  // OUT_BASE 是裸名（不带横线）；默认后缀自带横线。两者都归一成"无前导横线"再拼接，
+  // 避免出现 preview-light--custom.html 这类双横线文件名。
+  const raw = OUT_BASE || `${PALETTE === 'warm' ? '' : PALETTE}${LANG === 'auto' ? '' : LANG}`
+  const suffix = raw.replace(/^-+/, '')
+  const out = path.join(here, `preview-${mode}${suffix ? '-' + suffix : ''}.html`)
   fs.writeFileSync(out, html)
   console.log('✓ ' + out + '（' + Math.round(html.length / 1024) + ' KB）')
 }

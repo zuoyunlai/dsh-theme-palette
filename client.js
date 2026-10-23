@@ -1356,6 +1356,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
         preview: '预览',
+        sample: '试试示例',
         cancel: '取消',
         importSummary: '将覆盖：',
         config: '配置',
@@ -1401,6 +1402,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
         preview: '預覽',
+        sample: '試試示例',
         cancel: '取消',
         importSummary: '將覆蓋：',
         config: '設定',
@@ -1446,6 +1448,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
         preview: 'Preview',
+        sample: 'Try a sample',
         cancel: 'Cancel',
         importSummary: 'Will overwrite:',
         config: 'Config',
@@ -1491,6 +1494,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
         preview: 'プレビュー',
+        sample: 'サンプルを試す',
         cancel: 'キャンセル',
         importSummary: '上書きする内容：',
         config: '設定の共有',
@@ -1860,6 +1864,23 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                   }
                 },
               }, txt.preview),
+              h('button', {
+                type: 'button',
+                className: 'dsh-tp-mini',
+                // 示例码由生产编码器现场生成：schema 变了它跟着变，永远不会过期
+                onClick: () => {
+                  const code = props.getSampleCode()
+                  setImportText(code)
+                  const result = props.previewConfigCode(code)
+                  if (result && result.ok) {
+                    setImportPreview(result.config)
+                    setImportState(null)
+                  } else {
+                    setImportPreview(null)
+                    setImportState('bad')
+                  }
+                },
+              }, txt.sample),
               importState === 'bad' && h('span', { className: 'dsh-tp-note', role: 'alert', 'aria-live': 'polite' }, txt.importBad)),
             importPreview && h('div', { className: 'dsh-tp-preview', role: 'group', 'aria-label': txt.importSummary },
               h('p', null, txt.importSummary + ' ' + [
@@ -2226,6 +2247,15 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           const cfg = decodeConfig(code)
           return cfg ? { ok: true, config: cfg } : { ok: false }
         }
+        /**
+         * 「试试示例」用的演示短码：现场用生产 encodeConfig 生成，schema 演进时自动跟随，
+         * 不存在"README 里的示例码过期"这类手写漂移。三色刻意非默认组合，便于验证三色真的生效。
+         */
+        const getSampleCode = () => encodeConfig({
+          palette: 'custom', sidebar: 'deep', text: 'tinted', rightbar: 'sidebar',
+          scroll: 'tinted', control: 'accent', md: 'on', hc: 'off', lang: langPref,
+          custom: { bg: '#f5efe6', text: '#1d1a17', accent: '#3f66a3' },
+        })
         const resetCustom = () => {
           writeCustom(Object.assign({}, CUSTOM_DEFAULT))
           applyAll('custom:reset')
@@ -2375,6 +2405,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 getCustomColors,
                 getCustomExplain,
                 previewConfigCode,
+                getSampleCode,
                 subscribeNotice,
                 getNoticePending,
                 dismissNotice,

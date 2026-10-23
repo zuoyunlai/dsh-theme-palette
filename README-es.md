@@ -8,6 +8,10 @@ Paleta de tema para DeepSeek Harness (web y escritorio): **4 paletas × claro/os
 
 *Render estático con el ancho real del panel (564 px de contenido).*
 
+| Oscuro | Paleta personalizada | Alto contraste |
+|---|---|---|
+| ![Oscuro](assets/screenshot-settings-dark.png) | ![Paleta personalizada](assets/screenshot-settings-custom.png) | ![Alto contraste](assets/screenshot-settings-hc.png) |
+
 ## Compatibility
 
 | Superficie | Estado |
@@ -85,6 +89,43 @@ node tools/release.mjs --tag          # publicar en npm + tag
 ```
 
 La regresión visual tiene dos capas: el tablero de paletas (sin autenticación) y la ventana real del escritorio vía CDP (`tools/shoot-desktop.mjs`, requiere `--remote-debugging-port`). Ver [tools/README.md](tools/README.md).
+
+
+## Pitfalls we hit
+
+Las cinco más sorprendentes de la auditoría de 1.7.0 — cada una la encontró un test, no mirando capturas.
+
+- **Un acento blanco generaba un enlace blanco** (1.13:1). El solucionador de contraste solo avanzaba en una dirección, alejándose del fondo, así que un acento más claro que el fondo seguía yendo hacia el blanco.
+- **Elegir un color cambiaba la página pero no el panel.** El componente se suscribía al id de paleta, que no cambia al cambiar un color; React comparó los snapshots, no vio diferencia y saltó el re-render.
+- **Compartir una configuración no compartía los colores.** El código corto llevaba los modos pero no los tres colores personalizados, así que importar en otra máquina informaba éxito y conservaba los valores locales.
+- **Las superficies modulares oscuras tienen un techo.** Aun el blanco puro llega solo a ~10.99:1 en la superficie más profunda, de modo que el objetivo 12:1 (15:1 en alto contraste) es físicamente inalcanzable ahí. Ajustamos al máximo alcanzable y lo etiquetamos.
+- **Un selector que creíamos muerto estaba vivo.** La auditoría inicialmente lo reportó como roto; la prueba de contrato contra el CSS publicado demostró lo contrario. El hallazgo estaba equivocado, no el código.
+
+## Sharing
+
+Toda la configuración — incluidos los tres colores personalizados — viaja en un código corto. Pégalo en el cuadro de importación y pulsa Vista previa para ver qué cambiará antes de aplicar:
+
+```text
+dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiciI6InNpZGViYXIiLCJjIjoidGludGVkIiwiayI6ImFjY2VudCIsIm0iOiJvbiIsImgiOiJvZmYiLCJsIjoiemgtQ04iLCJ4Ijp7ImJnIjoiI2Y1ZWZlNiIsInRleHQiOiIjMWQxYTE3IiwiYWNjZW50IjoiIzNmNjZhMyJ9fQ
+```
+
+Este ejemplo real decodifica a:
+
+- paleta: custom · barra lateral: deep · texto: tinted · panel derecho: sidebar
+- scrollbar: tinted · controles: accent · Markdown: on · alto contraste: off · idioma: zh-CN
+- tres colores: `#f5efe6` (fondo) · `#1d1a17` (texto) · `#3f66a3` (acento)
+
+El código lo genera el codificador de producción y se auto-verifica ida y vuelta antes de entrar en este README — nunca se escribe a mano.
+
+## Trade-offs
+
+Otros plugins de tema aquí ofrecen cristal, fondos y animación. Decidimos no hacerlo:
+
+- **Sin cristal ni fondos.** Esa carrera se gana con capturas; preferimos competir con pruebas.
+- **Sin mercado de temas ni generación de color con IA.** Ambos introducen colores que no podemos garantizar; el solucionador de contraste es el activo.
+- **Sin más paletas.** Cuatro preajustes más un generador de tres colores supera a diez elegidas a mano; el volumen no es la ventaja.
+- **Sin promesas de "protección ocular".** Reportamos ratios medidos en las superficies donde el texto realmente cae y decimos "limitado por la superficie" cuando es todo lo que hay.
+
 
 ## License
 

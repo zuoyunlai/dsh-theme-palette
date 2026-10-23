@@ -8,6 +8,10 @@ DeepSeek Harness（Web / 桌面）的主题配色插件：**4 套配色 × 明�
 
 *上图按真机面板宽度（内容区 564 px）静态渲染。*
 
+| 深色 | 自定义面板 | 高对比 |
+|---|---|---|
+| ![深色](assets/screenshot-settings-dark.png) | ![自定义面板](assets/screenshot-settings-custom.png) | ![高对比](assets/screenshot-settings-hc.png) |
+
 ## Compatibility
 
 | 项目 | 状态 |
@@ -87,6 +91,43 @@ node tools/release.mjs --tag          # 发 npm + 打 tag
 ```
 
 截图回归分两层：配色看板（免登录）与桌面真机窗口（`tools/shoot-desktop.mjs`，需要 `--remote-debugging-port`）。见 [tools/README.md](tools/README.md)。
+
+
+## Pitfalls we hit
+
+1.7.0 审计里最反直觉的五条——每一条都是测试逼出来的，不是看截图看出来的。
+
+- **纯白强调色会生成纯白链接**（1.13:1）。对比度求解器原本只朝"远离背景"的单一方向走，强调色比背景还亮时只会一路推向白色。
+- **取了色，整页变了，面板没变。** 组件订阅的是配色 id，而取色不会改变它——React 比较快照发现没变，直接跳过重渲染。
+- **分享了配置，没分享颜色。** 短码带了各项模式，但没带自定义三色，换台机器导入提示成功，用的仍是本机旧值。
+- **深色模块面有硬上限。** 即使纯白，在最深的模块面上也只有约 10.99:1，12:1（高对比 15:1）物理上不可达。现在按该面可达上限钳位并标注"表面受限"，而不是默默不达标。
+- **一个我们以为失效的选择器其实活着。** 审计最初判定 `_markdown_` 相关选择器已失效；契约测试对着实际构建 CSS 证明它还在——错的是结论，不是代码。
+
+## Sharing
+
+所有设置——包括自定义三色——都装进一条短码。粘到导入框点「预览」，先看到将覆盖什么，再确认应用：
+
+```text
+dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiciI6InNpZGViYXIiLCJjIjoidGludGVkIiwiayI6ImFjY2VudCIsIm0iOiJvbiIsImgiOiJvZmYiLCJsIjoiemgtQ04iLCJ4Ijp7ImJnIjoiI2Y1ZWZlNiIsInRleHQiOiIjMWQxYTE3IiwiYWNjZW50IjoiIzNmNjZhMyJ9fQ
+```
+
+这条真实示例解码后是：
+
+- 配色：自定义 · 侧栏：更深 · 文字：标准 · 右栏：同左栏
+- 滚动条：跟随 · 控件：主题色 · Markdown 强调：开 · 高对比：关 · 语言：zh-CN
+- 三色：`#f5efe6`（底色）· `#1d1a17`（文字）· `#3f66a3`（强调）
+
+短码由生产编码器生成、经解码往返自检后才写进本文档——从不手写。
+
+## Trade-offs
+
+这个生态里别的主题插件做玻璃、壁纸、动效。我们刻意不做：
+
+- **不做玻璃与壁纸。** 那条赛道靠截图竞争，我们更愿意靠证据竞争。
+- **不做主题市场，也不做 AI 生色。** 两者都会引入我们无法保证的颜色；对比度求解器是资产，往里喂不可预测的输入等于自毁。
+- **不再堆配色。** 4 套预设 + 三色生成，强过手挑十套；数量不是护城河。
+- **不做护眼宣称。** 我们只报文字真实落在的承载面上的实测对比度，到顶就写"表面受限"，不做医学声明。
+
 
 ## License
 
