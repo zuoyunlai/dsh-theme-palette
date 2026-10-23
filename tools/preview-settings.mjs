@@ -145,16 +145,16 @@ const props = {
   subscribeCustom: () => () => {},
   // 静态预览用一份固定的对比度矩阵（真实值由 check-ui 的 --hc 对比断言覆盖）
   getContrastReport: () => {
-    const rows = ['main', 'secondary', 'tertiary', 'link'].map((role) => ({
-      role,
-      cells: ['00', '60', '150', '950', '875', '850', '800'].map((surface, i) => {
-        const light = i < 3
+    const surfaces = engine.CONTRAST_SURFACES
+    const rows = engine.CONTRAST_ROLES.map((role) => ({
+      role: role.id,
+      cells: surfaces.map((sf, i) => {
         // 高对比应当读数更高（更严的目标），不要造出"开了高对比反而更低"的假数据
-        const ratio = HC ? 10.9 - i * 0.6 : 9.8 - i * 0.5
+        const ratio = HC ? 10.9 - i * 0.5 : 9.8 - i * 0.4
         const claim = HC ? 15 : 12
-        const limited = surface === '800' || surface === '850'
+        const limited = sf.id === '800' || sf.id === '850' || sf.token !== undefined
         return {
-          surface, mode: light ? 'light' : 'dark', scope: surface !== '150',
+          surface: sf.id, mode: sf.mode, scope: sf.scope,
           ratio: Math.round(ratio * 100) / 100, claim, limited,
           ok: true,
         }

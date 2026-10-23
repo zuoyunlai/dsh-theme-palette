@@ -44,7 +44,7 @@ sandbox.__def.factory(() => ({
 }))
 if (!engine) throw new Error('生产引擎没有暴露 dev 钩子')
 
-const { buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, contrast, toOklch, floors, CONTRAST_SURFACES, CONTRAST_ROLES } = engine
+const { buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, contrast, toOklch, flatten, floors, CONTRAST_SURFACES, CONTRAST_ROLES } = engine
 const F = floors(HC)
 const roleFloor = (role) => (F[role] === undefined ? F.link : F[role])
 
@@ -53,7 +53,7 @@ const roleFloor = (role) => (F[role] === undefined ? F.link : F[role])
 const MODE_NAME = { light: '浅', dark: '深' }
 const SURFACES = CONTRAST_SURFACES.map((sf) => ({
   ...sf,
-  name: `${MODE_NAME[sf.mode]}·${sf.id}${sf.scope === false ? '*' : ''}`,
+  name: `${MODE_NAME[sf.mode]}·${sf.label || sf.id}${sf.scope === false ? '*' : ''}`,
   // 150 只作为图标/悬浮底出现，未发现正文用法：报表只列 tertiary/link，避免制造无关噪声
   fgs: Object.fromEntries(
     CONTRAST_ROLES
@@ -82,7 +82,8 @@ for (const scheme of SCHEMES) {
   const tokens = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', HC)
   console.log(`\n=== ${scheme.label}${HC ? ' · 高对比' : ''} ===`)
   for (const surface of SURFACES) {
-    const bg = get(tokens, surface.mode, surface.id)
+    const canvasKey = surface.mode === 'light' ? '00' : '950'
+    const bg = surface.token ? flatten(tokens[surface.token][surface.mode], get(tokens, surface.mode, canvasKey)) : get(tokens, surface.mode, surface.id)
     const ceiling = contrast(surface.mode === 'light' ? '#000000' : '#ffffff', bg)
     const parts = Object.entries(surface.fgs).map(([role, key]) => {
       const ratio = contrast(get(tokens, surface.mode, key), bg)

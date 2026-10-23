@@ -54,6 +54,8 @@ try {
   const surfaceCells = new Set((matrixHtml.match(/data-surface="(\d+)"/g) || []).map((s) => s.replace(/\D/g, '')))
   check(surfaceCells.size >= 4, `矩阵含 ≥4 个承载面（实得 ${surfaceCells.size}：${[...surfaceCells].join('/')}）`)
   check(matrixHtml.includes('表面受限'), '不可达的格子标注「表面受限」')
+  check(matrixHtml.includes('data-surface="menuL"') && matrixHtml.includes('data-surface="menuD"'), '矩阵含菜单面（半透明·按画布合成）')
+  check(matrixHtml.includes('复制诊断') || matrixHtml.includes('Copy diagnostics'), '矩阵含诊断导出入口')
 
   // 高对比开关必须改变深模块 800 的正文读数（防止永远显示"达标"）
   const pick = (html) => {

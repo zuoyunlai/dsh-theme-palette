@@ -4,6 +4,22 @@
 
 ## 版本一览
 
+### 1.8.3
+补齐 token 覆盖缺口（按宿主 118 个 alias/specific 做传递闭包统计：76% 跟随；余下 28 个逐项判断该不该跟）：
+
+- **深色菜单**：`--dsw-specific-menu` 宿主带字面量兜底（深 `#303136f0`），只改 `menu-surface-fill` 不够，
+  深色菜单仍是冷灰 → 现在按配色给（浅 50/深 850，alpha 0.94）
+- **品牌新色**：`--dsw-alias-brand-primary-new-…` 浅色写死 `#4176e6` 宿主蓝 → 两模式都归到强调色
+- **文件 diff 温度调和**：6 个 `file-diff-*` 保留绿/红语义，色相往配色拉 16–22°、压低饱和；
+  断言「新增仍是绿色系、删除仍是红色系」+ 正文对 diff 底 ≥4.5
+- **对比度矩阵加菜单面**：半透明面按画布合成后给出参考值，标 `※`（不计硬门），
+  UI 与 `palette-dev` 共用同一份 `CONTRAST_SURFACES`（含 token 面）
+- **诊断导出**：矩阵区新增「复制诊断」，输出 settings + 对比度矩阵 JSON，便于提 issue
+- **forced-colors**：核实我们改的都是 UA 强制色属性，系统高对比模式会自动接管，
+  因此**不加** `forced-color-adjust: none` 对抗（代码内已注明理由）
+- 契约测试补 `--dsw-specific-menu` / `--dsw-alias-brand-primary-new-…` / `--dsw-alias-file-diff-added-bg`
+- 明确不跟：`bg-mask-*`（遮罩）、`border-inverted*`（反色边框）、onboarding（一次性引导）——刻意保留宿主原值
+
 ### 1.8.2
 **暖砂字体体系修正**（用户反馈“和其他两套不一样，尤其字体颜色”）：
 

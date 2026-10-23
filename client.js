@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.8.2'
+    const PLUGIN_VERSION = '1.8.3'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -240,6 +240,10 @@ window.__ModuleLoader__.load({
       { id: '875', mode: 'dark', scope: true },
       { id: '850', mode: 'dark', scope: true },
       { id: '800', mode: 'dark', scope: true },
+      // 菜单是半透明面，实际颜色取决于 backdrop；这里按"合成在画布上"给出参考值，
+      // 标 scope:false（不计硬门），并在 UI 用 ※ 注明依赖 backdrop
+      { id: 'menuL', label: 'menu', mode: 'light', scope: false, token: '--dsw-specific-menu' },
+      { id: 'menuD', label: 'menu', mode: 'dark', scope: false, token: '--dsw-specific-menu' },
     ]
     const CONTRAST_ROLES = [
       { id: 'main', step: { light: '1000', dark: '50' } },
@@ -435,6 +439,26 @@ window.__ModuleLoader__.load({
 
     function withAlpha(hex, alpha) {
       return hex + Math.round(clamp(alpha, 0, 1) * 255).toString(16).padStart(2, '0')
+    }
+
+    /** 8 位 hex（带 alpha）按「覆盖在 bg 上」合成为不透明色；不带 alpha 时原样返回。 */
+    function flatten(hex, bgHex) {
+      if (typeof hex !== 'string' || hex.length !== 9) return hex
+      const fg = hexToRgb(hex.slice(0, 7))
+      const bg = hexToRgb(bgHex)
+      const a = parseInt(hex.slice(7, 9), 16) / 255
+      return rgbToHex(fg.map((v, i) => v * a + bg[i] * (1 - a)))
+    }
+
+    /**
+     * 语义色温度调和：保留色相为主（绿仍是绿、红仍是红），只把色相往配色的暖/冷方向
+     * 拉一小段、并压低饱和度。用于 file diff 这种大面积色块——不能整块换成主题色，
+     * 那会让「新增/删除」失去语义。
+     */
+    function harmonize(hex, targetHue, pull, chromaScale) {
+      const [L, C, h] = toOklch(hex)
+      const dh = ((targetHue - h + 540) % 360) - 180
+      return fromOklch(L, C * chromaScale, h + dh * pull)
     }
 
     /**
@@ -716,6 +740,17 @@ window.__ModuleLoader__.load({
           light: withAlpha(r.bluish['50'], 0.58),
           dark: withAlpha(r.bluish['750'], 0.45),
         },
+        // 宿主 `--dsw-specific-menu` 自带字面量兜底（浅 #f8f9faf0 / 深 #303136f0），
+        // 只改 menu-surface-fill 不够：深色菜单实际用的是它，会留着冷灰。这里一并对齐。
+        '--dsw-specific-menu': {
+          light: withAlpha(r.bluish['50'], 0.94),
+          dark: withAlpha(r.bluish['850'], 0.94),
+        },
+        // 浅色写死 #4176e6（宿主蓝），深色已引用 deepseek-450；两模式都归到强调色
+        '--dsw-alias-brand-primary-new-colorprimary-new-color': {
+          light: r.deepseek['500'],
+          dark: r.deepseek['400'],
+        },
         '--dsw-alias-menu-group-header-fill': {
           // 用 60 而不是 50：50 现在是「深色模式正文」的色度，拿去当浅色菜单头会偏艳
           light: withAlpha(r.bluish['60'], 0.94),
@@ -936,6 +971,19 @@ window.__ModuleLoader__.load({
         light: mixHex(ramps.deepseek['500'], ramps.bluish['50'], 0.05),
         dark: mixHex(ramps.deepseek['400'], ramps.bluish['900'], 0.07),
       }
+      /* ---- 文件 diff：宿主是固定冷绿/冷红的大面积色块，暖砂/苔绿下最显眼。
+       * 只做「温度调和」：保留绿=新增、红=删除的语义色相，往配色色相拉 16–22° 并压低饱和。 */
+      if (params.tinted) {
+        const diffHue = params.hue
+        const area = (hex) => harmonize(hex, diffHue, 0.16, 0.90)
+        const mark = (hex) => harmonize(hex, diffHue, 0.22, 0.95)
+        pairs['--dsw-alias-file-diff-added-bg'] = { light: area('#e6f4e7'), dark: area('#1f3124') }
+        pairs['--dsw-alias-file-diff-added-gutter'] = { light: area('#edf7ed'), dark: area('#132016') }
+        pairs['--dsw-alias-file-diff-added-marker'] = { light: mark('#01a241'), dark: mark('#41c977') }
+        pairs['--dsw-alias-file-diff-deleted-bg'] = { light: area('#fce6e2'), dark: area('#3c1f1b') }
+        pairs['--dsw-alias-file-diff-deleted-gutter'] = { light: area('#fdece9'), dark: area('#28130e') }
+        pairs['--dsw-alias-file-diff-deleted-marker'] = { light: mark('#ba2723'), dark: mark('#fa423e') }
+      }
       /* ---- 语法高亮（1.8.2）----
        * 宿主渲染器用 Shiki 的 `css-variables` 模式（className="shiki css-variables"，
        * 样式走 var(--shiki-*)），所以覆盖这些变量有效，不需要 !important。
@@ -1028,6 +1076,8 @@ window.__ModuleLoader__.load({
      * 命中 ui-layout 的 `data-rightbar-col`（稳定语义钩子，不是哈希类名）。
      * 全屏右栏时退回画布色 —— 那时右栏就是整块内容区，染成侧栏色会像只剩一条侧栏。
      */
+    // 说明：本插件不额外处理 forced-colors —— 我们改的 color/background-color/border-color
+    // 都在 UA 强制色列表内，系统高对比模式下会被自动接管，无需（也不应）用 forced-color-adjust 对抗。
     const RIGHTBAR_CSS = [
       '[data-rightbar-col]{background:var(--dshtp-rightbar-fill,var(--dsw-alias-bg-base))}',
       '[data-rightbar-fullscreen] [data-rightbar-col]{background:var(--dsw-alias-bg-base)}',
@@ -1474,6 +1524,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
         preview: '预览',
         sample: '试试示例',
+        copyDiag: '复制诊断',
         contrast: '对比度',
         contrastSub: '实测 / 目标（按承载面；※ 不计硬门·△ 表面受限）',
         cMain: '正文',
@@ -1527,6 +1578,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
         preview: '預覽',
         sample: '試試示例',
+        copyDiag: '複製診斷',
         contrast: '對比度',
         contrastSub: '實測 / 目標（依承載面；※ 不計硬門·△ 表面受限）',
         cMain: '正文',
@@ -1580,6 +1632,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
         preview: 'Preview',
         sample: 'Try a sample',
+        copyDiag: 'Copy diagnostics',
         contrast: 'Contrast',
         contrastSub: 'measured / target per surface (※ not gated · △ surface-limited)',
         cMain: 'Body',
@@ -1633,6 +1686,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
         preview: 'プレビュー',
         sample: 'サンプルを試す',
+        copyDiag: '診断をコピー',
         contrast: 'コントラスト',
         contrastSub: '実測 / 目標（面ごと；※ 判定外・△ 面の上限）',
         cMain: '本文',
@@ -1735,6 +1789,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       const [copyState, setCopyState] = React.useState(null)
       const [advanced, setAdvanced] = React.useState(false)
       const [matrixOpen, setMatrixOpen] = React.useState(false)
+      const [diagState, setDiagState] = React.useState(null)
       // 升级提示按版本只出现一次
       const noticePending = React.useSyncExternalStore(props.subscribeNotice, props.getNoticePending)
       // HEX 输入需要「草稿」态：非法值不能写进主题，但用户还在输入时也不该被立刻回滚。
@@ -1907,6 +1962,20 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           onClick: () => setMatrixOpen(!matrixOpen),
         }, (matrixOpen ? '▾ ' : '▸ ') + txt.contrast),
         h('span', { className: 'dsh-tp-matrix-sub' }, txt.contrastSub),
+        h('div', { className: 'dsh-tp-field-row' },
+          h('button', {
+            type: 'button',
+            className: 'dsh-tp-mini',
+            onClick: async () => {
+              try {
+                if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') throw new Error('no clipboard')
+                await navigator.clipboard.writeText(JSON.stringify(props.getDiagnostics(), null, 2))
+                setDiagState('copied')
+              } catch (err) { setDiagState('fail') }
+            },
+          }, txt.copyDiag),
+          diagState && h('span', { className: 'dsh-tp-note', role: 'status', 'aria-live': 'polite' },
+            diagState === 'copied' ? txt.copied : txt.copyFail)),
         matrixOpen && (() => {
           const report = props.getContrastReport()
           return h(
@@ -1914,7 +1983,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             { id: 'dsh-tp-matrix-body' },
             h('thead', null, h('tr', null,
               h('th', { scope: 'col' }, ''),
-              CONTRAST_SURFACES.map((sf) => h('th', { key: sf.id, scope: 'col' }, sf.id + (sf.scope === false ? '※' : ''))))),
+              CONTRAST_SURFACES.map((sf) => h('th', { key: sf.id, scope: 'col' }, (sf.label || sf.id) + (sf.scope === false ? '※' : ''))))),
             h('tbody', null, report.rows.map((row) => h('tr', { key: row.role },
               h('th', { scope: 'row' }, roleLabel[row.role] || row.role),
               row.cells.map((cell) => {
@@ -2123,7 +2192,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, settingsCss: SETTINGS_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, settingsCss: SETTINGS_CSS, cardColors })
     }
 
     return {
@@ -2429,6 +2498,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             linkTarget: floors(hc).link,
           }
         }
+        /** 诊断导出：把当前配色与对比度矩阵打成可粘贴的 JSON（提 issue 用）。 */
+        const getDiagnostics = () => ({
+          plugin: 'dsh-theme-palette',
+          version: PLUGIN_VERSION,
+          settings: { palette: current, sidebar: sidebarMode, text: textMode, rightbar: rightbarMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref },
+          report: getContrastReport(),
+        })
         const previewConfigCode = (code) => {
           const cfg = decodeConfig(code)
           return cfg ? { ok: true, config: cfg } : { ok: false }
@@ -2452,7 +2528,9 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               const fgHex = role.id === 'link'
                 ? t['--dsw-alias-link'][sf.mode]
                 : t['--dsw-static-neutral-bluish-' + role.step[sf.mode]][sf.mode]
-              const bg = t['--dsw-static-neutral-bluish-' + sf.id][sf.mode]
+              const bg = sf.token
+                ? flatten(t[sf.token][sf.mode], t['--dsw-static-neutral-bluish-' + (sf.mode === 'light' ? '00' : '950')][sf.mode])
+                : t['--dsw-static-neutral-bluish-' + sf.id][sf.mode]
               const ratio = contrast(fgHex, bg)
               const claim = sf.mode === 'light' ? F[role.id] : (role.id === 'link' ? F.linkDark : F[role.id])
               const ceiling = contrast(sf.mode === 'light' ? '#000000' : '#ffffff', bg)
@@ -2627,6 +2705,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 previewConfigCode,
                 getSampleCode,
                 getContrastReport,
+                getDiagnostics,
                 subscribeNotice,
                 getNoticePending,
                 dismissNotice,

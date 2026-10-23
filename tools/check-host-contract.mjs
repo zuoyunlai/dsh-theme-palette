@@ -66,6 +66,9 @@ else {
     '--dsw-static-neutral-bluish-800',
     '--dsw-static-deepseek-500',
     '--dsw-alias-markdown-code-block',
+    '--dsw-specific-menu',
+    '--dsw-alias-brand-primary-new-colorprimary-new-color',
+    '--dsw-alias-file-diff-added-bg',
   ]
   for (const name of tokens) check(text.includes(name), 'ui-theme 仍有 ' + name)
 }

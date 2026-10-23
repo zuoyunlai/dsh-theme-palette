@@ -40,7 +40,7 @@ globalThis.__def.factory(() => ({
 }))
 
 const {
-  buildTokens, SCHEMES, contrast, floors, encodeConfig, decodeConfig, writeCustom, toOklch,
+  buildTokens, SCHEMES, contrast, floors, encodeConfig, decodeConfig, writeCustom, toOklch, flatten,
 } = globalThis.__api
 const custom = SCHEMES.find((s) => s.id === 'custom')
 const F = floors(false)
@@ -203,6 +203,31 @@ console.log('\n9) 三套预置的字体体系统一（1.8.2）')
   const ratio = (arr) => Math.max(...arr.map((x) => x[1])) / Math.min(...arr.map((x) => x[1]))
   check(ratio(bodyC) <= 1.25, `三套浅色正文字色度比 ${ratio(bodyC).toFixed(2)} ≤ 1.25（${bodyC.map((x) => x[0] + ':' + x[1].toFixed(3)).join(' ')}）`)
   check(ratio(darkBodyC) <= 1.5, `三套深色正文字色度比 ${ratio(darkBodyC).toFixed(2)} ≤ 1.5（${darkBodyC.map((x) => x[0] + ':' + x[1].toFixed(3)).join(' ')}）`)
+}
+
+console.log('\n10) 菜单面 / 文件 diff / 诊断（1.8.3）')
+{
+  const PRE = ['warm', 'indigo', 'moss']
+  const hueOf = (hex) => toOklch(hex)[2]
+  const near = (h, target, tol) => Math.abs(((h - target + 540) % 360) - 180) <= tol
+  for (const id of PRE) {
+    const scheme = SCHEMES.find((s) => s.id === id)
+    const t = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', false)
+    for (const mode of ['light', 'dark']) {
+      const canvas = t['--dsw-static-neutral-bluish-' + (mode === 'light' ? '00' : '950')][mode]
+      const flat = flatten(t['--dsw-specific-menu'][mode], canvas)
+      const body = t['--dsw-static-neutral-bluish-' + (mode === 'light' ? '1000' : '50')][mode]
+      check(contrast(body, flat) >= 4.5, `${id}/${mode} 正文/菜单面 ${contrast(body, flat).toFixed(2)} ≥ 4.5`)
+      check(t['--dsw-alias-brand-primary-new-colorprimary-new-color'][mode] === t['--dsw-static-deepseek-' + (mode === 'light' ? '500' : '400')][mode],
+        `${id}/${mode} brand-primary-new 归到强调色`)
+      const addedBg = t['--dsw-alias-file-diff-added-bg'][mode]
+      const delBg = t['--dsw-alias-file-diff-deleted-bg'][mode]
+      check(contrast(body, addedBg) >= 4.5, `${id}/${mode} 正文/新增 diff 底 ${contrast(body, addedBg).toFixed(2)} ≥ 4.5`)
+      check(contrast(body, delBg) >= 4.5, `${id}/${mode} 正文/删除 diff 底 ${contrast(body, delBg).toFixed(2)} ≥ 4.5`)
+      check(near(hueOf(t['--dsw-alias-file-diff-added-marker'][mode]), 145, 40), `${id}/${mode} 新增标记仍是绿色系`)
+      check(near(hueOf(t['--dsw-alias-file-diff-deleted-marker'][mode]), 27, 40), `${id}/${mode} 删除标记仍是红色系`)
+    }
+  }
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)
