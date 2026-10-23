@@ -107,22 +107,22 @@ window.__ModuleLoader__.load({
       { id: 'mono', label: '黑白', desc: '无色调 · 默认', tinted: false },
       {
         id: 'warm', label: '暖砂', desc: '米白 + 棕调', tinted: true,
-        hue: 84, darkHue: 60, lightC: 0.030, midC: 0.010, textC: 0.004,
-        darkC: 0.014, darkLift: 0.026, paperC: 0.014, // 深底 #1e1b14 L 0.223 / 30% 色域
+        hue: 72, darkHue: 66, lightC: 0.030, midC: 0.010, textC: 0.004,
+        darkC: 0.014, darkLift: 0.026, paperC: 0.0053, // 深正文按色域归一：×2.4 后 ≈0.0127
         accentHue: 60, accentC: 0.101, accentL: 0.58, // 标准色 #A9683E
         accentScale: 1.0,
       },
       {
         id: 'indigo', label: '靛蓝', desc: '冷白 + 蓝调', tinted: true,
         hue: 266, lightC: 0.020, midC: 0.010, textC: 0.004,
-        darkC: 0.028, darkLift: 0.032, paperC: 0.009, // 深底 #161c2a L 0.227 / 19% 色域
+        darkC: 0.028, darkLift: 0.032, paperC: 0.0053, // 同上：三套统一，避免被色域裁成两倍差
         accentHue: 259, accentC: 0.107, accentL: 0.5108, // 标准色 #3F66A3
         accentScale: 1.0,
       },
       {
         id: 'moss', label: '苔绿', desc: '浅灰绿 + 绿调', tinted: true,
         hue: 162, lightC: 0.016, midC: 0.010, textC: 0.004,
-        darkC: 0.015, darkLift: 0.042, paperC: 0.0125, // 深底 #1a211b L 0.239 / 24% 色域
+        darkC: 0.015, darkLift: 0.042, paperC: 0.0053, // 同上
         accentHue: 139, accentC: 0.096, accentL: 0.5335, // 标准色 #4F7A42
         accentScale: 1.0,
       },
@@ -495,9 +495,10 @@ window.__ModuleLoader__.load({
         // 换成 60°（橙棕）才是咖啡色。浅色侧仍是 88°（米白）。
         // 文字档（含深色正文 paper）跟随「文字」这一项自己的色相；预设没有 textHue，行为不变。
         const tintRole = role === 'text' || role === 'paper'
+        // 深色角色（含深色正文 paper）统一走 darkHue，避免「深色面橙棕、正文黄绿」的双色相
         const hue = tintRole && scheme.textHue !== undefined
           ? scheme.textHue
-          : (role === 'dark' && scheme.darkHue !== undefined ? scheme.darkHue : scheme.hue)
+          : ((role === 'dark' || role === 'paper') && scheme.darkHue !== undefined ? scheme.darkHue : scheme.hue)
         bluish[step] = fromOklch(clamp(compressL(lifted), 0, 0.995), roleChroma(role, weight, scheme, scales), hue)
       }
       const neutral = {}
@@ -2122,7 +2123,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, settingsCss: SETTINGS_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, settingsCss: SETTINGS_CSS, cardColors })
     }
 
     return {

@@ -183,5 +183,27 @@ console.log('\n8) 语法高亮跟随配色（1.8.2）')
   }
 }
 
+console.log('\n9) 三套预置的字体体系统一（1.8.2）')
+{
+  const PRE = ['warm', 'indigo', 'moss']
+  const bodyC = [], darkBodyC = []
+  for (const id of PRE) {
+    const scheme = SCHEMES.find((s) => s.id === id)
+    const t = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', false)
+    const lightBody = t['--dsw-static-neutral-bluish-1000'].light
+    const darkBody = t['--dsw-static-neutral-bluish-50'].dark
+    bodyC.push([id, toOklch(lightBody)[1], toOklch(lightBody)[2]])
+    darkBodyC.push([id, toOklch(darkBody)[1], toOklch(darkBody)[2]])
+    // 深色正文的色相必须贴近深色面（darkHue），不能与深色面分裂
+    if (scheme.darkHue !== undefined) {
+      const dh = Math.abs(((toOklch(darkBody)[2] - scheme.darkHue + 540) % 360) - 180)
+      check(dh <= 12, `${id} 深正文色相偏离 darkHue ${dh.toFixed(1)}° ≤ 12°`)
+    }
+  }
+  const ratio = (arr) => Math.max(...arr.map((x) => x[1])) / Math.min(...arr.map((x) => x[1]))
+  check(ratio(bodyC) <= 1.25, `三套浅色正文字色度比 ${ratio(bodyC).toFixed(2)} ≤ 1.25（${bodyC.map((x) => x[0] + ':' + x[1].toFixed(3)).join(' ')}）`)
+  check(ratio(darkBodyC) <= 1.5, `三套深色正文字色度比 ${ratio(darkBodyC).toFixed(2)} ≤ 1.5（${darkBodyC.map((x) => x[0] + ':' + x[1].toFixed(3)).join(' ')}）`)
+}
+
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)
 process.exit(failed === 0 ? 0 : 1)
