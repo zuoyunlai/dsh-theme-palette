@@ -132,5 +132,27 @@ console.log('\n6) 高对比浅色正文对卡层有效')
   check(ratio >= FHC.main - 0.05, `warm HC 1000/60 ${ratio.toFixed(2)} ≥ ${FHC.main}`)
 }
 
+console.log('\n7) Markdown 层级与承载面（1.8.1）')
+for (const id of ['warm', 'indigo', 'moss']) {
+  const scheme = SCHEMES.find((s) => s.id === id)
+  const tk = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', false)
+  for (const mode of ['light', 'dark']) {
+    const h = ['--dshtp-md-h1', '--dshtp-md-h2', '--dshtp-md-h3'].map((k) => tk[k][mode])
+    check(new Set(h).size === 3, `${id}/${mode} 标题三档互不相同（${h.join(' / ')}）`)
+    const body = tk['--dsw-static-neutral-bluish-' + (mode === 'light' ? '1000' : '50')][mode]
+    const sec = tk['--dsw-static-neutral-bluish-' + (mode === 'light' ? '700' : '300')][mode]
+    const code = tk['--dshtp-code-fill'][mode]
+    const quote = tk['--dshtp-md-quote-fill'][mode]
+    const thead = tk['--dshtp-md-table-head'][mode]
+    check(contrast(body, code) >= 4.5, `${id}/${mode} 正文/代码块底 ${contrast(body, code).toFixed(2)} ≥ 4.5`)
+    check(contrast(body, quote) >= 4.5, `${id}/${mode} 正文/引用底 ${contrast(body, quote).toFixed(2)} ≥ 4.5`)
+    check(contrast(sec, thead) >= 5.5, `${id}/${mode} 次级/表头底 ${contrast(sec, thead).toFixed(2)} ≥ 5.5`)
+    check(tk['--dsw-alias-markdown-code-block'][mode] === code, `${id}/${mode} <pre> 底色与代码块一致（无双层底）`)
+  }
+  const off = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'off', false)
+  check(off['--dshtp-md-h1'].light === 'inherit' && off['--dshtp-md-quote-fill'].light === 'inherit',
+    `${id} md=off 时全部继承正文`)
+}
+
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)
 process.exit(failed === 0 ? 0 : 1)

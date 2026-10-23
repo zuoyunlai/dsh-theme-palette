@@ -65,6 +65,7 @@ else {
     '--dsw-specific-sidebar-fill',
     '--dsw-static-neutral-bluish-800',
     '--dsw-static-deepseek-500',
+    '--dsw-alias-markdown-code-block',
   ]
   for (const name of tokens) check(text.includes(name), 'ui-theme 仍有 ' + name)
 }

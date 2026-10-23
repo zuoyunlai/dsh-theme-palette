@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.8.0'
+    const PLUGIN_VERSION = '1.8.1'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -870,36 +870,66 @@ window.__ModuleLoader__.load({
         ? 'var(--dsw-alias-bg-base)'
         : 'var(--dsw-specific-sidebar-fill)'
       pairs['--dshtp-rightbar-fill'] = { light: rightbarFill, dark: rightbarFill }
-      // Markdown 强调色：标题 = 正文色混 40% 强调色；加粗 = 混 20%（比标题弱一档）
+      // Markdown 强调色：标题分三档（h1/h2 → h3/h4 → h5/h6），加粗比标题再弱一档。
+      // 分档而不是给六级标题六种色：长文靠层级扫读，不靠色相数量。
       if (params.tinted) {
+        const tintText = (hex, accentHex, extraChroma, lift) => {
+          const [L, C] = toOklch(hex)
+          const acc = toOklch(accentHex)
+          return fromOklch(clamp(L + lift, 0.05, 0.97), C + acc[1] * extraChroma, acc[2])
+        }
         if (mdMode === 'off') {
           const inherit = { light: 'inherit', dark: 'inherit' }
-          pairs['--dshtp-md-heading'] = inherit
-          pairs['--dshtp-md-strong'] = inherit
+          for (const k of ['--dshtp-md-h1', '--dshtp-md-h2', '--dshtp-md-h3', '--dshtp-md-strong',
+            '--dshtp-md-quote-fill', '--dshtp-md-quote-border', '--dshtp-md-table-head']) pairs[k] = inherit
         } else {
           // 加粗：只加色度、不动明度 —— 混色会把正文调亮（浅色下反而比正文更弱）。
           // 标题：再往中间推一点明度（浅色提亮 / 深色压暗），配合更大的字号拉开层级。
-          const tintText = (hex, accentHex, extraChroma, lift) => {
-            const [L, C] = toOklch(hex)
-            const acc = toOklch(accentHex)
-            return fromOklch(clamp(L + lift, 0.05, 0.97), C + acc[1] * extraChroma, acc[2])
-          }
-          pairs['--dshtp-md-heading'] = {
+          pairs['--dshtp-md-h1'] = {
             light: tintText(ramps.bluish['1000'], ramps.deepseek['500'], 0.45, 0.065),
             dark: tintText(ramps.bluish['50'], ramps.deepseek['400'], 0.40, -0.030),
+          }
+          pairs['--dshtp-md-h2'] = {
+            light: tintText(ramps.bluish['1000'], ramps.deepseek['500'], 0.38, 0.035),
+            dark: tintText(ramps.bluish['50'], ramps.deepseek['400'], 0.36, -0.018),
+          }
+          pairs['--dshtp-md-h3'] = {
+            light: tintText(ramps.bluish['1000'], ramps.deepseek['500'], 0.30, 0.015),
+            dark: tintText(ramps.bluish['50'], ramps.deepseek['400'], 0.28, -0.008),
           }
           pairs['--dshtp-md-strong'] = {
             light: tintText(ramps.bluish['1000'], ramps.deepseek['500'], 0.32, 0.012),
             dark: tintText(ramps.bluish['50'], ramps.deepseek['400'], 0.32, -0.010),
+          }
+          // 引用 / 表头：只掺 4–7% 强调色，主文字在这些面上仍要走"不降级"的对比度断言
+          pairs['--dshtp-md-quote-fill'] = {
+            light: mixHex(ramps.deepseek['500'], ramps.bluish['00'], 0.04),
+            dark: mixHex(ramps.deepseek['400'], ramps.bluish['950'], 0.06),
+          }
+          pairs['--dshtp-md-quote-border'] = {
+            light: mixHex(ramps.deepseek['500'], ramps.bluish['150'], 0.55),
+            dark: mixHex(ramps.deepseek['400'], ramps.bluish['800'], 0.55),
+          }
+          pairs['--dshtp-md-table-head'] = {
+            light: mixHex(ramps.deepseek['500'], ramps.bluish['60'], 0.05),
+            dark: mixHex(ramps.deepseek['400'], ramps.bluish['850'], 0.07),
           }
         }
       }
       // 代码块底色：宿主用 bg-layer-1，浅色下与画布同色（都指 00）→ 看不出边界。
       // 这里给它一档独立的"内嵌面板"色：卡层色 + 少量强调色相，保证与画布有可辨差。
       // mixHex(a, b, w) = a*w + b*(1-w)：a 是要掺进去的颜色，b 是底色。
-      pairs['--dshtp-code-fill'] = {
+      const codeFill = {
         light: mixHex(ramps.deepseek['500'], ramps.bluish['60'], 0.08),
         dark: mixHex(ramps.deepseek['400'], ramps.bluish['875'], 0.10),
+      }
+      pairs['--dshtp-code-fill'] = codeFill
+      // 宿主的 <pre> 背景来自 --shiki-background → --dsw-alias-markdown-code-block（bluish-50/900）。
+      // 不覆盖它就会出现"外层 div 染了、内层 pre 没染"的双层底；直接改这个 token 才是根治。
+      pairs['--dsw-alias-markdown-code-block'] = codeFill
+      pairs['--dsw-alias-markdown-code-block-banner'] = {
+        light: mixHex(ramps.deepseek['500'], ramps.bluish['50'], 0.06),
+        dark: mixHex(ramps.deepseek['400'], ramps.bluish['850'], 0.08),
       }
       pairs['--dshtp-code-inline'] = {
         light: mixHex(ramps.deepseek['500'], ramps.bluish['50'], 0.05),
@@ -958,8 +988,17 @@ window.__ModuleLoader__.load({
       '[data-rightbar-fullscreen] [data-rightbar-col]{background:var(--dsw-alias-bg-base)}',
       // Markdown 标题/加粗：容器类是 CSS Modules 的 `_markdown_<hash>_<n>`，
       // 用「类名里含 _markdown_」做钩子（局部名稳定，比整串哈希耐版本）。
-      '[class*="_markdown_"] :where(h1,h2,h3,h4,h5,h6){color:var(--dshtp-md-heading,inherit)}',
+      // 三级层次：h1/h2 最重、h3/h4 次之、h5/h6 最轻（不是六级六色）。
+      '[class*="_markdown_"] :where(h1,h2){color:var(--dshtp-md-h1,inherit)}',
+      '[class*="_markdown_"] :where(h3,h4){color:var(--dshtp-md-h2,inherit)}',
+      '[class*="_markdown_"] :where(h5,h6){color:var(--dshtp-md-h3,inherit)}',
       '[class*="_markdown_"] strong{color:var(--dshtp-md-strong,inherit)}',
+      // 引用 / 表格 / 分割线 / 列表：只动"结构性"颜色，不碰正文
+      '[class*="_markdown_"] blockquote{background:var(--dshtp-md-quote-fill,transparent);border-left:3px solid var(--dshtp-md-quote-border,currentColor)}',
+      '[class*="_markdown_"] table th{background:var(--dshtp-md-table-head,transparent)}',
+      '[class*="_markdown_"] :where(table th,table td){border-color:var(--dsw-alias-border-l2)}',
+      '[class*="_markdown_"] hr{border:0;border-top:.5px solid var(--dsw-alias-border-l3)}',
+      '[class*="_markdown_"] li::marker{color:var(--dsw-alias-label-tertiary)}',
       // 代码块：宿主把底色写在 CSS Modules 的 .block 上（浅色与画布同为 00，看不出边界）。
       // 这里以 `.md-code-block` 提高一级特异性覆盖，不需要 !important。
       '[class*="_markdown_"] .md-code-block{background:var(--dshtp-code-fill,inherit)}',
