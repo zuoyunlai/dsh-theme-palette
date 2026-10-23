@@ -44,21 +44,23 @@ sandbox.__def.factory(() => ({
 }))
 if (!engine) throw new Error('生产引擎没有暴露 dev 钩子')
 
-const { buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, contrast, toOklch, floors } = engine
+const { buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, contrast, toOklch, floors, CONTRAST_SURFACES, CONTRAST_ROLES } = engine
 const F = floors(HC)
 const roleFloor = (role) => (F[role] === undefined ? F.link : F[role])
 
-/** 真实承载面 → 落在该面上的前景角色。取自宿主 ui-theme 的别名映射。 */
-const SURFACES = [
-  { name: '浅·画布 00', mode: 'light', step: '00', fgs: { main: '1000', secondary: '700', tertiary: '600', link: 'link' } },
-  { name: '浅·卡层 60', mode: 'light', step: '60', fgs: { main: '1000', secondary: '700', tertiary: '600', link: 'link' } },
-  // 150 只作为图标/悬浮底出现，未发现把三级正文放上去的实际用法；保留观察，不计硬门
-  { name: '浅·悬浮 150*', mode: 'light', step: '150', fgs: { tertiary: '600', link: 'link' }, scope: false },
-  { name: '深·画布 950', mode: 'dark', step: '950', fgs: { main: '50', secondary: '300', tertiary: '400', link: 'link' } },
-  { name: '深·层1 875', mode: 'dark', step: '875', fgs: { main: '50', secondary: '300', tertiary: '400', link: 'link' } },
-  { name: '深·卡 850', mode: 'dark', step: '850', fgs: { main: '50', secondary: '300', tertiary: '400', link: 'link' } },
-  { name: '深·模块 800', mode: 'dark', step: '800', fgs: { main: '50', secondary: '300', tertiary: '400', link: 'link' } },
-]
+// 承载面与角色来自 client.js 的唯一定义（CONTRAST_SURFACES / CONTRAST_ROLES），
+// 本文件不再自带第二份清单——设置页 UI 读数与这份报表用的是同一套口径。
+const MODE_NAME = { light: '浅', dark: '深' }
+const SURFACES = CONTRAST_SURFACES.map((sf) => ({
+  ...sf,
+  name: `${MODE_NAME[sf.mode]}·${sf.id}${sf.scope === false ? '*' : ''}`,
+  // 150 只作为图标/悬浮底出现，未发现正文用法：报表只列 tertiary/link，避免制造无关噪声
+  fgs: Object.fromEntries(
+    CONTRAST_ROLES
+      .filter((r) => sf.scope !== false || r.id === 'tertiary' || r.id === 'link')
+      .map((r) => [r.id, r.step[sf.mode]]),
+  ),
+}))
 
 const get = (tokens, mode, key) => (key === 'link'
   ? tokens['--dsw-alias-link'][mode]
@@ -80,7 +82,7 @@ for (const scheme of SCHEMES) {
   const tokens = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', HC)
   console.log(`\n=== ${scheme.label}${HC ? ' · 高对比' : ''} ===`)
   for (const surface of SURFACES) {
-    const bg = get(tokens, surface.mode, surface.step)
+    const bg = get(tokens, surface.mode, surface.id)
     const ceiling = contrast(surface.mode === 'light' ? '#000000' : '#ffffff', bg)
     const parts = Object.entries(surface.fgs).map(([role, key]) => {
       const ratio = contrast(get(tokens, surface.mode, key), bg)

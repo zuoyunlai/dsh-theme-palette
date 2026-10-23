@@ -43,6 +43,35 @@ try {
   const withNotice = read('preview-light-custom.html')
   check(withNotice.includes('dsh-tp-notice'), '升级提示可渲染')
   check(withNotice.includes('dsh-tp-row-hc'), '提示与高对比可同时出现')
+
+  // ---- R1：对比度矩阵 ----
+  // 渲染 advanced 版（矩阵含在默认区，展开态由 --adv 1 驱动）
+  preview(['--palette', 'warm', '--adv', '1'])
+  const matrixHtml = read('preview-light.html')
+  check(matrixHtml.includes('id="dsh-tp-matrix-body"'), '对比度矩阵可展开')
+  const roleRows = (matrixHtml.match(/data-role="(main|secondary|tertiary|link)"/g) || []).length
+  check(roleRows >= 4, `矩阵含 ≥4 个角色行（实得 ${roleRows}）`)
+  const surfaceCells = new Set((matrixHtml.match(/data-surface="(\d+)"/g) || []).map((s) => s.replace(/\D/g, '')))
+  check(surfaceCells.size >= 4, `矩阵含 ≥4 个承载面（实得 ${surfaceCells.size}：${[...surfaceCells].join('/')}）`)
+  check(matrixHtml.includes('表面受限'), '不可达的格子标注「表面受限」')
+
+  // 高对比开关必须改变深模块 800 的正文读数（防止永远显示"达标"）
+  const pick = (html) => {
+    const m = html.match(/data-role="main"[^>]*data-surface="800"[^>]*>([^<]+)/)
+    return m ? m[1].trim() : ''
+  }
+  preview(['--palette', 'warm', '--adv', '1', '--hc', '0'])
+  const stdCell = pick(read('preview-light.html'))
+  preview(['--palette', 'warm', '--adv', '1', '--hc', '1'])
+  const hcCell = pick(read('preview-light.html'))
+  check(stdCell !== '' && hcCell !== '' && stdCell !== hcCell, `HC 切换改变 800 正文读数（标准「${stdCell}」→ 高对比「${hcCell}」）`)
+
+  // 承载面清单只能有一份定义：palette-dev 不得再自带 SURFACES
+  const clientSrc = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
+  const devSrc = fs.readFileSync(path.join(root, 'palette-dev.mjs'), 'utf8')
+  check((clientSrc.match(/const CONTRAST_SURFACES/g) || []).length === 1, 'CONTRAST_SURFACES 在 client.js 只定义一次')
+  check(!/const SURFACES = \[/.test(devSrc), 'palette-dev 不再自带承载面清单')
+  check(devSrc.includes('CONTRAST_SURFACES'), 'palette-dev 使用共享常量')
 } catch (err) {
   console.log('  ✗ 预览渲染失败：' + (err && err.message ? err.message : err))
   failed++

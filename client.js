@@ -227,6 +227,27 @@ window.__ModuleLoader__.load({
     // 只记录“已读哪个版本”的升级提示，不参与配色，也不迁移任何用户数据
     const NOTICE_KEY = 'dsh-theme-palette.notice.v1'
 
+    /* ================= 对比度矩阵（设置页 UI 与 palette-dev 报表共用的唯一定义） =================
+     * 这是 1.7.0 反哺里发现的隐性重复：报表自带一份承载面清单，UI 又要一份，两套口径必然漂移。
+     * 现在常量只在这里定义一次，dev 钩子把它交给 palette-dev，设置页直接引用。
+     * scope=false 的面不计入达标判定（当前宿主中 150 只作为图标/悬浮底，未发现三级正文用法）。
+     */
+    const CONTRAST_SURFACES = [
+      { id: '00', mode: 'light', scope: true },
+      { id: '60', mode: 'light', scope: true },
+      { id: '150', mode: 'light', scope: false },
+      { id: '950', mode: 'dark', scope: true },
+      { id: '875', mode: 'dark', scope: true },
+      { id: '850', mode: 'dark', scope: true },
+      { id: '800', mode: 'dark', scope: true },
+    ]
+    const CONTRAST_ROLES = [
+      { id: 'main', step: { light: '1000', dark: '50' } },
+      { id: 'secondary', step: { light: '700', dark: '300' } },
+      { id: 'tertiary', step: { light: '600', dark: '400' } },
+      { id: 'link', step: { light: 'link', dark: 'link' } },
+    ]
+
     /**
      * 区块底色：左侧栏相对主画布的深浅档位。
      * lift = OKLab 亮度增量（正 = 更浅）；chroma = 保留多少色度（越浅越该少）。
@@ -1015,6 +1036,18 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-note{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status{margin:0;font-size:11.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status.is-bad{color:var(--dsw-alias-state-error-primary)}
+.dsh-tp-matrix{display:flex;flex-direction:column;gap:8px;padding:11px 0;border-top:.5px solid var(--dsw-alias-border-l2)}
+.dsh-tp-matrix-head{display:flex;align-items:center;gap:8px}
+.dsh-tp-matrix-title{font-size:13.5px;font-weight:500}
+.dsh-tp-matrix-sub{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-matrix table{border-collapse:collapse;width:100%;font-size:11.5px;line-height:16px;font-variant-numeric:tabular-nums}
+.dsh-tp-matrix th,.dsh-tp-matrix td{padding:4px 6px;text-align:right;border-top:.5px solid var(--dsw-alias-border-l2);white-space:nowrap}
+.dsh-tp-matrix th:first-child,.dsh-tp-matrix td:first-child{text-align:left}
+.dsh-tp-matrix thead th{font-weight:500;color:var(--dsw-alias-label-tertiary);border-top:0}
+.dsh-tp-matrix td.is-ok{color:var(--dsw-alias-label-secondary)}
+.dsh-tp-matrix td.is-limited{color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-matrix td.is-bad{color:var(--dsw-alias-state-error-primary);font-weight:500}
+.dsh-tp-matrix td .dsh-tp-matrix-mark{font-size:10px;margin-left:2px}
 .dsh-tp-field{display:flex;flex-direction:column;gap:8px;padding:11px 0;border-top:.5px solid var(--dsw-alias-border-l2)}
 .dsh-tp-field-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .dsh-tp-field-title{font-size:13.5px;font-weight:500}
@@ -1357,6 +1390,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
         preview: '预览',
         sample: '试试示例',
+        contrast: '对比度',
+        contrastSub: '实测 / 目标（按承载面；※ 不计硬门·△ 表面受限）',
+        cMain: '正文',
+        cSecondary: '次级',
+        cTertiary: '三级',
+        cLink: '链接',
+        cLimited: '表面受限',
         cancel: '取消',
         importSummary: '将覆盖：',
         config: '配置',
@@ -1403,6 +1443,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
         preview: '預覽',
         sample: '試試示例',
+        contrast: '對比度',
+        contrastSub: '實測 / 目標（依承載面；※ 不計硬門·△ 表面受限）',
+        cMain: '正文',
+        cSecondary: '次級',
+        cTertiary: '三級',
+        cLink: '連結',
+        cLimited: '表面受限',
         cancel: '取消',
         importSummary: '將覆蓋：',
         config: '設定',
@@ -1449,6 +1496,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
         preview: 'Preview',
         sample: 'Try a sample',
+        contrast: 'Contrast',
+        contrastSub: 'measured / target per surface (※ not gated · △ surface-limited)',
+        cMain: 'Body',
+        cSecondary: 'Secondary',
+        cTertiary: 'Tertiary',
+        cLink: 'Link',
+        cLimited: 'surface-limited',
         cancel: 'Cancel',
         importSummary: 'Will overwrite:',
         config: 'Config',
@@ -1495,6 +1549,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
         preview: 'プレビュー',
         sample: 'サンプルを試す',
+        contrast: 'コントラスト',
+        contrastSub: '実測 / 目標（面ごと；※ 判定外・△ 面の上限）',
+        cMain: '本文',
+        cSecondary: '副次',
+        cTertiary: '三次',
+        cLink: 'リンク',
+        cLimited: '面の上限',
         cancel: 'キャンセル',
         importSummary: '上書きする内容：',
         config: '設定の共有',
@@ -1589,6 +1650,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       const [importPreview, setImportPreview] = React.useState(null)
       const [copyState, setCopyState] = React.useState(null)
       const [advanced, setAdvanced] = React.useState(false)
+      const [matrixOpen, setMatrixOpen] = React.useState(false)
       // 升级提示按版本只出现一次
       const noticePending = React.useSyncExternalStore(props.subscribeNotice, props.getNoticePending)
       // HEX 输入需要「草稿」态：非法值不能写进主题，但用户还在输入时也不该被立刻回滚。
@@ -1748,6 +1810,45 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         ),
       )
 
+      // R1：对比度矩阵。默认折叠，与「更多选项」同节奏；展开后按前景 × 承载面给实测读数。
+      const roleLabel = { main: txt.cMain, secondary: txt.cSecondary, tertiary: txt.cTertiary, link: txt.cLink }
+      const matrix = h(
+        'div',
+        { className: 'dsh-tp-matrix' },
+        h('button', {
+          type: 'button',
+          className: 'dsh-tp-more',
+          'aria-expanded': matrixOpen,
+          'aria-controls': 'dsh-tp-matrix-body',
+          onClick: () => setMatrixOpen(!matrixOpen),
+        }, (matrixOpen ? '▾ ' : '▸ ') + txt.contrast),
+        h('span', { className: 'dsh-tp-matrix-sub' }, txt.contrastSub),
+        matrixOpen && (() => {
+          const report = props.getContrastReport()
+          return h(
+            'table',
+            { id: 'dsh-tp-matrix-body' },
+            h('thead', null, h('tr', null,
+              h('th', { scope: 'col' }, ''),
+              CONTRAST_SURFACES.map((sf) => h('th', { key: sf.id, scope: 'col' }, sf.id + (sf.scope === false ? '※' : ''))))),
+            h('tbody', null, report.rows.map((row) => h('tr', { key: row.role },
+              h('th', { scope: 'row' }, roleLabel[row.role] || row.role),
+              row.cells.map((cell) => {
+                const cls = cell.scope === false ? 'is-limited' : (cell.ok ? 'is-ok' : 'is-bad')
+                const mark = cell.scope === false ? ' ※' : (cell.limited ? ' △' : '')
+                const text = cell.limited ? cell.ratio.toFixed(2) + ' ≤ ' + cell.claim : cell.ratio.toFixed(2)
+                return h('td', {
+                  key: cell.mode + cell.surface,
+                  className: cls,
+                  'data-role': row.role,
+                  'data-surface': cell.surface,
+                  'data-mode': cell.mode,
+                  title: cell.limited ? txt.cLimited + ' ≤ ' + cell.claim : txt.contrast + ' ' + text,
+                }, text + mark)
+              })))))
+        })(),
+      )
+
       const card = (scheme) => {
         const picked = scheme.id === current
         const c = cardColors(scheme, textMode, sidebarMode)
@@ -1798,6 +1899,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           { className: 'dsh-tp-status' },
           txt.healed + health.reapplies + txt.healedSuffix,
         ),
+        matrix,
         h('button', {
           type: 'button',
           className: 'dsh-tp-more',
@@ -1937,7 +2039,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, settingsCss: SETTINGS_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, settingsCss: SETTINGS_CSS, cardColors })
     }
 
     return {
@@ -2248,6 +2350,40 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           return cfg ? { ok: true, config: cfg } : { ok: false }
         }
         /**
+         * 对比度矩阵（R1）：把"前景 × 承载面"的真实读数露出来。
+         *
+         * 覆盖当前选中的配色（含全部预设，不只自定义）；每个格子给出
+         * 实测 ratio、声明目标 claim、以及是否"表面受限"（claim 高于该面物理上限）。
+         * 口径与 palette-dev 完全一致：同一个 CONTRAST_SURFACES、同一套 floors。
+         */
+        const getContrastReport = () => {
+          const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
+          const hc = hcMode === 'on'
+          const F = floors(hc)
+          const t = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hc)
+          const round2 = (v) => Math.round(v * 100) / 100
+          const rows = CONTRAST_ROLES.map((role) => ({
+            role: role.id,
+            cells: CONTRAST_SURFACES.map((sf) => {
+              const fgHex = role.id === 'link'
+                ? t['--dsw-alias-link'][sf.mode]
+                : t['--dsw-static-neutral-bluish-' + role.step[sf.mode]][sf.mode]
+              const bg = t['--dsw-static-neutral-bluish-' + sf.id][sf.mode]
+              const ratio = contrast(fgHex, bg)
+              const claim = sf.mode === 'light' ? F[role.id] : (role.id === 'link' ? F.linkDark : F[role.id])
+              const ceiling = contrast(sf.mode === 'light' ? '#000000' : '#ffffff', bg)
+              const limited = ceiling < claim / 0.93
+              const feasible = limited ? ceiling * 0.93 : claim
+              return {
+                surface: sf.id, mode: sf.mode, scope: sf.scope,
+                ratio: round2(ratio), claim, limited,
+                ok: sf.scope !== false && ratio >= feasible - 0.02,
+              }
+            }),
+          }))
+          return { hc, mono: !scheme.tinted, rows }
+        }
+        /**
          * 「试试示例」用的演示短码：现场用生产 encodeConfig 生成，schema 演进时自动跟随，
          * 不存在"README 里的示例码过期"这类手写漂移。三色刻意非默认组合，便于验证三色真的生效。
          */
@@ -2406,6 +2542,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 getCustomExplain,
                 previewConfigCode,
                 getSampleCode,
+                getContrastReport,
                 subscribeNotice,
                 getNoticePending,
                 dismissNotice,
