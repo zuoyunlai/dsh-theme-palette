@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.3'
+    const PLUGIN_VERSION = '1.9.4'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -835,8 +835,11 @@ window.__ModuleLoader__.load({
      * 关键：提亮时**保留色味**（受 LIGHT_CAP 约束），侧栏是该配色的浅一号，
      * 不是纯白 —— 否则换了配色侧栏还是白色，配色就白选了。
      * 黑白配色没有色味可留，浅色模式直接给纯白（画布另压一档，见 buildTokens）。
+     *
+     * 1.9.4：画布已收敛到近中性（00 的 C≈0.004），只靠继承拿不到参考侧栏那份暖色
+     * （参考 #faf6ef，C≈0.009）。这里按方案自身的 lightC 把侧栏色度显式补到约 0.75×lightC。
      */
-    function sidebarTokens(r, mode, tinted) {
+    function sidebarTokens(r, mode, tinted, scheme) {
       const m = SIDEBAR_MODES.find((x) => x.id === mode) || SIDEBAR_MODES[0]
       const lightLift = m.lift
       // 深色模式用独立的 darkLift：深色底的可用明度空间比浅色小得多，
@@ -845,7 +848,14 @@ window.__ModuleLoader__.load({
       const darkLift = m.darkLift
       const s = m.chroma
       const paper = r.bluish['00']
-      const lightFill = !tinted && m.lift >= 0 ? '#ffffff' : lift(paper, lightLift, s)
+      const fillRaw = !tinted && m.lift >= 0 ? '#ffffff' : lift(paper, lightLift, s)
+      // 显式补色度：保持明度，只把 C 抬到目标值（有 scheme 才做，custom 走自身参数）
+      const lightFill = tinted && scheme && scheme.lightC !== undefined
+        ? (() => {
+            const [L] = toOklch(fillRaw)
+            return fromOklch(L, Math.max(toOklch(fillRaw)[1], scheme.lightC * 0.75), scheme.hue)
+          })()
+        : fillRaw
       const darkFill = lift(r.bluish['950'], darkLift, s)
       // 悬停/选中相对「侧栏最终底色」推导，不能再各自抬一次 ——
       // 提亮有天花板（LIGHT_CAP），各自抬会被同一上限压平，悬停与底色撞成同色。
@@ -903,7 +913,7 @@ window.__ModuleLoader__.load({
         const aliases = aliasOverrides(ramps, hc)
         for (const [name, pair] of Object.entries(aliases)) pairs[name] = pair
       }
-      const sidebar = sidebarTokens(ramps, sidebarMode, params.tinted)
+      const sidebar = sidebarTokens(ramps, sidebarMode, params.tinted, params)
       for (const [name, pair] of Object.entries(sidebar)) pairs[name] = pair
       // 右栏底色只给一个间接层：同左栏时直接引用左栏 token，跟随画布时引用画布 token。
       // 主按钮：浅色下宿主把 button-primary-fill 指到 state-error-primary（红），
