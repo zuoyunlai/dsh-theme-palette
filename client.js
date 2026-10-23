@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.1'
+    const PLUGIN_VERSION = '1.9.2'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1099,6 +1099,25 @@ window.__ModuleLoader__.load({
         pairs['--dsw-static-neutral-bluish-300'].dark = fit(TT.dark['300'], darkBgs, F.secondary)
         pairs['--dsw-static-neutral-bluish-400'].dark = fit(TT.dark['400'], darkBgs, F.tertiary)
         pairs['--dsw-alias-link'] = { light: fit(TT.light.link, lightBgs, F.link), dark: fit(TT.dark.link, darkBgs, F.link) }
+        // 更弱的注释层（label-dimmed / document-preview）也跟随主题：
+        // 这些 token 走的是 200/750、300/700 这类低色度档，之前几乎是中性灰。
+        const boost = (hex, C, bgs, floor) => {
+          const [L0, C0, h0] = toOklch(hex)
+          const dir = contrast('#ffffff', bgs[0]) >= contrast('#000000', bgs[0]) ? 1 : -1
+          let L = L0
+          for (let i = 0; i < 200; i++) {
+            const c = fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
+            if (bgs.every((b) => contrast(c, b) >= floor)) return c
+            L += dir * 0.003
+          }
+          return fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
+        }
+        const dimLight = boost(pairs['--dsw-static-neutral-bluish-200'].light, 0.022, lightBgs, 3.0)
+        const dimDark = boost(pairs['--dsw-static-neutral-bluish-750'].dark, 0.022, darkBgs, 3.0)
+        pairs['--dsw-alias-label-dimmed'] = { light: dimLight, dark: dimDark }
+        const prevLight = boost(pairs['--dsw-static-neutral-bluish-300'].light, 0.018, lightBgs, 3.0)
+        const prevDark = boost(pairs['--dsw-static-neutral-bluish-700'].dark, 0.018, darkBgs, 3.0)
+        pairs['--dsw-alias-label-document-preview'] = { light: prevLight, dark: prevDark }
       }
       return pairs
     }
