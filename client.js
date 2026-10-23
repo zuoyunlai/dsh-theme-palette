@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.8.1'
+    const PLUGIN_VERSION = '1.8.2'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -934,6 +934,50 @@ window.__ModuleLoader__.load({
       pairs['--dshtp-code-inline'] = {
         light: mixHex(ramps.deepseek['500'], ramps.bluish['50'], 0.05),
         dark: mixHex(ramps.deepseek['400'], ramps.bluish['900'], 0.07),
+      }
+      /* ---- 语法高亮（1.8.2）----
+       * 宿主渲染器用 Shiki 的 `css-variables` 模式（className="shiki css-variables"，
+       * 样式走 var(--shiki-*)），所以覆盖这些变量有效，不需要 !important。
+       *
+       * 色相策略：不引入与配色无关的固定色，而是从强调色相出发取 3 个色族
+       * （强调 / +150° 的冷族 / -55° 的暖族），再用明度与色度拉开可辨度；
+       * 每个 token 都必须对代码块底达到 4.6:1，否则沿远离背景的方向调整明度。
+       */
+      if (params.tinted && mdMode === 'on') {
+        const baseHue = params.accentHue === undefined ? scheme.hue : params.accentHue
+        const pickL = (bg) => (contrast('#ffffff', bg) >= contrast('#000000', bg) ? 0.80 : 0.45)
+        const dirOf = (bg) => (contrast('#ffffff', bg) >= contrast('#000000', bg) ? 1 : -1)
+        const ink = (bg, hue, chroma, startL, target) => {
+          const dir = dirOf(bg)
+          let L = startL
+          for (let i = 0; i < 160; i++) {
+            const c = fromOklch(clamp(L, 0.02, 0.99), chroma, hue)
+            if (contrast(c, bg) >= target) return c
+            L += dir * 0.004
+          }
+          return fromOklch(clamp(L, 0.02, 0.99), chroma, hue)
+        }
+        // 每个色族自带目标对比度：同族靠明度分"常/表达"，异族靠色相差 55–150°
+        const families = {
+          keyword: [baseHue, 0.15, 4.6],
+          function: [baseHue + 70, 0.12, 5.0],
+          constant: [baseHue - 60, 0.13, 4.8],
+          parameter: [baseHue + 30, 0.10, 5.6],
+          string: [baseHue + 150, 0.10, 4.8],
+          'string-expression': [baseHue + 150, 0.085, 5.8],
+          comment: [baseHue, 0.015, 4.6],
+          punctuation: [baseHue, 0.02, 6.0],
+        }
+        for (const [name, [hue, chroma, target]] of Object.entries(families)) {
+          const key = '--shiki-token-' + name
+          pairs[key] = {
+            light: ink(codeFill.light, hue, chroma, pickL(codeFill.light), target),
+            dark: ink(codeFill.dark, hue, chroma, pickL(codeFill.dark), target),
+          }
+        }
+        pairs['--shiki-token-link'] = { light: lightLink(ramps, false), dark: ramps.deepseek['400'] }
+        pairs['--shiki-background'] = codeFill
+        pairs['--shiki-foreground'] = { light: ramps.bluish['1000'], dark: ramps.bluish['50'] }
       }
       const scroll = scrollbarTokens(ramps, params, scrollMode)
       for (const [name, pair] of Object.entries(scroll)) pairs[name] = pair

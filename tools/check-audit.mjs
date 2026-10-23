@@ -40,7 +40,7 @@ globalThis.__def.factory(() => ({
 }))
 
 const {
-  buildTokens, SCHEMES, contrast, floors, encodeConfig, decodeConfig, writeCustom,
+  buildTokens, SCHEMES, contrast, floors, encodeConfig, decodeConfig, writeCustom, toOklch,
 } = globalThis.__api
 const custom = SCHEMES.find((s) => s.id === 'custom')
 const F = floors(false)
@@ -152,6 +152,35 @@ for (const id of ['warm', 'indigo', 'moss']) {
   const off = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'off', false)
   check(off['--dshtp-md-h1'].light === 'inherit' && off['--dshtp-md-quote-fill'].light === 'inherit',
     `${id} md=off 时全部继承正文`)
+}
+
+console.log('\n8) 语法高亮跟随配色（1.8.2）')
+{
+  const NAMES = ['keyword', 'function', 'constant', 'parameter', 'string', 'string-expression', 'comment', 'punctuation', 'link']
+  const dE = (a, b) => {
+    const lab = (hex) => { const [L, C, h] = toOklch(hex); return [L, C * Math.cos(h * Math.PI / 180), C * Math.sin(h * Math.PI / 180)] }
+    const x = lab(a), y = lab(b)
+    return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]) * 100
+  }
+  for (const id of ['warm', 'moss']) {
+    const scheme = SCHEMES.find((s) => s.id === id)
+    const tk = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', false)
+    for (const mode of ['light', 'dark']) {
+      const bg = tk['--dshtp-code-fill'][mode]
+      for (const name of NAMES) {
+        const hex = tk['--shiki-token-' + name][mode]
+        check(/^#[0-9a-f]{6}$/i.test(hex) && contrast(hex, bg) >= 4.6,
+          `${id}/${mode} token ${name} ${hex} 对代码块底 ${contrast(hex, bg).toFixed(2)} ≥ 4.6`)
+      }
+      const fams = ['keyword', 'function', 'constant', 'string'].map((n) => tk['--shiki-token-' + n][mode])
+      let min = Infinity
+      for (let i = 0; i < fams.length; i++) for (let j = i + 1; j < fams.length; j++) min = Math.min(min, dE(fams[i], fams[j]))
+      check(min >= 10, `${id}/${mode} 四个色族最小 ΔE ${min.toFixed(1)} ≥ 10`)
+      check(tk['--shiki-background'][mode] === bg, `${id}/${mode} shiki 背景与代码块一致`)
+    }
+    const off = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'off', false)
+    check(off['--shiki-token-keyword'] === undefined, `${id} md=off 不输出语法色（交回宿主）`)
+  }
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)

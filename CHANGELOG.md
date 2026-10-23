@@ -4,6 +4,20 @@
 
 ## 版本一览
 
+### 1.8.2
+语法高亮跟随配色（1.8.1 里“未做”的那条，前提已实测）：
+
+- **实测依据**：宿主渲染器用 Shiki 的 `css-variables` 模式（`class="shiki css-variables"`，
+  `style="background-color:var(--shiki-background)"`），token 颜色走 CSS 变量，
+  所以覆盖 `--shiki-token-*` 生效，不需要 `!important`
+- **色相策略**：从强调色相取 3 个色族（强调 / +150° 冷族 / -60° 暖族），
+  同族靠明度分常/表达；每个 token 对代码块底求解到 **≥4.6:1**，四族最小 ΔE **≥10**
+- 覆盖 9 类 token（keyword / function / constant / parameter / string / string-expression /
+  comment / punctuation / link）+ `--shiki-background` / `--shiki-foreground`
+- **md=off 时不输出**任何 shiki token，交回宿主原色
+- 新增 `tools/preview-code.mjs`：用生产 token 渲染一段真实代码，发版前肉眼确认
+- 断言：9 类 token 对比度 ≥4.6、四族 ΔE ≥10、shiki 背景与代码块一致、md=off 无输出
+
 ### 1.8.1
 Markdown 配色丰富化（非加色相，而是加层级 + 修代码块底）：
 
