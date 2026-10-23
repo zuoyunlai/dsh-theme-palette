@@ -108,21 +108,21 @@ window.__ModuleLoader__.load({
       {
         id: 'warm', label: '暖砂', desc: '米白 + 棕调', tinted: true,
         hue: 72, darkHue: 66, lightC: 0.010, midC: 0.010, textC: 0.004,
-        darkC: 0.014, darkLift: 0.026, paperC: 0.0053, // 深正文按色域归一：×2.4 后 ≈0.0127
+        darkC: 0.010, darkLift: 0.006, paperC: 0.0053, // 深正文按色域归一：×2.4 后 ≈0.0127
         accentHue: 60, accentC: 0.101, accentL: 0.58, // 标准色 #A9683E
         accentScale: 1.0,
       },
       {
         id: 'indigo', label: '靛蓝', desc: '冷白 + 蓝调', tinted: true,
         hue: 266, lightC: 0.010, midC: 0.010, textC: 0.004,
-        darkC: 0.028, darkLift: 0.032, paperC: 0.0053, // 同上：三套统一，避免被色域裁成两倍差
+        darkC: 0.019, darkLift: 0.006, paperC: 0.0053, // 同上：三套统一，避免被色域裁成两倍差
         accentHue: 259, accentC: 0.107, accentL: 0.5108, // 标准色 #3F66A3
         accentScale: 1.0,
       },
       {
         id: 'moss', label: '苔绿', desc: '浅灰绿 + 绿调', tinted: true,
         hue: 162, lightC: 0.009, midC: 0.010, textC: 0.004,
-        darkC: 0.015, darkLift: 0.042, paperC: 0.0053, // 同上
+        darkC: 0.010, darkLift: 0.006, paperC: 0.0053, // 同上
         accentHue: 139, accentC: 0.096, accentL: 0.5335, // 标准色 #4F7A42
         accentScale: 1.0,
       },
