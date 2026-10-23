@@ -124,3 +124,49 @@ gh api -X PATCH repos/<me>/<repo>/git/refs/heads/<branch> -f sha=<new>
 事故：`tools/README.md` 写了"桌面真机截图回归"，实际 `shoot-desktop.mjs` 依赖一个**全仓无人创建**的全局钩子，永远跑不通。
 
 做法：文档写下去的当天跑一次，留截图/日志；跑不通就如实降级说明。
+
+---
+
+## 9. Tag 签名：用 SSH，不一定要 GPG
+
+**事故/现状**：1.5.2–1.6.0 的 tag 全部未签名（GitHub API `reason: unsigned`），但 Release 页面与
+tgz 资产正常，很容易被误记成“已验证”。1.7.0 起改用本机 SSH key 签名并复核为 `verified: true`。
+
+规则：
+
+- Git ≥ 2.34 支持 SSH 签名（本机 2.56）；不需要 GPG。
+- repo-local 配置（换机器/重新 clone 需重做）：
+
+  ```bash
+  git config --local gpg.format ssh
+  git config --local user.signingkey "$HOME/.ssh/id_ed25519.pub"
+  printf '%s %s\n' "<git email>" "$(cat "$HOME/.ssh/id_ed25519.pub")" > .git/allowed_signers
+  git config --local gpg.ssh.allowedSignersFile .git/allowed_signers
+  ```
+
+  `user.signingkey` 也可以指向私钥路径；GitHub 只接收**公钥**，私钥绝不外传。
+
+- 打签：`git tag -s vX.Y.Z -m "<pkg> X.Y.Z"`。已有 tag 重签：
+
+  ```bash
+  git tag -f -s vX.Y.Z -m "<pkg> X.Y.Z"
+  git push --force origin vX.Y.Z
+  ```
+
+- 本地验签：`git tag -v vX.Y.Z`，应输出 `Good "git" signature for <email>`。
+- **GitHub 验签另有一道门槛**：同一把公钥必须在 Settings → SSH and GPG keys 里以
+  **Signing Key** 类型注册；只作 Authentication Key 时，API 返回
+  `verified: false, reason: "unknown_key"`（签名本身有效，只是 GitHub 不认这把签名钥）。
+- 远端复核：
+
+  ```bash
+  sha=$(git rev-parse vX.Y.Z^{tag})
+  gh api "repos/<owner>/<repo>/git/tags/$sha" --jq '.verification'
+  ```
+
+  期望 `{"verified": true, "reason": "valid"}`。
+
+- `tools/release.mjs` 的逻辑是“`user.signingkey` 有值就加 `-s`”，配置好后发版会自动签名；
+  没有配置时只告警、不阻断。tag 签名与 npm publish 是两条链，npm 侧仍由 registry 的
+  dist-tag / integrity 负责，签名不会让 npm 自动 Verified。
+- 不要为了“看着绿”用网页上传或重写历史；签名是给 tag 对象加签名块，force-push 只更新那个 tag。
