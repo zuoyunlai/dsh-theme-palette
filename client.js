@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.0'
+    const PLUGIN_VERSION = '1.9.1'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -786,7 +786,9 @@ window.__ModuleLoader__.load({
         // 直接用在深底上只有 3.x:1；这里改用 500 并对**深色模块面(800)/卡层(850)** 求解到 AA。
         // 实测旧注释「约 6.5:1」不成立（实际 4.4–4.7），所以既改值也改注释。
         '--dsw-alias-label-caption': {
-          light: r.bluish['400'],
+          // 注释/时间戳：既要跟随主题（色度由 midC 给），也要在画布/卡层上可读。
+          // 直接拿 400 号色在浅色下只有约 2.4:1，所以这里对 00/60 求解到 AA。
+          light: solveForeground(r.bluish, '400', [r.bluish['00'], r.bluish['60']], floors(hc).tertiary, 0.62),
           dark: solveForeground(
             r.bluish,
             '500',
