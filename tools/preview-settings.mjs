@@ -128,7 +128,22 @@ const props = {
   getConfigCode: () => 'dshs1.eyJ2IjoxLCJwIjoid2FybSIsInMiOiJkZWVwIiwidCI6InRpbnRlZCIsInIiOiJzaWRlYmFyIiwiYyI6InRpbnRlZCIsImsiOiJhY2NlbnQiLCJtIjoib24iLCJoIjoib2ZmIiwibCI6ImF1dG8ifQ',
   applyConfigCode: () => true,
   getCustomColors: () => ({ bg: '#f5efe6', text: '#1d1a17', accent: process.env.PREVIEW_ACCENT || '#a9683e' }),
-  setCustomColor: () => {},
+  subscribeCustom: () => () => {},
+  getCustomExplain: () => ({
+    accentClamped: false, accentFrom: 0.58, accentTo: 0.58,
+    linkShifted: true, linkRatio: 4.7, linkTarget: 4.62,
+  }),
+  previewConfigCode: (code) => ({
+    ok: true,
+    config: {
+      palette: 'warm', sidebar: 'deep', text: 'tinted', rightbar: 'sidebar',
+      scroll: 'tinted', control: 'accent', md: 'on', hc: 'off', lang: 'auto',
+      custom: { bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' },
+    },
+  }),
+  subscribeNotice: () => () => {},
+  getNoticePending: () => process.env.PREVIEW_NOTICE === '1',
+  dismissNotice: () => {},
   resetCustom: () => {},
   getLangPref: () => (LANG === 'auto' ? 'auto' : LANG), getLocale: () => (LANG === 'auto' ? 'zh-CN' : LANG),
   subscribeLocale: () => () => {}, setLangPref: () => {},

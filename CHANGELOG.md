@@ -4,6 +4,32 @@
 
 ## 版本一览
 
+### 1.7.0
+依据 2026-10-23 审计反哺（对 DSH 0.2.1-rc.2 实际 token 与承载面核实）：
+
+- **A01 极端强调色**：`accentL` 钳位到 0.30–0.64；链接求解器改为双向搜索并对 00/60/150 同时达标；
+  新增 `--dsw-alias-button-info-fill` 覆盖（与主按钮一样按白字 4.5 压暗），不再出现白底白链/白勾
+- **A02 自定义色订阅**：`readCustom` 改为按存储内容缓存的冻结快照，新增 `subscribeCustom`；
+  取色/重置/导入会更换引用并触发重渲染，空闲时快照稳定（`useSyncExternalStore` 语义）
+- **A03 分享完整**：`dshs1.` 短码新增 `x`（三色），旧码仍可导入并提示未含自定义色；
+  `applyConfigCode` 返回 `{ok,hasCustom}`，非法码不部分写入
+- **A04 承载面求解**：深色正文（50）、次级（300）、caption（500）补上求解；目标按承载面可达上限
+  钳位（0.93 余量），`palette-dev` 打印「实际/目标/可达」并标注「表面上限」，不再虚报 12/15；
+  caption 注释里的 6.5:1 更正为实测值
+- **A05 文字色相**：自定义文字色相进入 700/750/1000/50 档（此前只取色度）
+- **A06 HEX 校验**：改为 draft + 提交，非法值显示 `aria-invalid` 与行内错误，Enter 提交、Esc 回滚
+- **A07 键盘模型**：分段控件 roving tabindex + 方向键/Home/End
+- **A08 标签结构**：自定义色改为 `role=group` + 色盘/HEX 两个独立 label
+- **A09 健康检测**：探针比对期望值（支持 `#rgb/#rrggbb/rgb()/rgba()`），报 `mismatched`；mono 覆盖更多 token
+- **A10 测试门**：`palette-dev.mjs` 改用生产 `floors()`，支持 `--hc`，硬失败退出码 1
+- **A11 边界**：grid/swatches 改 `minmax(min(100%,N),1fr)`；说明 `_markdown_`/`.md-code-block`
+  在当前宿主构建 CSS 中仍存在（属契约风险而非失效）；ramp 缓存上限 48
+- **建议落地**：自定义面板新增**解释性校正**（强调色归一化 / 链接压暗，带实际对比度）；
+  导入改为**先预览后确认**（预览不写存储）；新增按版本一次的**升级提示**（`notice.v1`，不碰配色键；
+  仅升级前已有配置的用户可见）；高对比从「更多选项」移到阅读区；新增 `tools/check-host-contract.mjs`
+  契约测试与 `tools/check-ui.mjs` 结构回归，并把它们接入 `npm run check` 与发版预检
+- 新增 `tools/check-audit.mjs`：覆盖极端色、分享往返、文字色相、caption、深色正文可达上限、HC 卡层
+
 ### 未发版 · 发版预检补强
 - `tools/release.mjs` 新增 **engines.dsh 兼容性预检**：按宿主 app-boot 的同一口径
   （`semver.satisfies(v, range, { includePrerelease: true })`）计算，守住两条底线——

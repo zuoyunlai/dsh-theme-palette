@@ -1,6 +1,6 @@
 {
   "name": "dsh-theme-palette",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "DSH 主题配色：4 套配色 × 明暗两模式，OKLCH 色域安全重建 + 真实承载面对比度求解，可调强度与面板表面。",
   "type": "module",
   "main": "index.js",
@@ -37,6 +37,10 @@
   "engines": {
     "node": "^22.19.0 || >=24.0.0",
     "dsh": ">=0.2.1-rc.1"
+  },
+  "scripts": {
+    "check": "node tools/check-audit.mjs && node tools/check-custom.mjs && node tools/check-ui.mjs && node tools/check-host-contract.mjs",
+    "report": "node palette-dev.mjs && node palette-dev.mjs --hc"
   },
   "dsh": {
     "bundle": {

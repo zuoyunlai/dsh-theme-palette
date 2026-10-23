@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.6.0'
+    const PLUGIN_VERSION = '1.7.0'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -141,20 +141,50 @@ window.__ModuleLoader__.load({
     const CUSTOM_DEFAULT = { bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' }
     const HEX_RE = /^#[0-9a-f]{6}$/i
 
+    /**
+     * 自定义色的**不可变快照**。
+     *
+     * useSyncExternalStore 要求 getSnapshot 在数据未变时返回同一引用，否则每次渲染都会
+     * 得到新对象并陷入重渲染；但也不能让快照永远不变 —— 取色/重置/导入都必须换新对象。
+     * 所以这里缓存一份冻结对象，写入时替换缓存。
+     */
+    let customCache = null
+    // undefined = 内存里的写入没落盘（隐私模式），缓存仍然有效；字符串 = 与存储内容对应
+    let customCacheRaw
+
     function readCustom() {
+      let raw = null
+      try { raw = localStorage.getItem(CUSTOM_KEY) } catch (err) { /* 读取失败按空处理 */ }
+      if (customCache !== null && (customCacheRaw === undefined || raw === customCacheRaw)) return customCache
       const out = Object.assign({}, CUSTOM_DEFAULT)
-      try {
-        const raw = localStorage.getItem(CUSTOM_KEY)
-        if (raw) {
+      if (raw) {
+        try {
           const parsed = JSON.parse(raw)
-          for (const k of CUSTOM_FIELDS) if (parsed && typeof parsed[k] === 'string' && HEX_RE.test(parsed[k])) out[k] = parsed[k]
-        }
-      } catch (err) { /* 退回默认 */ }
-      return out
+          for (const k of CUSTOM_FIELDS) if (parsed && typeof parsed[k] === 'string' && HEX_RE.test(parsed[k])) out[k] = parsed[k].toLowerCase()
+        } catch (err) { /* 退回默认 */ }
+      }
+      customCache = Object.freeze(out)
+      customCacheRaw = raw
+      return customCache
     }
 
     function writeCustom(next) {
-      try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(next)) } catch (err) { /* 忽略 */ }
+      const clean = {}
+      for (const k of CUSTOM_FIELDS) {
+        const v = next && typeof next[k] === 'string' && HEX_RE.test(next[k]) ? next[k].toLowerCase() : CUSTOM_DEFAULT[k]
+        clean[k] = v
+      }
+      const serialized = JSON.stringify(clean)
+      // 值没变就保持同一引用：useSyncExternalStore 的快照在数据未变时必须稳定
+      const unchanged = customCache !== null && CUSTOM_FIELDS.every((k) => customCache[k] === clean[k])
+      try {
+        localStorage.setItem(CUSTOM_KEY, serialized)
+        customCacheRaw = serialized
+      } catch (err) {
+        customCacheRaw = undefined
+      }
+      if (!unchanged) customCache = Object.freeze(clean)
+      return customCache
     }
 
     function customScheme(colors) {
@@ -166,10 +196,14 @@ window.__ModuleLoader__.load({
         id: 'custom', label: '自定义', desc: '三色派生', tinted: true, custom: true,
         hue: bg[2], darkHue: bg[2],
         lightC: clampN(bg[1] * 0.9, 0.008, 0.045), midC: 0.010,
-        textC: clampN(tx[1], 0.002, 0.030),
+        // 文字色相必须真的来自「文字」这一项：只用色度会让「同色度、不同色相」完全同效，
+        // 与 UI 上「三色的色相与色度」的承诺不符。
+        textC: clampN(tx[1], 0.002, 0.030), textHue: tx[2],
         darkC: clampN(bg[1] * 0.75, 0.006, 0.035), darkLift: 0.030,
-        paperC: clampN(tx[1], 0.004, 0.030),
-        accentHue: ac[2], accentC: clampN(ac[1], 0.04, 0.18), accentL: ac[0], accentScale: 1.0,
+        paperC: clampN(tx[1], 0.004, 0.030), paperHue: tx[2],
+        // accentL 必须钳位：500 档同时是 --dsw-alias-link、button-info-fill 与勾选支点的来源。
+        // 纯白/荧光黄会让填充与白字同色；只在极端输入时归一化，预设色不受影响。
+        accentHue: ac[2], accentC: clampN(ac[1], 0.04, 0.18), accentL: clampN(ac[0], 0.30, 0.64), accentScale: 1.0,
       }
     }
 
@@ -190,6 +224,8 @@ window.__ModuleLoader__.load({
         : { main: MIN_MAIN, secondary: MIN_SECONDARY, tertiary: MIN_TERTIARY, link: MIN_LINK, linkDark: MIN_LINK_DARK }
     }
     const HC_KEY = 'dsh-theme-palette.hc.v1'
+    // 只记录“已读哪个版本”的升级提示，不参与配色，也不迁移任何用户数据
+    const NOTICE_KEY = 'dsh-theme-palette.notice.v1'
 
     /**
      * 区块底色：左侧栏相对主画布的深浅档位。
@@ -436,7 +472,11 @@ window.__ModuleLoader__.load({
         const lifted = role === 'dark' ? L + scheme.darkLift : L + liftText
         // 深色层单独给色相：暖砂的 88° 是「黄」，在 L≈0.22 的暗部读成橄榄绿；
         // 换成 60°（橙棕）才是咖啡色。浅色侧仍是 88°（米白）。
-        const hue = role === 'dark' && scheme.darkHue !== undefined ? scheme.darkHue : scheme.hue
+        // 文字档（含深色正文 paper）跟随「文字」这一项自己的色相；预设没有 textHue，行为不变。
+        const tintRole = role === 'text' || role === 'paper'
+        const hue = tintRole && scheme.textHue !== undefined
+          ? scheme.textHue
+          : (role === 'dark' && scheme.darkHue !== undefined ? scheme.darkHue : scheme.hue)
         bluish[step] = fromOklch(clamp(compressL(lifted), 0, 0.995), roleChroma(role, weight, scheme, scales), hue)
       }
       const neutral = {}
@@ -472,47 +512,74 @@ window.__ModuleLoader__.load({
     }
 
     /**
-     * 对比度求解：前景达不到 target 就沿亮度往「离背景更远」的方向微调，
-     * 最多挪 0.09（保持原有明暗层次，不把正文推成纯黑）。
+     * 对比度求解：前景达不到 target 就沿亮度微调，**两个方向都找**（取离原色最近的可行解）。
+     *
+     * 只朝「远离背景」一个方向走会漏掉可行解：当强调色比浅色背景还亮（纯白/荧光黄），
+     * 继续往白走只会更不可读，正确解在暗的一侧。bgs 可以是多个承载面，要求同时达标。
      */
-    function solveForeground(hexes, step, bgHex, target, cap) {
-      const maxShift = typeof cap === "number" ? cap : 0.13
+    function solveForeground(hexes, step, bgs, target, cap) {
+      const list = Array.isArray(bgs) ? bgs : [bgs]
+      const maxShift = typeof cap === 'number' ? cap : 0.13
       const [L0, C, hue] = toOklch(hexes[step])
-      const darker = luminance(hexes[step]) < luminance(bgHex)
-      let L = L0
-      for (let i = 0; i < Math.ceil(maxShift / 0.004) + 4; i++) {
-        const candidate = fromOklch(L, C, hue)
-        if (contrast(candidate, bgHex) >= target) return candidate
-        L += darker ? -0.004 : 0.004
-        // 上限 0.13：三级文字要从 4.41 抬到 4.62 需要 ΔL≈0.096，旧的 0.09 会静默截断
-        if (Math.abs(L - L0) > maxShift) break
+      const passes = (candidate) => list.every((bg) => contrast(candidate, bg) >= target)
+      if (passes(hexes[step])) return hexes[step]
+      const steps = Math.ceil(maxShift / 0.004)
+      for (let i = 1; i <= steps; i++) {
+        // 同距离先试暗侧：浅色模式下正文/链接的可行解绝大多数在暗侧
+        for (const dir of [-1, 1]) {
+          const L = L0 + dir * i * 0.004
+          if (L < 0 || L > 1) continue
+          const candidate = fromOklch(L, C, hue)
+          if (passes(candidate)) return candidate
+        }
       }
-      return fromOklch(L, C, hue)
+      // 位移上限内无解：黑/白里取「最差承载面」更高的那个，保证可读性优先
+      const score = (candidate) => Math.min(...list.map((bg) => contrast(candidate, bg)))
+      return score('#000000') >= score('#ffffff') ? '#000000' : '#ffffff'
     }
 
     function tuneRamps(ramps, scheme, hc) {
       const F = floors(hc)
       // 靶点必须用**真实承载面**，不能用画布：三级文字与链接大量落在卡层(60)、
-      // 悬浮层(150)、深色模块层(800)上，只对 00/950 求解会得到「画布达标、卡层不达标」。
+      // 深色模块层(800)上，只对 00/950 求解会得到「画布达标、卡层不达标」。
+      //
+      // 深色侧还要面对**物理上限**：白色对 800 面最多只有 10.1–11.0:1，
+      // 12:1（HC 15:1）不可能达成。这里按「目标与可达上限取小」求解，并留 7% 色彩余量，
+      // 由 palette-dev 报告「承诺 / 可达 / 实际」，不再假装能到 15。
       const lightCanvas = ramps.bluish['00']
       const lightCard = ramps.bluish['60']
       const darkCanvas = ramps.bluish['950']
       const darkModule = ramps.bluish['800']
+      const darkCard = ramps.bluish['850']
+      const maxOn = (bg, lightFg) => contrast(lightFg ? '#ffffff' : '#000000', bg)
+      // 0.93 而不是 0.995：贴着上限求解会把深色正文推成纯白，文字色味（paperC）全丢；
+      // 留出余量才能既达到可见的最高档，又保住「近白但有色味」的设计意图。
+      const clampTarget = (bg, target, lightFg) => Math.min(target, Math.max(1, maxOn(bg, lightFg) * 0.93))
       const jobs = [
-        ['1000', lightCanvas, F.main],
-        ['700', lightCard, F.secondary],
-        ['600', lightCard, F.tertiary],
-        ['400', darkModule, F.tertiary],
+        ['1000', [lightCard, lightCanvas], F.main, false],
+        ['700', [lightCard], F.secondary, false],
+        ['600', [lightCard], F.tertiary, false],
+        // 深色次级：(300) 之前从未被求解；800 是最亮的深色面，对浅色文字最难
+        ['300', [darkModule, darkCard, darkCanvas], F.secondary, true],
+        ['400', [darkModule], F.tertiary, true],
       ]
-      for (const [step, bg, target] of jobs) {
-        if (contrast(ramps.bluish[step], bg) >= target) continue
-        ramps.bluish[step] = solveForeground(ramps.bluish, step, bg, target, hc ? 0.30 : 0.13)
+      for (const [step, bgs, target, lightFg] of jobs) {
+        const effective = bgs.reduce((acc, bg) => Math.min(acc, clampTarget(bg, target, lightFg)), target)
+        ramps.bluish[step] = solveForeground(ramps.bluish, step, bgs, effective, hc ? 0.30 : 0.13)
+      }
+      // 深色正文：以最亮的深色面（800）为求解面。它对浅色文字最难；把它抬到可达上限后，
+      // 850/875/950 会自然更高。12/15 在 800 上物理不可达，所以目标按该面上限钳位，
+      // 由 palette-dev 报告「承诺 / 可达 / 实际」，不再假装能到 15。
+      {
+        const target = Math.min(F.main, maxOn(darkModule, true) * 0.93)
+        ramps.bluish['50'] = solveForeground(ramps.bluish, '50', darkModule, target, hc ? 0.30 : 0.13)
       }
       // 链接按「最亮的深色承载面（800）」兜底。
       // 注意这里**只有 400**：浅色链接不走这条色阶的中段（500 是设计稿的标准色，
       // 不能被求解器按承载面改写），浅色链接在 aliasOverrides 里从 500 派生。
       if (contrast(ramps.deepseek['400'], darkModule) < F.linkDark) {
-        ramps.deepseek['400'] = solveForeground(ramps.deepseek, '400', darkModule, F.linkDark, hc ? 0.30 : 0.13)
+        const effective = clampTarget(darkModule, F.linkDark, true)
+        ramps.deepseek['400'] = solveForeground(ramps.deepseek, '400', darkModule, effective, hc ? 0.30 : 0.13)
       }
       return ramps
     }
@@ -522,21 +589,29 @@ window.__ModuleLoader__.load({
      *
      * 为什么不能直接用 500：设计稿给的标准值（暖砂 `#A9683E`）在浅色悬浮面 `150` 上只有
      * 3.46:1、画布上 4.06 —— 那是「品牌色」不是「链接色」。链接要 4.62 起，所以同色相同色度、
-     * 明度往远处收，收到达标为止（最多 0.13，与其它求解一致）。
+     * 明度往可行的一侧收（两个方向都找），收到达标为止。
      * 这样宿主里 500 的其它用途（info 按钮填充、焦点环、deep-diving 文字、卡片预览色）
      * 全部保持标准值，只有「当文字用」的链接换一条。
      */
     function lightLink(r, hc) {
       const target = floors(hc).link
       if (r === BASE) return BASE.deepseek['500'] // 黑白配色没被覆盖，走宿主原值
-      const bg = r.bluish['150']
-      if (contrast(r.deepseek['500'], bg) >= target) return r.deepseek['500']
-      return solveForeground(r.deepseek, '500', bg, target, hc ? 0.30 : 0.13)
+      // 链接出现在卡层(60)、画布(00) 与悬浮层(150) 上；150 最难，要求同时达标。
+      const surfaces = [r.bluish['150'], r.bluish['60'], r.bluish['00']]
+      if (surfaces.every((bg) => contrast(r.deepseek['500'], bg) >= target)) return r.deepseek['500']
+      // 链接允许比正文移动更大：语义色必须可读，宁可偏离品牌色
+      return solveForeground(r.deepseek, '500', surfaces, target, hc ? 0.60 : 0.45)
     }
 
     /* ================= token 组装 ================= */
     /** 重建结果缓存：一个配色只算一次（渲染时每张卡片都会取预览色）。 */
     const rampCache = new Map()
+    // 自定义取色会持续产生新键；给一个小上限，避免长会话里只增不减
+    function rememberRamp(key, value) {
+      rampCache.set(key, value)
+      while (rampCache.size > 48) rampCache.delete(rampCache.keys().next().value)
+      return value
+    }
     function scalesFor(textMode) {
       const m = TEXT_MODES.find((x) => x.id === textMode) || TEXT_MODES[1]
       return { textScale: m.textScale, paperScale: m.paperScale, textLift: m.textLift || 0 }
@@ -563,7 +638,7 @@ window.__ModuleLoader__.load({
             scheme,
             hc,
           )
-          rampCache.set(monoKey, mono)
+          rememberRamp(monoKey, mono)
         }
         return mono
       }
@@ -571,7 +646,7 @@ window.__ModuleLoader__.load({
       let cached = rampCache.get(key)
       if (cached === undefined) {
         cached = tuneRamps(buildRamps(params, scalesFor(textMode)), params, hc)
-        rampCache.set(key, cached)
+        rememberRamp(key, cached)
       }
       return cached
     }
@@ -626,8 +701,18 @@ window.__ModuleLoader__.load({
         },
         '--dsw-alias-bg-mask-drop': { light: withAlpha(r.bluish['00'], 0.70), dark: withAlpha(r.bluish['800'], 0.70) },
         // 注释文字：宿主浅色用 400、深色用 600。深色的 600 被「浅色三级文字要 AA」的求解压暗过，
-        // 在深底上只剩 3.0:1，所以深色这一侧改用 500（约 6.5:1），浅色保持宿主值。
-        '--dsw-alias-label-caption': { light: r.bluish['400'], dark: r.bluish['500'] },
+        // 直接用在深底上只有 3.x:1；这里改用 500 并对**深色模块面(800)/卡层(850)** 求解到 AA。
+        // 实测旧注释「约 6.5:1」不成立（实际 4.4–4.7），所以既改值也改注释。
+        '--dsw-alias-label-caption': {
+          light: r.bluish['400'],
+          dark: solveForeground(
+            r.bluish,
+            '500',
+            [r.bluish['800'], r.bluish['850']],
+            Math.min(floors(hc).tertiary, contrast('#ffffff', r.bluish['800']) * 0.995),
+            0.30,
+          ),
+        },
         // 主人气泡（`--dsw-specific-bubble`）宿主指向 deepseek-50：那是「品牌色的极浅底」，
         // 我的强调色色度高，浅端直接算出 #ffede0（R 顶满 255）→ 看着发粉发红。
         // 改成「强调色 8–10% 混画布」，气泡是有色味的浅底而不是一块彩色。
@@ -742,6 +827,12 @@ window.__ModuleLoader__.load({
       // 黑白配色在上面已经单独设过，这里跳过（它要按「更浅」档的画布兜底）。
       if (params.tinted) {
         pairs['--dsw-alias-button-primary-fill'] = {
+          light: darkenUntil(ramps.deepseek['500'], ramps.bluish['00'], 4.5),
+          dark: ramps.deepseek['400'],
+        }
+        // info 按钮同样是「强调色填充 + 白字」，宿主直接指向 deepseek-500。
+        // 极端自定义强调色下会变成浅底白字；与主按钮一样按白字 4.5 压暗。
+        pairs['--dsw-alias-button-info-fill'] = {
           light: darkenUntil(ramps.deepseek['500'], ramps.bluish['00'], 4.5),
           dark: ramps.deepseek['400'],
         }
@@ -862,7 +953,12 @@ window.__ModuleLoader__.load({
 .dsh-tp-head h2{margin:0;font-size:18px;font-weight:600;letter-spacing:.2px}
 .dsh-tp-badge{margin-left:auto;font:11px/1.7 ui-monospace,Consolas,monospace;color:var(--dsw-alias-label-tertiary);border:.5px solid var(--dsw-alias-border-l4);border-radius:999px;padding:0 8px}
 .dsh-tp-sub{margin:-6px 0 0;color:var(--dsw-alias-label-tertiary);font-size:12px;line-height:18px}
-.dsh-tp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(196px,1fr));gap:10px}
+.dsh-tp-notice{display:flex;align-items:flex-start;gap:10px;justify-content:space-between;padding:10px 12px;border-radius:12px;border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1)}
+.dsh-tp-notice p{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
+.dsh-tp-explain{margin:0;display:flex;flex-direction:column;gap:4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-preview{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:10px;border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1)}
+.dsh-tp-preview p{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
+.dsh-tp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,196px),1fr));gap:10px}
 .dsh-tp-card{position:relative;display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;color:var(--dsw-alias-label-primary);cursor:pointer;padding:9px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:transparent;transition:background .12s ease,border-color .12s ease}
 .dsh-tp-card:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-tp-card:focus-visible{outline-offset:2px}
@@ -904,7 +1000,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-custom{display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1)}
 .dsh-tp-custom-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .dsh-tp-custom-head b{font-size:13.5px;font-weight:500}
-.dsh-tp-swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:10px}
+.dsh-tp-swatches{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,86px),1fr));gap:10px}
 .dsh-tp-swatch{display:flex;flex-direction:column;gap:6px;cursor:pointer}
 .dsh-tp-color{width:100%;height:44px;padding:0;border:.5px solid var(--dsw-alias-border-l4);border-radius:10px;background:transparent;cursor:pointer}
 .dsh-tp-color::-webkit-color-swatch-wrapper{padding:3px}
@@ -913,6 +1009,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-hex{font:11.5px/1 ui-monospace,Consolas,monospace;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-hexinput{width:100%;box-sizing:border-box;font:11.5px/16px ui-monospace,Consolas,monospace;padding:3px 6px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
 .dsh-tp-hexinput:focus-visible{outline-offset:1px}
+.dsh-tp-hexinput[aria-invalid="true"]{border-color:var(--dsw-alias-state-error-primary)}
+.dsh-tp-hexerror{font-size:11.5px;line-height:16px;color:var(--dsw-alias-state-error-primary)}
 .dsh-tp-custom-hint{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .dsh-tp-note{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status{margin:0;font-size:11.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
@@ -963,24 +1061,57 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
      */
     const TOKEN_PROBE = [
       '--dsw-static-neutral-bluish-00',
+      '--dsw-static-neutral-bluish-600',
       '--dsw-static-neutral-bluish-1000',
+      '--dsw-static-deepseek-500',
       '--dsw-alias-link',
       '--dsw-specific-sidebar-fill',
       '--dsw-alias-label-caption',
     ]
 
+    /** 只用于比对的颜色解析：支持 #rgb/#rrggbb/#rrggbbaa 与 rgb()/rgba()。 */
+    function parseColor(value) {
+      const s = String(value).trim().toLowerCase()
+      if (s.charAt(0) === '#') {
+        if (s.length === 4) return [parseInt(s[1], 16) * 17, parseInt(s[2], 16) * 17, parseInt(s[3], 16) * 17, 1]
+        if (s.length === 7) return [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16), 1]
+        if (s.length === 9) return [parseInt(s.slice(1, 3), 16), parseInt(s.slice(3, 5), 16), parseInt(s.slice(5, 7), 16), parseInt(s.slice(7, 9), 16) / 255]
+      }
+      const m = s.match(/^rgba?\(([^)]+)\)$/)
+      if (m) {
+        const p = m[1].split(/[,\s/]+/).filter(Boolean).map((x) => (x.charAt(x.length - 1) === '%' ? parseFloat(x) * 2.55 : parseFloat(x)))
+        return [p[0], p[1], p[2], p[3] === undefined ? 1 : p[3]]
+      }
+      return null
+    }
+
+    function sameColor(actual, expected) {
+      const a = parseColor(actual)
+      const b = parseColor(expected)
+      if (!a || !b) return String(actual).trim().toLowerCase() === String(expected).trim().toLowerCase()
+      return Math.abs(a[0] - b[0]) <= 1 && Math.abs(a[1] - b[1]) <= 1 && Math.abs(a[2] - b[2]) <= 1 && Math.abs(a[3] - b[3]) <= 0.02
+    }
+
+    /**
+     * 不只验证「非空」：宿主原始 token 本来就有值，覆盖层丢失时非空检查会报假健康。
+     * 这里比对计算值与本层期望值（var()/inherit 这类间接值跳过），并把不一致的 token 报出来。
+     */
     function probeApplied(tokens) {
       try {
         if (typeof getComputedStyle !== 'function') return null
         const style = getComputedStyle(document.body)
         let checked = 0
-        let ok = true
+        const mismatched = []
         for (const name of TOKEN_PROBE) {
-          if (!(name in tokens)) continue
+          const pair = tokens[name]
+          if (!pair) continue
           checked++
-          if (style.getPropertyValue(name).trim() === '') ok = false
+          const actual = style.getPropertyValue(name).trim()
+          if (actual === '') { mismatched.push(name); continue }
+          const expected = [pair.light, pair.dark].filter((v) => typeof v === 'string' && v.charAt(0) === '#')
+          if (expected.length > 0 && !expected.some((v) => sameColor(actual, v))) mismatched.push(name)
         }
-        return checked === 0 ? null : { ok, checked }
+        return checked === 0 ? null : { ok: mismatched.length === 0, checked, mismatched }
       } catch (err) {
         return null
       }
@@ -993,6 +1124,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         if (raw && SCHEMES.some((s) => s.id === raw)) return raw
       } catch (err) { /* 隐私模式 / 存储禁用：退回默认 */ }
       return 'mono'
+    }
+
+    /** 是否已经有用户配置：新装用户不需要看“行为变更”提示。 */
+    function hasStoredConfig() {
+      try { return localStorage.getItem(STORE_KEY) !== null } catch (err) { return false }
     }
 
     function writeStored(id) {
@@ -1083,14 +1219,30 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       try { localStorage.setItem(HC_KEY, id) } catch (err) { /* 同理 */ }
     }
 
-    /* ---------- 配置导入/导出（反哺 A-2）----------
-     * 短码格式：`dshs1.` + base64url(JSON)，字段全部用单字母，
-     * 导入时逐项对照模式表校验，任何一项不认识就整体拒绝（不猜、不部分应用）。
+    function readNoticeSeen() {
+      try {
+        const raw = localStorage.getItem(NOTICE_KEY)
+        return typeof raw === 'string' ? raw : ''
+      } catch (err) { return '' }
+    }
+
+    function writeNoticeSeen(version) {
+      try { localStorage.setItem(NOTICE_KEY, version) } catch (err) { /* 记不住就每次都提示，不阻断使用 */ }
+    }
+
+    /* ---------- 配置导入/导出（反哺 A-2 / A03）----------
+     * 短码格式：`dshs1.` + base64url(JSON)，字段全部用单字母。
+     * v1 早期短码没有 `x`（自定义三色），解码时兼容：旧码仍可导入，只是不带自定义色。
      */
     const CONFIG_PREFIX = 'dshs1.'
 
     function encodeConfig(state) {
-      const raw = { v: 1, p: state.palette, s: state.sidebar, t: state.text, r: state.rightbar, c: state.scroll, k: state.control, m: state.md, h: state.hc, l: state.lang }
+      const custom = state.custom || readCustom()
+      const raw = {
+        v: 1, p: state.palette, s: state.sidebar, t: state.text, r: state.rightbar,
+        c: state.scroll, k: state.control, m: state.md, h: state.hc, l: state.lang,
+        x: { bg: custom.bg, text: custom.text, accent: custom.accent },
+      }
       try {
         const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(raw))))
         return CONFIG_PREFIX + b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -1119,7 +1271,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           hc: hasId(HC_MODES, raw.h) ? raw.h : null,
           lang: raw.l === 'auto' || LOCALES.indexOf(raw.l) !== -1 ? raw.l : null,
         }
-        return Object.values(next).every((v) => v !== null) ? next : null
+        // 三色要么全合法、要么整体忽略（旧码没有这一项）
+        const x = raw.x
+        const custom = x && CUSTOM_FIELDS.every((k) => typeof x[k] === 'string' && HEX_RE.test(x[k]))
+          ? { bg: x.bg.toLowerCase(), text: x.text.toLowerCase(), accent: x.accent.toLowerCase() }
+          : null
+        return Object.values(next).every((v) => v !== null) ? Object.assign(next, { custom }) : null
       } catch (err) { return null }
     }
 
@@ -1193,17 +1350,26 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         lang: '语言',
         hc: '高对比',
         custom: '自定义配色',
-        customHint: '取三个色的色相与色度；明度由引擎按明暗模式算，对比度仍由求解器兜底。',
+        customHint: '取三个色的色相与色度；过亮/过暗的强调色会归一化以保证可读，明度由引擎按模式计算。',
+        notice: '1.7.0 调整了派生规则：极端强调色会归一化、文字色相参与派生、深色模块面按可达上限报告对比度。',
+        dismiss: '知道了',
+        explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
+        explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
+        preview: '预览',
+        cancel: '取消',
+        importSummary: '将覆盖：',
         config: '配置',
-        configHint: '导出这台机器的配色选择，或粘贴短码导入；导入会覆盖全部 8 项。',
+        configHint: '导出这台机器的配色选择（含自定义三色），或粘贴短码导入；导入会覆盖全部 9 项。',
         reset: '恢复默认',
         copy: '复制',
         applyImport: '导入',
         copied: '已复制',
         copyFail: '复制失败，请手选后 Ctrl+C',
         importOk: '已导入',
+        importLegacy: '已导入（旧短码不含自定义三色）',
         importBad: '短码无效，已忽略',
-        hcSub: '把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三级 ≥7）',
+        badHex: 'HEX 需为 #RRGGBB',
+        hcSub: '尽量把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三级 ≥7）；深色模块面的上限受表面亮度限制。',
       },
       'zh-TW': {
         nav: '主題色',
@@ -1229,17 +1395,26 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         lang: '語言',
         hc: '高對比',
         custom: '自訂配色',
-        customHint: '取三個色的色相與色度；明度由引擎依明暗模式計算，對比度仍由求解器兜底。',
+        customHint: '取三個色的色相與色度；過亮/過暗的強調色會正規化以確保可讀性，明度由引擎依模式計算。',
+        notice: '1.7.0 調整了衍生規則：極端強調色會正規化、文字色相參與衍生、深色模組面按可達上限回報對比度。',
+        dismiss: '知道了',
+        explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
+        explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
+        preview: '預覽',
+        cancel: '取消',
+        importSummary: '將覆蓋：',
         config: '設定',
-        configHint: '匯出這台機器的配色選擇，或貼上短碼匯入；匯入會覆蓋全部 8 項。',
+        configHint: '匯出這台機器的配色選擇（含自訂三色），或貼上短碼匯入；匯入會覆蓋全部 9 項。',
         reset: '恢復預設',
         copy: '複製',
         applyImport: '匯入',
         copied: '已複製',
         copyFail: '複製失敗，請手選後 Ctrl+C',
         importOk: '已匯入',
+        importLegacy: '已匯入（舊短碼不含自訂三色）',
         importBad: '短碼無效，已忽略',
-        hcSub: '把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三級 ≥7）',
+        badHex: 'HEX 需為 #RRGGBB',
+        hcSub: '盡量把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三級 ≥7）；深色模組面的上限受表面亮度限制。',
       },
       en: {
         nav: 'Color theme',
@@ -1265,17 +1440,26 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         lang: 'Language',
         hc: 'High contrast',
         custom: 'Custom palette',
-        customHint: 'Takes hue and chroma from three colours; lightness comes from the engine per mode and contrast is still solved.',
+        customHint: 'Takes hue and chroma from three colours; extreme accents are normalised for readability; lightness comes from the engine per mode.',
+        notice: '1.7.0 changes how colours are derived: extreme accents are normalised, text hue now affects derivation, and dark module surfaces report contrast against their achievable ceiling.',
+        dismiss: 'Got it',
+        explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
+        explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
+        preview: 'Preview',
+        cancel: 'Cancel',
+        importSummary: 'Will overwrite:',
         config: 'Config',
-        configHint: 'Export this machine’s choices, or paste a short code to import. Import overwrites all 8 settings.',
+        configHint: 'Export this machine’s choices (including the three custom colours), or paste a short code to import. Import overwrites all 9 settings.',
         reset: 'Reset',
         copy: 'Copy',
         applyImport: 'Import',
         copied: 'Copied',
         copyFail: 'Copy failed — select the code and press Ctrl+C',
         importOk: 'Imported',
+        importLegacy: 'Imported (old code has no custom colours)',
         importBad: 'Invalid code, ignored',
-        hcSub: 'Raises text floors to AAA (body ≥15, secondary ≥9, tertiary ≥7)',
+        badHex: 'HEX must be #RRGGBB',
+        hcSub: 'Raises text floors toward AAA (body ≥15, secondary ≥9, tertiary ≥7); dark module surfaces are limited by surface luminance.',
       },
       ja: {
         nav: 'カラーテーマ',
@@ -1301,17 +1485,26 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         lang: '言語',
         hc: 'ハイコントラスト',
         custom: 'カスタム配色',
-        customHint: '3 色の色相と彩度だけを使います。明度はモードごとにエンジンが決め、コントラストは従来どおり求解します。',
+        customHint: '3 色の色相と彩度を使用。極端なアクセント色は可読性のため正規化され、明度はモードごとにエンジンが決めます。',
+        notice: '1.7.0 で派生ルールを変更しました：極端なアクセント色は正規化され、文字の色相が派生に使われ、暗いモジュール面は到達可能な上限でコントラストを報告します。',
+        dismiss: '了解',
+        explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
+        explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
+        preview: 'プレビュー',
+        cancel: 'キャンセル',
+        importSummary: '上書きする内容：',
         config: '設定の共有',
-        configHint: 'この端末の配色設定を書き出す／短いコードを貼り付けて読み込みます（8 項目すべて上書き）。',
+        configHint: 'この端末の配色設定（カスタム 3 色を含む）を書き出す／短いコードを貼り付けて読み込みます（9 項目すべて上書き）。',
         reset: 'リセット',
         copy: 'コピー',
         applyImport: '読み込み',
         copied: 'コピーしました',
         copyFail: 'コピーできません。選択して Ctrl+C してください',
         importOk: '読み込みました',
+        importLegacy: '読み込みました（旧コードにカスタム 3 色は含まれません）',
         importBad: '無効なコードです',
-        hcSub: '本文の下限を AAA に引き上げます（本文 ≥15、副次 ≥9、三次 ≥7）',
+        badHex: 'HEX は #RRGGBB 形式で入力してください',
+        hcSub: '本文の下限を AAA に近づけます（本文 ≥15、副次 ≥9、三次 ≥7）。暗いモジュール面は表面の明るさで上限が決まります。',
       },
     }
 
@@ -1372,6 +1565,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
     }
 
     /* ================= 设置页（左侧导航独立一节） ================= */
+    /** 文案插值：只替换 {name}，缺值留空，不做 HTML 解释。 */
+    function fmt(template, vars) {
+      return String(template).replace(/\{(\w+)\}/g, (m, key) => (vars[key] === undefined ? '' : String(vars[key])))
+    }
+
     function PaletteSection(props) {
       const current = React.useSyncExternalStore(props.subscribe, props.getCurrent)
       const sidebarMode = React.useSyncExternalStore(props.subscribeSidebar, props.getSidebarMode)
@@ -1384,8 +1582,16 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       const health = React.useSyncExternalStore(props.subscribeHealth, props.getHealth)
       const [importText, setImportText] = React.useState('')
       const [importState, setImportState] = React.useState(null)
+      const [importPreview, setImportPreview] = React.useState(null)
       const [copyState, setCopyState] = React.useState(null)
       const [advanced, setAdvanced] = React.useState(false)
+      // 升级提示按版本只出现一次
+      const noticePending = React.useSyncExternalStore(props.subscribeNotice, props.getNoticePending)
+      // HEX 输入需要「草稿」态：非法值不能写进主题，但用户还在输入时也不该被立刻回滚。
+      const [hexDraft, setHexDraft] = React.useState({})
+      const [hexError, setHexError] = React.useState({})
+      // 自定义色有自己的不可变快照与订阅；只订阅 current 不会因三色变化而重渲染。
+      const customColors = React.useSyncExternalStore(props.subscribeCustom, props.getCustomColors)
       const locale = React.useSyncExternalStore(props.subscribeLocale, props.getLocale)
       const langPref = React.useSyncExternalStore(props.subscribeLocale, props.getLangPref)
       const langAttr = langPref !== 'auto'
@@ -1393,11 +1599,42 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         : ((typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) || 'zh-CN')
       const txt = TEXT[locale] || TEXT['zh-CN']
       const lb = LABELS[locale] || LABELS['zh-CN']
+      // 只在自定义面板显示；解释是只读的，不改变任何设置。取色异常不应拖垮设置页。
+      let explain = null
+      if (current === 'custom') {
+        try { explain = props.getCustomExplain() } catch (err) { explain = null }
+      }
+
+      // A07：radiogroup 的键盘模型 —— 组只占一个 Tab 位，方向键循环切换，Home/End 到首尾。
+      const onSegKeyDown = (event, modes, value, onPick, disabled) => {
+        if (disabled) return
+        if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp', 'Home', 'End'].indexOf(event.key) === -1) return
+        event.preventDefault()
+        const currentIndex = Math.max(0, modes.findIndex((m) => m.id === value))
+        let nextIndex = currentIndex
+        if (event.key === 'Home') nextIndex = 0
+        else if (event.key === 'End') nextIndex = modes.length - 1
+        else {
+          const delta = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1
+          nextIndex = (currentIndex + delta + modes.length) % modes.length
+        }
+        if (nextIndex === currentIndex) return
+        onPick(modes[nextIndex].id)
+        const buttons = event.currentTarget.children
+        const target = buttons && buttons[nextIndex]
+        if (target && typeof target.focus === 'function') target.focus()
+      }
 
       // A6：读屏需要知道"这是哪个设置的选项组"；单选用 radio 语义更准
       const seg = (modes, value, onPick, labels, labelId, disabled) => h(
         'div',
-        { className: 'dsh-tp-seg', role: 'radiogroup', 'aria-labelledby': labelId, 'aria-disabled': disabled ? 'true' : undefined },
+        {
+          className: 'dsh-tp-seg',
+          role: 'radiogroup',
+          'aria-labelledby': labelId,
+          'aria-disabled': disabled ? 'true' : undefined,
+          onKeyDown: (event) => onSegKeyDown(event, modes, value, onPick, disabled),
+        },
         modes.map((mode) => h(
           'button',
           {
@@ -1407,6 +1644,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             className: mode.id === value ? 'is-on' : undefined,
             'aria-checked': mode.id === value,
             'aria-disabled': disabled ? 'true' : undefined,
+            // roving tabindex：只有选中项在 Tab 序列里，其余靠方向键进入
+            tabIndex: mode.id === value ? 0 : -1,
             disabled: disabled === true,
             onClick: () => { if (!disabled) onPick(mode.id) },
           },
@@ -1423,7 +1662,18 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         control,
       )
 
-      const customColors = props.getCustomColors()
+      // A06：HEX 以「草稿 + 提交」处理；非法值不写主题，也不假装保存成功。
+      const commitHex = (field) => {
+        const draft = hexDraft[field]
+        const raw = String(draft !== undefined ? draft : customColors[field]).trim()
+        if (HEX_RE.test(raw)) {
+          props.setCustomColor(field, raw)
+          setHexDraft(Object.assign({}, hexDraft, { [field]: undefined }))
+          setHexError(Object.assign({}, hexError, { [field]: false }))
+        } else {
+          setHexError(Object.assign({}, hexError, { [field]: true }))
+        }
+      }
       const customPanel = current === 'custom' && h(
         'div',
         { className: 'dsh-tp-custom' },
@@ -1435,28 +1685,63 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             onClick: () => props.resetCustom(),
           }, txt.reset)),
         h('div', { className: 'dsh-tp-swatches' },
-          ['bg', 'text', 'accent'].map((field) => h('label', { key: field, className: 'dsh-tp-swatch' },
+          ['bg', 'text', 'accent'].map((field) => {
+            const name = (lb.custom && lb.custom[field]) || field
+            const colorId = rowId('color-' + field)
+            const hexId = rowId('hex-' + field)
+            const errId = rowId('hexerr-' + field)
+            const invalid = hexError[field] === true
+            return h('div', {
+              key: field,
+              className: 'dsh-tp-swatch',
+              role: 'group',
+              'aria-label': name,
+            },
             h('input', {
               type: 'color',
+              id: colorId,
               className: 'dsh-tp-color',
               value: customColors[field],
               // input 是"拖动过程中"就触发，change 是"确认后"触发；两个都接，
               // 拖动时实时看到整页变化，松手/确认后不会再跳一次
               onInput: (e) => props.setCustomColor(field, e.target.value),
               onChange: (e) => props.setCustomColor(field, e.target.value),
-              'aria-label': (lb.custom && lb.custom[field]) || field,
+              'aria-label': name,
             }),
-            h('span', { className: 'dsh-tp-swatch-name' }, (lb.custom && lb.custom[field]) || field),
+            h('label', { htmlFor: hexId, className: 'dsh-tp-swatch-name' }, name),
             h('input', {
-              key: customColors[field],
+              id: hexId,
               className: 'dsh-tp-hexinput',
-              defaultValue: customColors[field],
+              value: hexDraft[field] !== undefined ? hexDraft[field] : customColors[field],
               spellCheck: false,
-              'aria-label': ((lb.custom && lb.custom[field]) || field) + ' HEX',
-              onBlur: (e) => props.setCustomColor(field, e.target.value.trim()),
-              onKeyDown: (e) => { if (e.key === 'Enter') props.setCustomColor(field, e.target.value.trim()) },
-            })))),
+              'aria-invalid': invalid ? 'true' : undefined,
+              'aria-describedby': invalid ? errId : undefined,
+              'aria-label': name + ' HEX',
+              onChange: (e) => {
+                setHexDraft(Object.assign({}, hexDraft, { [field]: e.target.value }))
+                if (invalid) setHexError(Object.assign({}, hexError, { [field]: false }))
+              },
+              onBlur: () => commitHex(field),
+              onKeyDown: (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); commitHex(field) }
+                if (e.key === 'Escape') {
+                  setHexDraft(Object.assign({}, hexDraft, { [field]: undefined }))
+                  setHexError(Object.assign({}, hexError, { [field]: false }))
+                  e.currentTarget.blur()
+                }
+              },
+            }),
+            invalid && h('span', { id: errId, className: 'dsh-tp-hexerror', role: 'alert' }, txt.badHex))
+          })),
         h('p', { className: 'dsh-tp-custom-hint' }, txt.customHint),
+        explain && (explain.accentClamped || explain.linkShifted) && h(
+          'div',
+          { className: 'dsh-tp-explain', role: 'status' },
+          explain.accentClamped && h('span', null,
+            fmt(txt.explainClamp, { from: explain.accentFrom, to: explain.accentTo })),
+          explain.linkShifted && h('span', null,
+            fmt(txt.explainLink, { ratio: explain.linkRatio.toFixed(2), target: explain.linkTarget })),
+        ),
       )
 
       const card = (scheme) => {
@@ -1494,9 +1779,13 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           h('h2', null, txt.nav),
           h('span', { className: 'dsh-tp-badge' }, 'v' + PLUGIN_VERSION)),
         h('p', { className: 'dsh-tp-sub' }, txt.hint),
+        noticePending && h('div', { className: 'dsh-tp-notice' },
+          h('p', { role: 'status' }, txt.notice),
+          h('button', { type: 'button', className: 'dsh-tp-mini', onClick: () => props.dismissNotice() }, txt.dismiss)),
         h('div', { className: 'dsh-tp-grid' }, SCHEMES.map(card)),
         customPanel,
         row('text', txt.text, txt.textSub, seg(TEXT_MODES, textMode, props.setTextMode, lb.text, rowId('text'))),
+        row('hc', txt.hc, txt.hcSub, seg(HC_MODES, hcMode, props.setHcMode, lb.hc, rowId('hc'))),
         row('sidebar', txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode, lb.sidebar, rowId('sidebar'))),
         row('rightbar', txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode, lb.rightbar, rowId('rightbar'))),
         health && !health.ok && h('p', { className: 'dsh-tp-status is-bad' }, txt.bad),
@@ -1551,19 +1840,57 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 placeholder: 'dshs1.…',
                 value: importText,
                 'aria-label': txt.applyImport,
-                onChange: (e) => { setImportText(e.target.value); setImportState(null) },
+                onChange: (e) => {
+                  setImportText(e.target.value)
+                  setImportState(null)
+                  setImportPreview(null)
+                },
               }),
               h('button', {
                 type: 'button',
                 className: 'dsh-tp-mini',
-                onClick: () => setImportState(props.applyConfigCode(importText) ? 'ok' : 'bad'),
-              }, txt.applyImport),
-              importState && h('span', { className: 'dsh-tp-note', role: importState === 'bad' ? 'alert' : 'status', 'aria-live': 'polite' },
-                importState === 'ok' ? txt.importOk : txt.importBad)),
+                onClick: () => {
+                  const result = props.previewConfigCode(importText)
+                  if (result && result.ok) {
+                    setImportPreview(result.config)
+                    setImportState(null)
+                  } else {
+                    setImportPreview(null)
+                    setImportState('bad')
+                  }
+                },
+              }, txt.preview),
+              importState === 'bad' && h('span', { className: 'dsh-tp-note', role: 'alert', 'aria-live': 'polite' }, txt.importBad)),
+            importPreview && h('div', { className: 'dsh-tp-preview', role: 'group', 'aria-label': txt.importSummary },
+              h('p', null, txt.importSummary + ' ' + [
+                (lb.scheme[importPreview.palette] || importPreview.palette),
+                txt.sidebar + ' ' + (lb.sidebar[importPreview.sidebar] || importPreview.sidebar),
+                txt.text + ' ' + (lb.text[importPreview.text] || importPreview.text),
+                txt.hc + ' ' + (lb.hc[importPreview.hc] || importPreview.hc),
+              ].join(' · ')),
+              importPreview.custom
+                ? h('p', null, txt.custom + ' ' + importPreview.custom.bg + ' / ' + importPreview.custom.text + ' / ' + importPreview.custom.accent)
+                : h('p', null, txt.importLegacy),
+              h('div', { className: 'dsh-tp-field-row' },
+                h('button', {
+                  type: 'button',
+                  className: 'dsh-tp-mini',
+                  onClick: () => {
+                    const result = props.applyConfigCode(importText)
+                    setImportPreview(null)
+                    setImportState(result && result.ok ? (result.hasCustom ? 'ok' : 'legacy') : 'bad')
+                  },
+                }, txt.applyImport),
+                h('button', {
+                  type: 'button',
+                  className: 'dsh-tp-mini',
+                  onClick: () => { setImportPreview(null); setImportState(null) },
+                }, txt.cancel))),
+            importState && importState !== 'bad' && h('span', { className: 'dsh-tp-note', role: 'status', 'aria-live': 'polite' },
+              importState === 'ok' ? txt.importOk : txt.importLegacy),
             h('p', { className: 'dsh-tp-custom-hint' }, txt.configHint),
           ),
           row('md', txt.md, txt.mdSub, seg(MD_MODES, mdMode, props.setMdMode, lb.md, rowId('md'))),
-          row('hc', txt.hc, txt.hcSub, seg(HC_MODES, hcMode, props.setHcMode, lb.hc, rowId('hc'))),
           row('scroll', txt.scroll, current === 'mono' ? txt.scrollHintMono : txt.scrollSub, seg(SCROLL_MODES, scrollMode, props.setScrollMode, lb.scroll, rowId('scroll'), current === 'mono')),
           row('control', txt.control, txt.controlSub, seg(CONTROL_MODES, controlMode, props.setControlMode, lb.control, rowId('control'), current === 'mono')),
         ),
@@ -1589,7 +1916,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, contrast, toOklch, rampsFor, settingsCss: SETTINGS_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, settingsCss: SETTINGS_CSS, cardColors })
     }
 
     return {
@@ -1602,6 +1929,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         }
 
         let current = readStored()
+        // 只有升级前已有配置的用户才需要“行为变更”提示
+        const hadConfig = hasStoredConfig()
         let sidebarMode = readSidebarStored()
         let textMode = readTextStored()
         let rightbarMode = readRightbarStored()
@@ -1622,6 +1951,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         const controlListeners = new Set()
         const mdListeners = new Set()
         const hcListeners = new Set()
+        const customListeners = new Set()
 
         const getCurrent = () => current
         const getSidebarMode = () => sidebarMode
@@ -1671,6 +2001,27 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           return () => { hcListeners.delete(fn) }
         }
         const emitHc = () => { for (const fn of hcListeners) { try { fn() } catch (err) { /* 同理 */ } } }
+        // 自定义色的独立订阅：三个色变了但 current 没变，不能靠配色订阅触发重渲染
+        const subscribeCustom = (fn) => {
+          customListeners.add(fn)
+          return () => { customListeners.delete(fn) }
+        }
+        const emitCustom = () => { for (const fn of customListeners) { try { fn() } catch (err) { /* 同理 */ } } }
+
+        // 升级提示：每个版本只出现一次；只读写 notice 键，不碰配色设置
+        let noticeSeenVersion = readNoticeSeen()
+        const noticeListeners = new Set()
+        const subscribeNotice = (fn) => {
+          noticeListeners.add(fn)
+          return () => { noticeListeners.delete(fn) }
+        }
+        const getNoticePending = () => hadConfig && noticeSeenVersion !== PLUGIN_VERSION
+        const emitNotice = () => { for (const fn of noticeListeners) { try { fn() } catch (err) { /* 同理 */ } } }
+        const dismissNotice = () => {
+          noticeSeenVersion = PLUGIN_VERSION
+          writeNoticeSeen(noticeSeenVersion)
+          emitNotice()
+        }
 
         let disposeLayer = () => {}
         /** 按当前配色 + 侧栏档位重建覆盖层（换配色与换侧栏档位走同一条路）。 */
@@ -1760,7 +2111,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           const run = () => {
             const next = probeApplied(tokens)
             if (next === null) return
-            if (health !== null && health.ok === next.ok && health.checked === next.checked) return
+            if (health !== null && health.ok === next.ok && health.checked === next.checked
+              && String(health.mismatched) === String(next.mismatched)) return
             health = { ...next, reapplies: reapplyCount }
             if (!next.ok) console.warn('[dsh-theme-palette] 有 token 没写进 body，宿主可能改名了')
             emitHealth()
@@ -1817,10 +2169,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           applyAll()
           emitMd()
         }
-        /** 导入：整份校验通过才落地；返回 true/false 供 UI 显示结果 */
+        /** 导入：整份校验通过才落地；返回结果供 UI 显示（旧码不含自定义三色时 hasCustom=false） */
         const applyConfigCode = (code) => {
           const cfg = decodeConfig(code)
-          if (!cfg) return false
+          if (!cfg) return { ok: false, hasCustom: false }
           current = cfg.palette
           sidebarMode = cfg.sidebar
           textMode = cfg.text
@@ -1830,6 +2182,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           mdMode = cfg.md
           hcMode = cfg.hc
           langPref = cfg.lang
+          if (cfg.custom) writeCustom(cfg.custom)
           writeStored(current)
           writeSidebarStored(sidebarMode)
           writeTextStored(textMode)
@@ -1841,21 +2194,51 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           writeLangPref(langPref)
           applyAll('import')
           emit(); emitSidebar(); emitText(); emitRightbar(); emitScroll(); emitControl(); emitMd(); emitHc(); emitLocale()
-          return true
+          if (cfg.custom) emitCustom()
+          return { ok: true, hasCustom: !!cfg.custom }
         }
         const getCustomColors = () => readCustom()
+        /**
+         * 解释性校正：告诉用户“你的取色被如何处理了”，而不是让颜色悄悄变掉。
+         * 只读、可重复调用；ramp 缓存保证同一组设置不会重复计算。
+         */
+        const getCustomExplain = () => {
+          const colors = readCustom()
+          const scheme = customScheme(colors)
+          const hc = hcMode === 'on'
+          const t = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hc)
+          const link = t['--dsw-alias-link'].light
+          const base = t['--dsw-static-deepseek-500'].light
+          const surfaces = ['150', '60', '00'].map((k) => t['--dsw-static-neutral-bluish-' + k].light)
+          const ratio = Math.min(...surfaces.map((bg) => contrast(link, bg)))
+          const acL = toOklch(colors.accent)[0]
+          const accentTo = Math.min(0.64, Math.max(0.30, acL))
+          return {
+            accentClamped: Math.abs(acL - accentTo) > 0.005,
+            accentFrom: Math.round(acL * 100) / 100,
+            accentTo: Math.round(accentTo * 100) / 100,
+            linkShifted: link.toLowerCase() !== base.toLowerCase(),
+            linkRatio: Math.round(ratio * 100) / 100,
+            linkTarget: floors(hc).link,
+          }
+        }
+        const previewConfigCode = (code) => {
+          const cfg = decodeConfig(code)
+          return cfg ? { ok: true, config: cfg } : { ok: false }
+        }
         const resetCustom = () => {
           writeCustom(Object.assign({}, CUSTOM_DEFAULT))
           applyAll('custom:reset')
-          emit()
+          emitCustom()
         }
         const setCustomColor = (field, hex) => {
-          if (CUSTOM_FIELDS.indexOf(field) === -1) return
-          if (typeof hex !== 'string' || !HEX_RE.test(hex)) return
-          const next = Object.assign(readCustom(), { [field]: hex })
+          if (CUSTOM_FIELDS.indexOf(field) === -1) return false
+          if (typeof hex !== 'string' || !HEX_RE.test(hex)) return false
+          const next = Object.assign({}, readCustom(), { [field]: hex.toLowerCase() })
           writeCustom(next)
           applyAll('custom:' + field)
-          emit()
+          emitCustom()
+          return true
         }
         const setHcMode = (id) => {
           if (!HC_MODES.some((m) => m.id === id)) return
@@ -1990,6 +2373,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 getConfigCode,
                 applyConfigCode,
                 getCustomColors,
+                getCustomExplain,
+                previewConfigCode,
+                subscribeNotice,
+                getNoticePending,
+                dismissNotice,
+                subscribeCustom,
                 setCustomColor,
                 resetCustom,
                 getLangPref,
