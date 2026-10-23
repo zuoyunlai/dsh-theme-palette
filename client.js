@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.2'
+    const PLUGIN_VERSION = '1.9.3'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1112,11 +1112,32 @@ window.__ModuleLoader__.load({
           }
           return fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
         }
-        const dimLight = boost(pairs['--dsw-static-neutral-bluish-200'].light, 0.022, lightBgs, 3.0)
-        const dimDark = boost(pairs['--dsw-static-neutral-bluish-750'].dark, 0.022, darkBgs, 3.0)
+        const dimLight = boost(pairs['--dsw-static-neutral-bluish-200'].light, 0.040, lightBgs, 3.0)
+        const dimDark = boost(pairs['--dsw-static-neutral-bluish-750'].dark, 0.040, darkBgs, 3.0)
         pairs['--dsw-alias-label-dimmed'] = { light: dimLight, dark: dimDark }
-        const prevLight = boost(pairs['--dsw-static-neutral-bluish-300'].light, 0.018, lightBgs, 3.0)
-        const prevDark = boost(pairs['--dsw-static-neutral-bluish-700'].dark, 0.018, darkBgs, 3.0)
+        // 明暗两套都提高「鲜艳度」：二级/三级文字按主题色相给足色度（0.05），
+        // 再对真实承载面求解对比度；只动色度不动语义。
+        const vivid = (hex, C, bgs, floor) => {
+          const [L0, C0, h0] = toOklch(hex)
+          const dir = contrast('#ffffff', bgs[0]) >= contrast('#000000', bgs[0]) ? 1 : -1
+          let L = L0
+          for (let i = 0; i < 240; i++) {
+            const c = fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
+            if (bgs.every((b) => contrast(c, b) >= floor)) return c
+            L += dir * 0.003
+          }
+          return fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
+        }
+        pairs['--dsw-alias-label-tertiary'] = {
+          light: vivid(pairs['--dsw-static-neutral-bluish-600'].light, 0.055, lightBgs, F.tertiary),
+          dark: vivid(pairs['--dsw-static-neutral-bluish-400'].dark, 0.055, darkBgs, F.tertiary),
+        }
+        pairs['--dsw-alias-label-secondary'] = {
+          light: vivid(pairs['--dsw-static-neutral-bluish-700'].light, 0.050, lightBgs, F.secondary),
+          dark: vivid(pairs['--dsw-static-neutral-bluish-300'].dark, 0.050, darkBgs, F.secondary),
+        }
+        const prevLight = boost(pairs['--dsw-static-neutral-bluish-300'].light, 0.030, lightBgs, 3.0)
+        const prevDark = boost(pairs['--dsw-static-neutral-bluish-700'].dark, 0.030, darkBgs, 3.0)
         pairs['--dsw-alias-label-document-preview'] = { light: prevLight, dark: prevDark }
       }
       return pairs
