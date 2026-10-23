@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.8.3'
+    const PLUGIN_VERSION = '1.8.4'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -107,7 +107,7 @@ window.__ModuleLoader__.load({
       { id: 'mono', label: '黑白', desc: '无色调 · 默认', tinted: false },
       {
         id: 'warm', label: '暖砂', desc: '米白 + 棕调', tinted: true,
-        hue: 72, darkHue: 66, lightC: 0.030, midC: 0.010, textC: 0.004,
+        hue: 72, darkHue: 66, lightC: 0.010, midC: 0.010, textC: 0.004,
         darkC: 0.014, darkLift: 0.026, paperC: 0.0053, // 深正文按色域归一：×2.4 后 ≈0.0127
         accentHue: 60, accentC: 0.101, accentL: 0.58, // 标准色 #A9683E
         accentScale: 1.0,
@@ -514,7 +514,7 @@ window.__ModuleLoader__.load({
         // 只有「近黑」那一步需要抬明度（色域太窄）；次级 700 在中明度，靠色度就够，
         // 抬它反而会把 700/卡层 的对比压到 6.2 以下（求解器的 0.13 位移上限拉不回来）。
         const liftText = role === 'text' && L < 0.30 ? (scales.textLift || 0) : 0
-        const lifted = role === 'dark' ? L + scheme.darkLift : L + liftText
+        const lifted = role === 'dark' ? L + scheme.darkLift : L + liftText + (role === 'light' ? (scheme.whiteLift || 0) : 0)
         // 深色层单独给色相：暖砂的 88° 是「黄」，在 L≈0.22 的暗部读成橄榄绿；
         // 换成 60°（橙棕）才是咖啡色。浅色侧仍是 88°（米白）。
         // 文字档（含深色正文 paper）跟随「文字」这一项自己的色相；预设没有 textHue，行为不变。
