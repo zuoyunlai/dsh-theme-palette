@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.4'
+    const PLUGIN_VERSION = '1.9.5'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -126,7 +126,7 @@ window.__ModuleLoader__.load({
         accentHue: 139, accentC: 0.096, accentL: 0.5335, // 标准色 #4F7A42
         accentScale: 1.0,
       },
-      { id: 'custom', label: '自定义', desc: '三色派生', tinted: true, custom: true, hue: 60, darkHue: 60, lightC: 0.02, midC: 0.01, textC: 0.004, darkC: 0.014, darkLift: 0.03, paperC: 0.012, accentHue: 60, accentC: 0.1, accentL: 0.58, accentScale: 1 },
+      { id: 'custom', label: '自定义', desc: '三色派生', tinted: true, custom: true, hue: 60, darkHue: 60, lightC: 0.02, whiteLift: 0.012, midC: 0.02, textC: 0.004, darkC: 0.014, darkLift: 0.03, paperC: 0.012, accentHue: 60, accentC: 0.1, accentL: 0.58, accentScale: 1 },
     ]
 
     /**
@@ -853,7 +853,7 @@ window.__ModuleLoader__.load({
       const lightFill = tinted && scheme && scheme.lightC !== undefined
         ? (() => {
             const [L] = toOklch(fillRaw)
-            return fromOklch(L, Math.max(toOklch(fillRaw)[1], scheme.lightC * 0.75), scheme.hue)
+            return fromOklch(L, Math.max(toOklch(fillRaw)[1], Math.min(0.010, scheme.lightC * 0.75)), scheme.hue)
           })()
         : fillRaw
       const darkFill = lift(r.bluish['950'], darkLift, s)
@@ -1087,7 +1087,8 @@ window.__ModuleLoader__.load({
         moss: { light: { 1000: '#1f2a22', 700: '#55645a', 600: '#7a8a7e', link: '#406236' }, dark: { 50: '#eef5ef', 300: '#b8c8bc', 400: '#8ba091', link: '#aed0a2' } },
       }
       const TT = TEXT_TARGETS[scheme.id]
-      if (scheme.tinted && TT) {
+      // 三套预置走参考目标；自定义没有参考表，但同样要拿到跟随主题的注释/文字
+      if (scheme.tinted) {
         const fit = (hex, bgs, target) => {
           const dir = contrast('#ffffff', bgs[0]) >= contrast('#000000', bgs[0]) ? 1 : -1
           const [L0, C0, h0] = toOklch(hex)
@@ -1102,6 +1103,7 @@ window.__ModuleLoader__.load({
         const lightBgs = ['00', '60', '150'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].light)
         const darkBgs = ['950', '875', '850', '800'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].dark)
         const F = floors(hc)
+        if (TT) {
         pairs['--dsw-static-neutral-bluish-1000'].light = fit(TT.light['1000'], lightBgs, F.main)
         pairs['--dsw-static-neutral-bluish-700'].light = fit(TT.light['700'], lightBgs, F.secondary)
         pairs['--dsw-static-neutral-bluish-600'].light = fit(TT.light['600'], lightBgs, F.tertiary)
@@ -1109,6 +1111,7 @@ window.__ModuleLoader__.load({
         pairs['--dsw-static-neutral-bluish-300'].dark = fit(TT.dark['300'], darkBgs, F.secondary)
         pairs['--dsw-static-neutral-bluish-400'].dark = fit(TT.dark['400'], darkBgs, F.tertiary)
         pairs['--dsw-alias-link'] = { light: fit(TT.light.link, lightBgs, F.link), dark: fit(TT.dark.link, darkBgs, F.link) }
+        }
         // 更弱的注释层（label-dimmed / document-preview）也跟随主题：
         // 这些 token 走的是 200/750、300/700 这类低色度档，之前几乎是中性灰。
         const boost = (hex, C, bgs, floor) => {
