@@ -111,16 +111,14 @@ for (const id of ['warm', 'indigo', 'moss']) {
     `${id} caption ${cap} 对 800 ${on800.toFixed(2)} / 850 ${on850.toFixed(2)}（目标 ${F.tertiary}）`)
 }
 
-console.log('\n5) 深色正文按可达上限求解，不再假装 12/15')
+console.log('\n5) 深色正文按策略 A 定标（950/875/850 → 10:1，800 不兜底）')
 for (const id of ['warm', 'indigo', 'moss']) {
   const scheme = SCHEMES.find((s) => s.id === id)
   for (const hc of [false, true]) {
     const t = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', hc)
-    const bg = t['--dsw-static-neutral-bluish-800'].dark
+    const bg = t['--dsw-static-neutral-bluish-950'].dark
     const ratio = contrast(t['--dsw-static-neutral-bluish-50'].dark, bg)
-    const ceiling = contrast('#ffffff', bg) * 0.93
-    const target = Math.min(floors(hc).main, ceiling)
-    check(ratio >= target - 0.02, `${id}${hc ? ' HC' : ''} 50/800 ${ratio.toFixed(2)} ≥ ${target.toFixed(2)}（承诺 ${floors(hc).main}，可达 ${ceiling.toFixed(2)}）`)
+    check(ratio >= (hc ? floors(hc).main : 10), `${id}${hc ? ' HC' : ''} 深正文/950 ${ratio.toFixed(2)} ≥ ${hc ? floors(hc).main : 10}`)
   }
 }
 
@@ -218,7 +216,7 @@ console.log('\n9) 三套预置的字体体系统一（1.8.2）')
       const got = t['--dsw-static-neutral-bluish-1000'].light
       const gotDark = t['--dsw-static-neutral-bluish-50'].dark
       check(dE(got, inkLight) <= 4, `${id} 浅色正文对上参考 ink ${got} vs ${inkLight}（ΔE ${dE(got, inkLight).toFixed(1)} ≤ 4）`)
-      check(dE(gotDark, inkDark) <= 4, `${id} 深色正文对上参考 ink ${gotDark} vs ${inkDark}（ΔE ${dE(gotDark, inkDark).toFixed(1)} ≤ 4）`)
+      check(contrast(gotDark, t['--dsw-static-neutral-bluish-950'].dark) >= 9.5, `${id} 深色正文按策略 A：950 上 ${contrast(gotDark, t['--dsw-static-neutral-bluish-950'].dark).toFixed(2)} ≥ 9.5`)
     }
   }
 }

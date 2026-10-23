@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.6'
+    const PLUGIN_VERSION = '1.9.7'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1168,7 +1168,22 @@ window.__ModuleLoader__.load({
         const prevDark = boost(pairs['--dsw-static-neutral-bluish-700'].dark, 0.030, darkBgs, 3.0)
         pairs['--dsw-alias-label-document-preview'] = { light: prevLight, dark: prevDark }
       }
-      return pairs
+            /* ---- 暗色正文按 10:1 定标（1.9.7）----
+             * 12:1 在近黑底上要求近纯白，视觉发亮。策略 A：非高对比模式正文目标 10:1，
+             * 只按 950/875/850 定标；最亮的模块面 800 不再兜底（约 5.6:1，仍过 AA）。
+             */
+      if (!hc && pairs['--dsw-static-neutral-bluish-50']) {
+        const hex = pairs['--dsw-static-neutral-bluish-50'].dark
+        const bgs = ['875', '950', '850'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].dark)
+        const [L0, C0, h0] = toOklch(hex)
+        let L = L0
+        for (let j = 0; j < 240; j++) {
+          const c = fromOklch(clamp(L, 0.2, 0.99), C0, h0)
+          if (contrast(c, bgs[0]) <= 10.2) { pairs['--dsw-static-neutral-bluish-50'].dark = c; break }
+          L -= 0.002
+        }
+      }
+return pairs
     }
 
     
