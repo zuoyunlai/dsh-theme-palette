@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.5'
+    const PLUGIN_VERSION = '1.9.6'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1149,6 +1149,21 @@ window.__ModuleLoader__.load({
           light: vivid(pairs['--dsw-static-neutral-bluish-700'].light, 0.050, lightBgs, F.secondary),
           dark: vivid(pairs['--dsw-static-neutral-bluish-300'].dark, 0.050, darkBgs, F.secondary),
         }
+        // 深色模式菜单/说明文字：默认解到 800 面会偏亮，这里按导航实际承载面（950/875）
+        // 压到更低的明度目标，达不到下限时才回抬，避免"菜单一片白"。
+        const dimTo = (hex, Lwant, bgs, floor) => {
+          const [, C0, h0] = toOklch(hex)
+          let L = Lwant
+          for (let i = 0; i < 120; i++) {
+            const c = fromOklch(clamp(L, 0.2, 0.99), C0, h0)
+            if (bgs.every((b) => contrast(c, b) >= floor)) return c
+            L += 0.003
+          }
+          return fromOklch(clamp(L, 0.2, 0.99), C0, h0)
+        }
+        const navBgs = ['950', '875'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].dark)
+        pairs['--dsw-alias-label-secondary'].dark = dimTo(pairs['--dsw-alias-label-secondary'].dark, 0.78, navBgs, F.secondary)
+        pairs['--dsw-alias-label-tertiary'].dark = dimTo(pairs['--dsw-alias-label-tertiary'].dark, 0.70, navBgs, F.tertiary)
         const prevLight = boost(pairs['--dsw-static-neutral-bluish-300'].light, 0.030, lightBgs, 3.0)
         const prevDark = boost(pairs['--dsw-static-neutral-bluish-700'].dark, 0.030, darkBgs, 3.0)
         pairs['--dsw-alias-label-document-preview'] = { light: prevLight, dark: prevDark }
