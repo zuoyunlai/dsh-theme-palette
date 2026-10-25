@@ -51,7 +51,7 @@ let failed = 0
 
 for (const scheme of SCHEMES) {
   if (!scheme.tinted) continue // 黑白 = 宿主原值，导出它没有意义
-  const t = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', false)
+  const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
   for (const mode of MODES) {
     const tokens = {}
     for (const [k, pair] of Object.entries(t)) {

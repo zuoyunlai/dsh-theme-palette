@@ -29,7 +29,7 @@ El plugin solo apila tokens de color mediante `ctx.theme.overrideTokens`; no reg
 - **4 paletas** — Mono, Arena cálida, Índigo, Musgo — cada una adaptada de forma independiente a claro y oscuro;
 - la escala se **recalcula** completa: reconstrucción OKLCH → croma por rol → **ajuste al gamut sRGB** → contraste resuelto sobre superficies reales;
 - más de 27.000 referencias de token: texto, secundario, terciario, notas, enlaces, barras laterales, tarjetas, burbuja del usuario, botón primario, barras de desplazamiento, interruptores, títulos/negritas de Markdown, bloques de código;
-- ajustable: intensidad del texto (3), profundidad de la barra lateral (3), panel derecho (2), énfasis de Markdown, barras de desplazamiento, color de interruptores;
+- ajustable: intensidad del texto (3), profundidad de la barra lateral (3), énfasis de Markdown, barras de desplazamiento, color de interruptores;
 - **autorreparable**: si el host descarta la capa de override, la paleta se vuelve a aplicar;
 - **promesas de contraste**: el cuerpo tiene la promesa de 12:1 en claro y 10:1 en oscuro (15:1 en alto contraste), el secundario ≥ 6.2 en claro y 8.0 en oscuro, y el terciario y los enlaces ≥ 4.62 en claro y 6.4 en oscuro (los enlaces además pasan una puerta APCA Lc ≥ 60 en oscuro / 75 en HC), medidos sobre las superficies donde el texto realmente cae (el lado oscuro necesita más: un cociente WCAG sobreestima la legibilidad sobre fondo oscuro);
 - las superficies prometidas son 00/60 en claro y 950/875 en oscuro; las oscuras 800 (superficie de módulo) y 850 (sub-superficie) **no** respaldan el texto del cuerpo: el informe las cuenta aparte como «fuera de política» (ni cuentan como aprobado ni como fallo);
@@ -54,7 +54,7 @@ Después **reinicia la interfaz**: un proceso en marcha conserva el módulo anti
 |---|---|
 | Paleta | Mono · Arena cálida · Índigo · Musgo (las miniaturas siguen claro/oscuro) |
 | Intensidad | Suave / Estándar / Fuerte — cuánto sigue el texto a la paleta |
-| Superficies | Barra lateral (Más clara / Igual / Más oscura), panel derecho (Igual que la barra / Seguir el lienzo) |
+| Superficies | Barra lateral (Más clara / Igual / Más oscura). El panel derecho nunca se tiñe: es una capa transparente de altura completa, teñirlo taparía la conversación (ajuste retirado en 1.9.10) |
 | Más opciones | Idioma, énfasis de Markdown, barras de desplazamiento, interruptores |
 
 Cada elección se aplica al instante y se guarda en `localStorage`. Claro/oscuro sigue en el control «Apariencia» del host.
@@ -111,7 +111,7 @@ dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiciI6InNpZGViYX
 
 Este ejemplo real decodifica a:
 
-- paleta: custom · barra lateral: deep · texto: tinted · panel derecho: sidebar
+- paleta: custom · barra lateral: deep · texto: tinted
 - scrollbar: tinted · controles: accent · Markdown: on · alto contraste: off · idioma: zh-CN
 - tres colores: `#f5efe6` (fondo) · `#1d1a17` (texto) · `#3f66a3` (acento)
 

@@ -35,7 +35,7 @@ if (!engine) throw new Error('dev hook missing')
 
 const { buildTokens, SCHEMES } = engine
 const scheme = SCHEMES.find((s) => s.id === PALETTE) || SCHEMES[1]
-const tk = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', false)
+const tk = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
 
 const CODE = [
   ['comment', '// 把背景色解成可读的前景'],

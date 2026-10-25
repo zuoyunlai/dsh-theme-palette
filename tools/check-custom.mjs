@@ -50,7 +50,7 @@ const CUSTOM_KEY = 'dsh-theme-palette.custom.v1'
 const rows = []
 for (const accent of ACCENTS) {
   store.set(CUSTOM_KEY, JSON.stringify({ bg: '#f5efe6', text: '#1d1a17', accent }))
-  const t = buildTokens(custom, 'deep', 'tinted', 'sidebar', 'accent', 'accent', 'on', false)
+  const t = buildTokens(custom, 'deep', 'tinted', 'accent', 'accent', 'on', false)
   const g = (k) => t['--dsw-static-' + k].light
   rows.push({
     accent,

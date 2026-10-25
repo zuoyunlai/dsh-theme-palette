@@ -75,7 +75,6 @@ else {
 if (!layout) { console.log('  ✗ 找不到 ui-layout/lib/client.js'); failed++ }
 else {
   const layoutText = read(layout)
-  check(layoutText.includes('data-rightbar-col'), 'ui-layout 仍有 data-rightbar-col')
   // 1.9.8 的自愈判据（标记 token --dshtp-layer）依赖宿主 presenter 的两个行为：
   //   a) 快照里的每个 token 都写到 body —— 标记 token 才会出现在 body 上；
   //   b) 重写前先摘掉上一批 token —— 覆盖层被撤销时标记才会随之消失。
@@ -87,6 +86,8 @@ else {
     /appliedTokens[\s\S]{0,160}removeProperty\(name\)/.test(layoutText),
     'presenter 重写前先摘掉上一批 token',
   )
+  // 右栏底色 1.9.10 起不再接管（宿主面板是整高透明覆盖层，染色要么看不见、要么盖住主栏），
+  // 所以这里也不再用 data-sidebar-right-panel 做契约 —— 依赖消失，断言一并撤除。
 }
 if (!css) { console.log('  ✗ 找不到前端构建 CSS'); failed++ }
 else {

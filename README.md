@@ -29,7 +29,7 @@ The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does
 - **4 palettes** — Mono, Warm sand, Indigo, Moss — each adapting to light *and* dark independently;
 - the whole ramp is **recomputed**, not swapped: OKLCH rebuild → role-based chroma → **sRGB gamut clamp** → contrast solved on real surfaces;
 - 27,000+ token references covered: body, secondary, tertiary, captions, links, sidebars, cards, user bubble, primary button, scrollbars, switches, Markdown headings/bold, code blocks;
-- adjustable: text tint (3), sidebar depth (3), right panel (2), Markdown emphasis, scrollbars, switch colour;
+- adjustable: text tint (3), sidebar depth (3), Markdown emphasis, scrollbars, switch colour;
 - **custom palette** (pick surface / text / accent — the engine keeps its contrast guarantees), **config export/import** via a `dshs1.` code, **high-contrast** mode, and 4 UI languages;
 - **self-healing**: if the host drops the override layer, the palette is re-applied;
 - **contrast promises**: body text is promised 12:1 in light and 10:1 in dark (15:1 in high contrast), secondary ≥ 6.2 in light / 8.0 in dark, tertiary and links ≥ 4.62 in light / 6.4 in dark (links also clear an APCA Lc ≥ 60 gate in dark / 75 in HC) — measured on the surfaces the text actually lands on (the dark side needs more, because a WCAG ratio overstates readability on a dark background);
@@ -55,7 +55,7 @@ Then **restart the GUI** — a running process keeps the old module. Open it fro
 |---|---|
 | Palette | Mono · Warm sand · Indigo · Moss (thumbnails follow light/dark) |
 | Strength | Quiet / Standard / Strong — how much body text follows the palette |
-| Panel surfaces | Sidebar (Lighter / Same / Deeper), right panel (Match sidebar / Follow canvas) |
+| Panel surfaces | Sidebar (Lighter / Same / Deeper). The right panel is never tinted — it is a full-height transparent overlay, so painting it would cover the conversation (the setting was removed in 1.9.10) |
 | More options | Language, Markdown emphasis, scrollbars, switches/checks |
 
 Every choice applies immediately and is stored in `localStorage`. Light/dark stays under the host’s Appearance control.
@@ -112,7 +112,7 @@ dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiciI6InNpZGViYX
 
 This real example decodes to:
 
-- palette: custom · sidebar: deep · text: tinted · rightbar: sidebar
+- palette: custom · sidebar: deep · text: tinted
 - scrollbar: tinted · controls: accent · Markdown emphasis: on · high contrast: off · language: zh-CN
 - three colours: `#f5efe6` (canvas) · `#1d1a17` (text) · `#3f66a3` (accent)
 

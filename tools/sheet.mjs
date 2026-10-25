@@ -59,7 +59,7 @@ const HOST = {
 const isDarkFallback = (h) => h.card
 
 function palette(scheme, mode) {
-  const t = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent')
+  const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent')
   const pick = (name, fallback) => {
     const entry = t[name]
     return entry ? entry[mode] : fallback

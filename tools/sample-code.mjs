@@ -34,7 +34,7 @@ globalThis.__def.factory(() => ({ createElement: () => null, useState: (v) => [v
 
 const { encodeConfig, decodeConfig } = globalThis.__api
 const state = {
-  palette: 'custom', sidebar: 'deep', text: 'tinted', rightbar: 'sidebar',
+  palette: 'custom', sidebar: 'deep', text: 'tinted',
   scroll: 'tinted', control: 'accent', md: 'on', hc: 'off', lang: 'zh-CN',
   custom: CUSTOM,
 }
@@ -55,4 +55,4 @@ console.log('示例短码（已通过 decodeConfig 自检，三色一致）：')
 console.log('')
 console.log(code)
 console.log('')
-console.log('包含字段：palette / sidebar / text / rightbar / scroll / control / md / hc / lang + x(底色·文字·强调)')
+console.log('包含字段：palette / sidebar / text / scroll / control / md / hc / lang + x(底色·文字·强调)')

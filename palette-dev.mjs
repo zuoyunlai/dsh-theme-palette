@@ -53,7 +53,7 @@ sandbox.__def.factory(() => ({
 if (!engine) throw new Error('生产引擎没有暴露 dev 钩子')
 
 const {
-  buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, MD_MODES,
+  buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, MD_MODES,
   SCROLL_MODES, CONTROL_MODES, contrast, toOklch, flatten,
   devContrastReport, buildContrastReport, CONTRAST_SURFACES, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN,
 } = engine
@@ -225,7 +225,7 @@ console.log(`硬门：${hardFailures} 处未达标（只有 pass===false 算失�
 
  * 承诺面（浅 00/60、深 950/875）必须在**所有**配置下都成立 ——
  * 只报默认组合的话，改一个轴（侧栏档、文字档）就能悄悄把承诺面拖到线下。
- * 这里把全部配置轴跑一遍：配色 × 侧栏 × 文字 × 右栏 × Markdown × 滚动 × 控件 × 高对比。
+ * 这里把全部配置轴跑一遍：配色 × 侧栏 × 文字 × Markdown × 滚动 × 控件 × 高对比。
  */
 
 const COMMITTED = new Set(['00', '60', '950', '875'])
@@ -238,50 +238,48 @@ const sweepFailures = []
 for (const scheme of SCHEMES) {
   for (const sidebar of SIDEBAR_MODES) {
     for (const text of TEXT_MODES) {
-      for (const rightbar of RIGHTBAR_MODES) {
-        for (const md of MD_MODES) {
-          for (const scroll of SCROLL_MODES) {
-            for (const control of CONTROL_MODES) {
-              for (const hc of [false, true]) {
-                sweepCombos++
-                const tokens = buildTokens(
-                  scheme, sidebar.id, text.id, rightbar.id, scroll.id, control.id, md.id, hc,
-                )
-                const report = buildContrastReport(tokens, hc, { mono: !scheme.tinted })
-                for (const row of report.rows) {
-                  for (const cell of row.cells) {
-                    if (cell.unmeasured) continue
-                    if (cell.pass === false) {
-                      sweepHardFail++
-                      if (sweepFailures.length < 20) {
-                        sweepFailures.push({
-                          配色: scheme.label, 侧栏: sidebar.id, 文字: text.id, 高对比: hc,
-                          承载面: cell.surface, 角色: row.role,
-                          实测: cell.measured, 目标: cell.declaredTarget, 豁免: cell.exemptReason || null,
-                        })
-                      }
+      for (const md of MD_MODES) {
+        for (const scroll of SCROLL_MODES) {
+          for (const control of CONTROL_MODES) {
+            for (const hc of [false, true]) {
+              sweepCombos++
+              const tokens = buildTokens(
+                scheme, sidebar.id, text.id, scroll.id, control.id, md.id, hc,
+              )
+              const report = buildContrastReport(tokens, hc, { mono: !scheme.tinted })
+              for (const row of report.rows) {
+                for (const cell of row.cells) {
+                  if (cell.unmeasured) continue
+                  if (cell.pass === false) {
+                    sweepHardFail++
+                    if (sweepFailures.length < 20) {
+                      sweepFailures.push({
+                        配色: scheme.label, 侧栏: sidebar.id, 文字: text.id, 高对比: hc,
+                        承载面: cell.surface, 角色: row.role,
+                        实测: cell.measured, 目标: cell.declaredTarget, 豁免: cell.exemptReason || null,
+                      })
                     }
-                    if (!cell.meetsFloor) {
-                      const key = `${scheme.label}|${row.role}|${cell.surface}|${cell.mode}|${cell.exemptReason || '承诺面'}`
-                      const prev = sweepFloor.get(key)
-                      if (!prev) sweepFloor.set(key, { n: 1, min: cell.measured })
-                      else {
-                        prev.n++
-                        if (cell.measured < prev.min) prev.min = cell.measured
-                      }
+                  }
+                  if (!cell.meetsFloor) {
+                    const key = `${scheme.label}|${row.role}|${cell.surface}|${cell.mode}|${cell.exemptReason || '承诺面'}`
+                    const prev = sweepFloor.get(key)
+                    if (!prev) sweepFloor.set(key, { n: 1, min: cell.measured })
+                    else {
+                      prev.n++
+                      if (cell.measured < prev.min) prev.min = cell.measured
                     }
-                    if (row.role === 'main' && COMMITTED.has(cell.surface)) {
-                      const key = `${scheme.label}|${cell.surface}|${cell.mode}|${hc ? 'HC' : '标准'}`
-                      const prev = sweepMin.get(key)
-                      if (!prev || cell.measured < prev.min) {
-                        sweepMin.set(key, {
-                          min: cell.measured,
-                          target: cell.declaredTarget,
-                          ceiling: cell.physicalCeiling,
-                          feasible: cell.feasibleTarget,
-                          limited: cell.limitedByPhysics,
-                        })
-                      }
+                  }
+                  if (row.role === 'main' && COMMITTED.has(cell.surface)) {
+                    const key = `${scheme.label}|${cell.surface}|${cell.mode}|${hc ? 'HC' : '标准'}`
+                    const prev = sweepMin.get(key)
+                    if (!prev || cell.measured < prev.min) {
+                      sweepMin.set(key, {
+                        min: cell.measured,
+                        target: cell.declaredTarget,
+                        ceiling: cell.physicalCeiling,
+                        feasible: cell.feasibleTarget,
+                        limited: cell.limitedByPhysics,
+                      })
                     }
                   }
                 }
@@ -336,7 +334,7 @@ const get = (tokens, mode, key) => (key === 'link'
 
 for (const scheme of SCHEMES) {
   if (!scheme.tinted) continue
-  const tokens = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', HC)
+  const tokens = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', HC)
   console.log(`\n  ${scheme.label} · 品牌基准色 / 链接`)
   {
     const anchor = tokens['--dsw-static-deepseek-500'].light

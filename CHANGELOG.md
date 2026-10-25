@@ -4,6 +4,16 @@
 
 ## 版本一览
 
+### 1.9.10
+撤除「右侧栏底色」这一档，并把它的技术债一起清干净（用户拍板）。**这不是修 bug，是承认做不到**：宿主右栏没有可染的落点，留着这个开关只会一直看起来像坏的。
+
+- **两条路都走不通**。只染网格列（`data-rightbar-col`，0.9.0 起的做法）：宿主真正的右栏面板是 `position:absolute; right:0; top:0; bottom:0` 的**整高透明覆盖层**，它盖在列上、自己不上底色（透明才露出主栏画布）—— 染列几乎看不出差别，这就是用户说的「设了像没设」。连面板本体一起染（本版第一版试过）：那个覆盖层的覆盖范围大于右栏列宽，一上色**直接盖住主栏一大块**，右栏开关按钮也被压在它下面（用户实测「按钮根本看不到，主栏被遮盖了一半」）。给那条 1px 分隔线上色也不成立 —— 用户明确不要对右栏做任何设置，该尝试已回退。
+- **整条链路一并删除，不留半截**：设置页那一行、`TEXT` 里 4 个语种的文案（`rightbarTitle/rightbarSub/rightbarSame/rightbar`）、`rightbarMode` 状态与 `getRightbarMode` / `setRightbarMode` / `subscribeRightbar` / `emitRightbar` / `rightbarListeners`、`readRightbarStored` / `writeRightbarStored` 与那个 `localStorage` 键、分享码的 `r` 字段（encode + decode）、`DEFAULT_RIGHTBAR`、`RIGHTBAR_MODES` 表、四条右栏染色规则、`--dshtp-rightbar-fill` / `--dshtp-canvas-fill` / `--dshtp-rightbar-divider` 三个 token、`buildTokens` 的第九个参数、`unknown xxx id` 告警里的 rightbar 项、palette-dev 的右栏循环（扫描从 2160 组降到 **1080 组**）、dev 钩子导出的 `RIGHTBAR_MODES` / `setRightbarMode`、`tools/check-host-contract.mjs` 里针对 `data-rightbar-col` / `data-sidebar-right-panel` 的契约断言。改名留下的壳：`RIGHTBAR_CSS` → `MARKDOWN_CSS`（这张表从 1.9.10 起只装 Markdown 与代码块样式）。
+- **唯一保留的是兼容读取**：旧分享码里的 `r` 字段、旧 `localStorage` 里那个键，读到只是忽略、不报错（`decodeConfig` 不认识它就跳过）。`tools/check-audit.mjs` 第 18 组改成反向断言：样式表不碰右栏任何元素、不产出右栏 token、**旧码仍可解析且不复活该字段**、新码不再带 `r`。
+- **高对比边框不再比浅色侧还硬**（同版本内的调整）。深色有四层面（`950` 侧栏 / `875` / `850` / `800` 模块面），对比度在暗面上单调 —— 面越暗读数越高，所以 1.9.9 按最亮的 `800` 定标后，同一根线在 `950` 上是 **5.3 / 6.1 / 7.1:1**，用户实测反馈「一开高对比边框全变了、扎眼」。改为对中间两层 `875` / `850` 定标、目标抬到 **3.2 / 3.6 / 4.1**：`950` 落到 **3.81 / 4.27 / 4.88**，`800` 从 3.0 降到 2.2–2.8（仍看得见分界，但不再满足 1.4.11 的 3:1 —— 取舍是「用户盯着看的是侧栏与画布，不是模块面」）。浅色侧不动。`tools/check-audit.mjs` 新增第 19 组钉住这条（浅色对 00/60、深色对 875/850、`950 ≤ 5.0`、`800 ≥ 2.0`，以及「标准档必须是墨色 alpha、`l1` 两档都不变」）。
+- 「左侧栏底色」三档不受影响：它有自己的宿主 token（`--dsw-specific-sidebar-fill`），一直可靠。
+- 复核：`npm run check` 全绿（结构 / 契约 / 自愈 / 审计 19 组）；`palette-dev.mjs` 两档均 exit 0，1080 组配置 × 承诺面「低于 AA 4.5 = 0、硬失败 = 0」。
+
 ### 1.9.9
 按一次独立审计（`_audit-theme-palette-20261025/`，针对 1.9.8，11 条问题）逐条核实后修订。**核实结论是：8 条成立并已修；3.5 成立但属于权衡（只补控件边界档，不把全部边框提到 3:1）；1 条不成立（报告本身的口径错，已更正）。另有两项在三套预置的「对齐契约」上做了让步（浅画布分离、链接 Lc 门），由用户拍板后修改。**
 

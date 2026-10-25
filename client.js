@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.9'
+    const PLUGIN_VERSION = '1.9.10'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -488,19 +488,7 @@ window.__ModuleLoader__.load({
     const DEFAULT_TEXT = 'tinted'
     const TEXT_KEY = 'dsh-theme-palette.text.v1'
 
-    /**
-     * 右侧栏底色。宿主的右栏（ui-layout 的 RightbarColumn）**没有自己的背景**，
-     * 露出的是 frame 的 --dsw-alias-bg-base（也就是会话区画布色），所以看着和中间一样。
-     * 元素上有一个稳定钩子 `data-rightbar-col`，用一条 CSS 规则就能单独上色，
-     * 具体颜色由 token 层给的 --dshtp-rightbar-fill 决定（默认直接引用左栏 token）。
-     */
-    const RIGHTBAR_MODES = [
-      { id: 'sidebar', label: '同左栏' },
-      { id: 'canvas', label: '跟随画布' },
-    ]
-    const DEFAULT_RIGHTBAR = 'sidebar'
-    const RIGHTBAR_KEY = 'dsh-theme-palette.rightbar.v1'
-    const RIGHTBAR_STYLE_ID = 'dsh-theme-palette/rightbar.css'
+    const MARKDOWN_STYLE_ID = 'dsh-theme-palette/markdown.css'
 
     /**
      * Markdown 的标题 / 加粗可否用比正文更「有色」的颜色。
@@ -555,7 +543,7 @@ window.__ModuleLoader__.load({
     const warnedModeIds = {}
     function warnUnknownModes(ids) {
       const tables = [
-        ['sidebarMode', SIDEBAR_MODES], ['textMode', TEXT_MODES], ['rightbarMode', RIGHTBAR_MODES],
+        ['sidebarMode', SIDEBAR_MODES], ['textMode', TEXT_MODES],
         ['scrollMode', SCROLL_MODES], ['controlMode', CONTROL_MODES], ['mdMode', MD_MODES],
       ]
       for (const [field, table] of tables) {
@@ -1127,11 +1115,17 @@ window.__ModuleLoader__.load({
        * HC 的边框要的是**定量**：3.0 / 3.4 / 4.0。之前用 solveForeground 求解，
        * 从墨色起步时它一步都不用挪就「已达标」→ 直接返回墨色，实测 16.9:1 ——
        * 发丝线变成黑框，比不改还难看。混色求解才命中目标本身。
-       * 承载面取该模式**最亮的那一层**（浅：00/60；深：800/850），因为边框是深于/亮于
-       * 背景的那一侧，最亮的承载面对它才是最难的一关。
+       * 承载面取该模式**最亮的那一层**（浅：00/60），因为边框是深于背景的那一侧，
+       * 最亮的承载面对它才是最难的一关。
+       *
+       * 深色侧例外（1.9.10 内调整）：深色有四层面（950 侧栏 / 875 / 850 / 800 模块面），
+       * 一根线不可能对四层等强。取最亮的 800 定标时，同一根线在 950 上读 5.3–7.1:1，
+       * 比浅色侧还硬（用户实测「边框全变了、扎眼」）；只对 950 定标又会让 800 掉到 1.9。
+       * 所以深色取**中间两层 875/850** 定标，并把目标抬一档（3.2 / 3.6 / 4.1）：
+       * 950 落 3.5–4.6（稳过 3:1 但不再比浅色硬），800 落 2.3–3.0（仍看得见分界）。
        */
       const solidBorder = (mode, target) => mixToContrast(
-        mode === 'light' ? [r.bluish['00'], r.bluish['60']] : [r.bluish['800'], r.bluish['850']],
+        mode === 'light' ? [r.bluish['00'], r.bluish['60']] : [r.bluish['875'], r.bluish['850']],
         inkOf(mode),
         target,
       )
@@ -1144,10 +1138,10 @@ window.__ModuleLoader__.load({
         '--dsw-alias-link': { light: lightLink(r, hc), dark: r.deepseek['400'] },
 
         '--dsw-alias-border-l1': { light: alphaBorder('light', 0.04), dark: alphaBorder('dark', 0.06) },
-        '--dsw-alias-border-l2': { light: border('light', 0.10, 3.0), dark: border('dark', 0.12, 3.0) },
+        '--dsw-alias-border-l2': { light: border('light', 0.10, 3.0), dark: border('dark', 0.12, 3.2) },
         '--dsw-alias-border-l2-darkmode-thin': { light: alphaBorder('light', 0.10), dark: alphaBorder('dark', 0.06) },
-        '--dsw-alias-border-l3': { light: border('light', 0.12, 3.4), dark: border('dark', 0.16, 3.4) },
-        '--dsw-alias-border-l4': { light: border('light', 0.16, 4.0), dark: border('dark', 0.20, 4.0) },
+        '--dsw-alias-border-l3': { light: border('light', 0.12, 3.4), dark: border('dark', 0.16, 3.6) },
+        '--dsw-alias-border-l4': { light: border('light', 0.16, 4.0), dark: border('dark', 0.20, 4.1) },
         /* 组件边界（勾选框 / 输入框 / 开关 / 焦点环）：宿主只有 l1..l4 四级，没有
            「装饰性分隔线」与「组件边界」的区分，而 SC 1.4.11 只管后者。
            这里额外给一档 3:1 的实色，本插件设置页自己的控件用它（审计 3.5）；
@@ -1410,27 +1404,27 @@ window.__ModuleLoader__.load({
      */
     const tokenCache = new Map()
     const TOKEN_CACHE_LIMIT = 24
-    function buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode) {
+    function buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hcMode) {
       const customKey = scheme && scheme.custom === true
         ? (() => { const c = readCustom(); return c ? c.bg + c.text + c.accent : '' })()
         : ''
       const key = [
-        scheme && scheme.id, customKey, sidebarMode, textMode, rightbarMode,
+        scheme && scheme.id, customKey, sidebarMode, textMode,
         scrollMode, controlMode, mdMode, hcMode === true ? 1 : 0,
       ].join('|')
       const hit = tokenCache.get(key)
       if (hit) return hit
-      const built = buildTokensRaw(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode)
+      const built = buildTokensRaw(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hcMode)
       tokenCache.set(key, built)
       while (tokenCache.size > TOKEN_CACHE_LIMIT) tokenCache.delete(tokenCache.keys().next().value)
       return built
     }
 
-    function buildTokensRaw(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode) {
+    function buildTokensRaw(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hcMode) {
       // hc 同时接受布尔与 HC_MODES 的 id（'on' / 'off'）：两条调用路径历史上混用过
       const hc = hcMode === true || hcMode === 'on'
       // 审计 3.9：入口先校验模式 id（拼错就静默退回默认是最难查的一类问题）
-      warnUnknownModes({ sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode })
+      warnUnknownModes({ sidebarMode, textMode, scrollMode, controlMode, mdMode })
       // 自定义配色必须先解引用：ramps 内部会派生参数，但 accent / scroll / control
       // 这些直接读 params.accentHue、params.hue 的地方若拿到占位值，就会"不跟取色"
       const params = scheme && scheme.custom === true ? customScheme(readCustom()) : scheme
@@ -1464,7 +1458,9 @@ window.__ModuleLoader__.load({
       }
       const sidebar = sidebarTokens(ramps, sidebarMode, params.tinted, params)
       for (const [name, pair] of Object.entries(sidebar)) pairs[name] = pair
-      // 右栏底色只给一个间接层：同左栏时直接引用左栏 token，跟随画布时引用画布 token。
+      // 右栏底色：**给具体色值，不给 var() 引用**（1.9.10）。面板里要把 --dsw-alias-bg-base
+      // 重映射成这个 token，若此处再写 var(--dsw-alias-bg-base) 就是自定义属性自引用环，
+      // 值在计算时退化为 unset，面板内所有 bg-base 表面一起失效 —— 正是「设了像没设」的形态。
       // 主按钮：浅色下宿主把 button-primary-fill 指到 state-error-primary（红），
       // 于是页面上有「红主按钮 + 强调色」两个主色。改成强调色，并压暗到按钮文字 ≥4.5。
       // 黑白配色在上面已经单独设过，这里跳过（它要按「更浅」档的画布兜底）。
@@ -1488,10 +1484,9 @@ window.__ModuleLoader__.load({
         light: mixHex(accentHex, ramps.bluish['00'], 0.10),
         dark: mixHex(accentDark, ramps.bluish['950'], 0.16),
       }
-      const rightbarFill = rightbarMode === 'canvas'
-        ? 'var(--dsw-alias-bg-base)'
-        : 'var(--dsw-specific-sidebar-fill)'
-      pairs['--dshtp-rightbar-fill'] = { light: rightbarFill, dark: rightbarFill }
+      // 右栏不再染色（1.9.10）：宿主那块「右栏面板」是 position:absolute 的整高覆盖层，
+      // 本身没有底色 —— 它透明时才露出主栏画布；一旦给它上色，就会盖住主栏一大块，
+      // 连切换按钮都被压在下面（用户实测）。网格列又完全被它盖住，所以这一档没有
       // Markdown 强调色：标题分三档（h1/h2 → h3/h4 → h5/h6），加粗比标题再弱一档。
       // 分档而不是给六级标题六种色：长文靠层级扫读，不靠色相数量。
       if (params.tinted) {
@@ -1769,17 +1764,14 @@ return pairs
       }
     }
 
-    /* ================= 右栏染色（head 里一条 CSS） ================= */
-    /**
-     * 用与官方包相同的 `data-plugin` / `data-plugin-css` 标记注入一条样式表，
-     * 命中 ui-layout 的 `data-rightbar-col`（稳定语义钩子，不是哈希类名）。
-     * 全屏右栏时退回画布色 —— 那时右栏就是整块内容区，染成侧栏色会像只剩一条侧栏。
-     */
+    /* ================= Markdown 样式（注入宿主 head） ================= */
     // 说明：本插件不额外处理 forced-colors —— 我们改的 color/background-color/border-color
     // 都在 UA 强制色列表内，系统高对比模式下会被自动接管，无需（也不应）用 forced-color-adjust 对抗。
-    const RIGHTBAR_CSS = [
-      '[data-rightbar-col]{background:var(--dshtp-rightbar-fill,var(--dsw-alias-bg-base))}',
-      '[data-rightbar-fullscreen] [data-rightbar-col]{background:var(--dsw-alias-bg-base)}',
+    //
+    // 这张表 0.9.0–1.9.9 叫 RIGHTBAR_CSS（那时它还装着右栏染色规则）。右栏在 1.9.10 整体撤除
+    // （宿主面板是整高透明覆盖层：染列看不见、染面板盖住主栏 —— 见 docs/DESIGN.md），
+    // 表里只剩 Markdown，名字跟着改回它实际的内容。
+    const MARKDOWN_CSS = [
       // Markdown 标题/加粗：容器类是 CSS Modules 的 `_markdown_<hash>_<n>`，
       // 用「类名里含 _markdown_」做钩子（局部名稳定，比整串哈希耐版本）。
       // 三级层次：h1/h2 最重、h3/h4 次之、h5/h6 最轻（不是六级六色）。
@@ -1909,14 +1901,14 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
 @media (prefers-reduced-motion:reduce){.dsh-tp-card,.dsh-tp-seg button,.dsh-tp-more,.dsh-tp-check,.dsh-tp-mini{transition:none}}
 `
 
-    function installRightbarStyle() {
+    function installMarkdownStyle() {
       try {
         if (typeof document === 'undefined' || !document.head) return () => {}
-        if (document.querySelector('style[data-plugin-css="' + RIGHTBAR_STYLE_ID + '"]')) return () => {}
+        if (document.querySelector('style[data-plugin-css="' + MARKDOWN_STYLE_ID + '"]')) return () => {}
         const tag = document.createElement('style')
         tag.dataset.plugin = 'dsh-theme-palette'
-        tag.dataset.pluginCss = RIGHTBAR_STYLE_ID
-        tag.textContent = RIGHTBAR_CSS
+        tag.dataset.pluginCss = MARKDOWN_STYLE_ID
+        tag.textContent = MARKDOWN_CSS
         document.head.appendChild(tag)
         return () => { tag.remove() }
       } catch (err) {
@@ -2051,17 +2043,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       try { localStorage.setItem(TEXT_KEY, id) } catch (err) { /* 同理 */ }
     }
 
-    function readRightbarStored() {
-      try {
-        const raw = localStorage.getItem(RIGHTBAR_KEY)
-        if (raw && RIGHTBAR_MODES.some((m) => m.id === raw)) return raw
-      } catch (err) { /* 退回默认 */ }
-      return DEFAULT_RIGHTBAR
-    }
 
-    function writeRightbarStored(id) {
-      try { localStorage.setItem(RIGHTBAR_KEY, id) } catch (err) { /* 同理 */ }
-    }
 
     function readScrollStored() {
       try {
@@ -2131,7 +2113,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     function encodeConfig(state) {
       const custom = state.custom || readCustom()
       const raw = {
-        v: 1, p: state.palette, s: state.sidebar, t: state.text, r: state.rightbar,
+        v: 1, p: state.palette, s: state.sidebar, t: state.text,
         c: state.scroll, k: state.control, m: state.md, h: state.hc, l: state.lang,
         x: { bg: custom.bg, text: custom.text, accent: custom.accent },
       }
@@ -2156,7 +2138,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           palette: SCHEMES.some((sc) => sc.id === raw.p) ? raw.p : null,
           sidebar: hasId(SIDEBAR_MODES, raw.s) ? raw.s : null,
           text: hasId(TEXT_MODES, raw.t) ? raw.t : null,
-          rightbar: hasId(RIGHTBAR_MODES, raw.r) ? raw.r : null,
           scroll: hasId(SCROLL_MODES, raw.c) ? raw.c : null,
           control: hasId(CONTROL_MODES, raw.k) ? raw.k : null,
           md: hasId(MD_MODES, raw.m) ? raw.m : null,
@@ -2225,11 +2206,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         control: '开关 / 勾选',
         scroll: '滚动条',
         scrollHintMono: '当前是黑白配色，没有色相可跟随，滚动条保持中性灰。',
-        rightbar: '右侧栏底色',
         advanced: '更多选项',
         textSub: '正文与强调的着色程度',
         sidebarSub: '相对会话区的层次',
-        rightbarSub: '面板底色',
         mdSub: '标题与加粗是否着色',
         scrollSub: '滚动条与滑轨的色相',
         controlSub: '开关与复选框是否跟强调色',
@@ -2291,11 +2270,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         control: '開關 / 勾選',
         scroll: '捲軸',
         scrollHintMono: '目前是黑白配色，沒有色相可跟隨，捲軸保持中性灰。',
-        rightbar: '右側欄底色',
         advanced: '更多選項',
         textSub: '本文與強調的著色程度',
         sidebarSub: '相對會話區的層次',
-        rightbarSub: '面板底色',
         mdSub: '標題與粗體是否著色',
         scrollSub: '捲軸與軌道的色相',
         controlSub: '開關與核取方塊是否跟強調色',
@@ -2357,11 +2334,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         control: 'Switches / checks',
         scroll: 'Scrollbars',
         scrollHintMono: 'Monochrome has no hue to follow; scrollbars stay neutral.',
-        rightbar: 'Right panel surface',
         advanced: 'More options',
         textSub: 'How strongly text follows the palette',
         sidebarSub: 'Layer relative to the conversation',
-        rightbarSub: 'Panel surface',
         mdSub: 'Tint headings and bold',
         scrollSub: 'Hue of the scrollbar',
         controlSub: 'Switches and checkboxes',
@@ -2423,11 +2398,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         control: 'スイッチ / チェック',
         scroll: 'スクロールバー',
         scrollHintMono: 'モノクロには色相がないため、スクロールバーはグレーのままです。',
-        rightbar: '右パネルの背景',
         advanced: 'その他のオプション',
         textSub: '本文と強調の色づき具合',
         sidebarSub: '会話エリアとの段差',
-        rightbarSub: 'パネルの背景',
         mdSub: '見出しと太字を色づけする',
         scrollSub: 'スクロールバーの色相',
         controlSub: 'スイッチとチェックの色',
@@ -2491,7 +2464,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         desc: { mono: '无色调 · 默认', warm: '米白 + 棕调', indigo: '冷白 + 蓝调', moss: '浅灰绿 + 绿调', custom: '三色派生 · 你的配色' },
         text: { neutral: '静', tinted: '标准', deep: '浓' },
         sidebar: { light: '更浅', match: '同色', deep: '更深' },
-        rightbar: { sidebar: '同左栏', canvas: '跟随画布' },
         scroll: { neutral: '中性', tinted: '跟随', accent: '强调' },
         control: { accent: '主题色', mono: '黑白' },
         md: { on: '着色', off: '同正文' },
@@ -2504,7 +2476,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         desc: { mono: '無色調 · 預設', warm: '米白 + 棕調', indigo: '冷白 + 藍調', moss: '淺灰綠 + 綠調', custom: '三色派生 · 你的配色' },
         text: { neutral: '靜', tinted: '標準', deep: '濃' },
         sidebar: { light: '更淺', match: '同色', deep: '更深' },
-        rightbar: { sidebar: '同左欄', canvas: '跟隨畫布' },
         scroll: { neutral: '中性', tinted: '跟隨', accent: '強調' },
         control: { accent: '主題色', mono: '黑白' },
         md: { on: '著色', off: '同本文' },
@@ -2517,7 +2488,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         desc: { mono: 'Neutral · default', warm: 'Cream + brown', indigo: 'Cool white + blue', moss: 'Grey-green', custom: 'Derived from your three colours' },
         text: { neutral: 'Quiet', tinted: 'Standard', deep: 'Strong' },
         sidebar: { light: 'Lighter', match: 'Same', deep: 'Deeper' },
-        rightbar: { sidebar: 'Match sidebar', canvas: 'Follow canvas' },
         scroll: { neutral: 'Neutral', tinted: 'Tint', accent: 'Accent' },
         control: { accent: 'Accent', mono: 'Mono' },
         md: { on: 'Tinted', off: 'Body colour' },
@@ -2530,7 +2500,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         desc: { mono: '色なし · 既定', warm: 'クリーム + ブラウン', indigo: 'クールホワイト + ブルー', moss: 'グレーグリーン', custom: '3 色から派生' },
         text: { neutral: '控えめ', tinted: '標準', deep: '強め' },
         sidebar: { light: '明るく', match: '同じ', deep: '暗く' },
-        rightbar: { sidebar: 'サイドバー', canvas: 'キャンバス' },
         scroll: { neutral: '無彩', tinted: '追従', accent: '強調' },
         control: { accent: 'アクセント', mono: 'モノクロ' },
         md: { on: '色づけ', off: '本文と同じ' },
@@ -2550,7 +2519,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       const current = React.useSyncExternalStore(props.subscribe, props.getCurrent)
       const sidebarMode = React.useSyncExternalStore(props.subscribeSidebar, props.getSidebarMode)
       const textMode = React.useSyncExternalStore(props.subscribeText, props.getTextMode)
-      const rightbarMode = React.useSyncExternalStore(props.subscribeRightbar, props.getRightbarMode)
       const scrollMode = React.useSyncExternalStore(props.subscribeScroll, props.getScrollMode)
       const controlMode = React.useSyncExternalStore(props.subscribeControl, props.getControlMode)
       const mdMode = React.useSyncExternalStore(props.subscribeMd, props.getMdMode)
@@ -2890,7 +2858,8 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         row('text', txt.text, txt.textSub, seg(TEXT_MODES, textMode, props.setTextMode, lb.text, rowId('text'))),
         row('hc', txt.hc, txt.hcSub, seg(HC_MODES, hcMode, props.setHcMode, lb.hc, rowId('hc'))),
         row('sidebar', txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode, lb.sidebar, rowId('sidebar'))),
-        row('rightbar', txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode, lb.rightbar, rowId('rightbar'))),
+        // 右栏底色这一档 1.9.10 撤除：宿主右栏面板是整高透明覆盖层，染色要么看不见、要么盖住主栏
+        // 并把切换按钮压在下面（用户实测）。详见 docs/DESIGN.md「右侧栏为什么不再染色」。
         health && !health.ok && h('p', { className: 'dsh-tp-status is-bad' }, txt.bad),
         health && health.applied === false && h(
           'p',
@@ -3052,7 +3021,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         scheme,
         opt.sidebar || DEFAULT_SIDEBAR,
         opt.text || DEFAULT_TEXT,
-        opt.rightbar || DEFAULT_RIGHTBAR,
         opt.scroll || DEFAULT_SCROLL,
         opt.control || DEFAULT_CONTROL,
         opt.md || DEFAULT_MD,
@@ -3063,7 +3031,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
 
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, LAYER_MARK, settingsCss: SETTINGS_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
     }
 
     return {
@@ -3080,12 +3048,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const hadConfig = hasStoredConfig()
         let sidebarMode = readSidebarStored()
         let textMode = readTextStored()
-        let rightbarMode = readRightbarStored()
         let scrollMode = readScrollStored()
         let controlMode = readControlStored()
         let mdMode = readMdStored()
         let hcMode = readHcStored()
-        const getConfigCode = () => encodeConfig({ palette: current, sidebar: sidebarMode, text: textMode, rightbar: rightbarMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref })
+        const getConfigCode = () => encodeConfig({ palette: current, sidebar: sidebarMode, text: textMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref })
         let langPref = readLangPref()
         const localeListeners = new Set()
         const currentLocale = () => pickLocale(langPref)
@@ -3093,7 +3060,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const listeners = new Set()
         const sidebarListeners = new Set()
         const textListeners = new Set()
-        const rightbarListeners = new Set()
         const scrollListeners = new Set()
         const controlListeners = new Set()
         const mdListeners = new Set()
@@ -3103,7 +3069,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const getCurrent = () => current
         const getSidebarMode = () => sidebarMode
         const getTextMode = () => textMode
-        const getRightbarMode = () => rightbarMode
         const getScrollMode = () => scrollMode
         const getControlMode = () => controlMode
         const getMdMode = () => mdMode
@@ -3120,10 +3085,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           textListeners.add(fn)
           return () => { textListeners.delete(fn) }
         }
-        const subscribeRightbar = (fn) => {
-          rightbarListeners.add(fn)
-          return () => { rightbarListeners.delete(fn) }
-        }
         const subscribeScroll = (fn) => {
           scrollListeners.add(fn)
           return () => { scrollListeners.delete(fn) }
@@ -3139,7 +3100,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const emit = () => { for (const fn of listeners) { try { fn() } catch (err) { /* 单个订阅者出错不影响全局 */ } } }
         const emitSidebar = () => { for (const fn of sidebarListeners) { try { fn() } catch (err) { /* 同理 */ } } }
         const emitText = () => { for (const fn of textListeners) { try { fn() } catch (err) { /* 同理 */ } } }
-        const emitRightbar = () => { for (const fn of rightbarListeners) { try { fn() } catch (err) { /* 同理 */ } } }
         const emitScroll = () => { for (const fn of scrollListeners) { try { fn() } catch (err) { /* 同理 */ } } }
         const emitControl = () => { for (const fn of controlListeners) { try { fn() } catch (err) { /* 同理 */ } } }
         const emitMd = () => { for (const fn of mdListeners) { try { fn() } catch (err) { /* 同理 */ } } }
@@ -3183,7 +3143,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
 
         const applyAll = (reason) => {
           const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
-          const tokens = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode === 'on')
+          const tokens = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hcMode === 'on')
           let next = () => {}
           if (tokens !== undefined) {
             try {
@@ -3332,13 +3292,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           applyAll()
           emitText()
         }
-        const setRightbarMode = (id) => {
-          if (!RIGHTBAR_MODES.some((m) => m.id === id)) return
-          rightbarMode = id
-          writeRightbarStored(id)
-          applyAll()
-          emitRightbar()
-        }
         const setScrollMode = (id) => {
           if (!SCROLL_MODES.some((m) => m.id === id)) return
           scrollMode = id
@@ -3367,7 +3320,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           current = cfg.palette
           sidebarMode = cfg.sidebar
           textMode = cfg.text
-          rightbarMode = cfg.rightbar
           scrollMode = cfg.scroll
           controlMode = cfg.control
           mdMode = cfg.md
@@ -3377,14 +3329,13 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           writeStored(current)
           writeSidebarStored(sidebarMode)
           writeTextStored(textMode)
-          writeRightbarStored(rightbarMode)
           writeScrollStored(scrollMode)
           writeControlStored(controlMode)
           writeMdStored(mdMode)
           writeHcStored(hcMode)
           writeLangPref(langPref)
           applyAll('import')
-          emit(); emitSidebar(); emitText(); emitRightbar(); emitScroll(); emitControl(); emitMd(); emitHc(); emitLocale()
+          emit(); emitSidebar(); emitText(); emitScroll(); emitControl(); emitMd(); emitHc(); emitLocale()
           if (cfg.custom) emitCustom()
           return { ok: true, hasCustom: !!cfg.custom }
         }
@@ -3397,7 +3348,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           const colors = readCustom()
           const scheme = customScheme(colors)
           const hc = hcMode === 'on'
-          const t = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hc)
+          const t = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hc)
           const link = t['--dsw-alias-link'].light
           const base = t['--dsw-static-deepseek-500'].light
           const surfaces = ['150', '60', '00'].map((k) => t['--dsw-static-neutral-bluish-' + k].light)
@@ -3417,7 +3368,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const getDiagnostics = () => ({
           plugin: 'dsh-theme-palette',
           version: PLUGIN_VERSION,
-          settings: { palette: current, sidebar: sidebarMode, text: textMode, rightbar: rightbarMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref },
+          settings: { palette: current, sidebar: sidebarMode, text: textMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref },
           report: getContrastReport(),
         })
         const previewConfigCode = (code) => {
@@ -3433,7 +3384,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const getContrastReport = () => {
           const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
           const hc = hcMode === 'on'
-          const t = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hc)
+          const t = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hc)
           return buildContrastReport(t, hc, { mono: !scheme.tinted })
         }
         /**
@@ -3441,7 +3392,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
          * 不存在"README 里的示例码过期"这类手写漂移。三色刻意非默认组合，便于验证三色真的生效。
          */
         const getSampleCode = () => encodeConfig({
-          palette: 'custom', sidebar: 'deep', text: 'tinted', rightbar: 'sidebar',
+          palette: 'custom', sidebar: 'deep', text: 'tinted',
           scroll: 'tinted', control: 'accent', md: 'on', hc: 'off', lang: langPref,
           custom: { bg: '#f5efe6', text: '#1d1a17', accent: '#3f66a3' },
         })
@@ -3496,7 +3447,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
               setPalette,
               setSidebarMode,
               setTextMode,
-              setRightbarMode,
               setScrollMode,
               setControlMode,
               getPreference: () => theme.getTheme().preference,
@@ -3538,7 +3488,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
 
         ctx.effect(() => {
           applyAll('boot')
-          const removeStyle = installRightbarStyle()
+          const removeStyle = installMarkdownStyle()
           const removeSettings = installSettingsStyle()
           return () => {
             disposeLayer()
@@ -3574,9 +3524,6 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
                 getTextMode,
                 subscribeText,
                 setTextMode,
-                getRightbarMode,
-                subscribeRightbar,
-                setRightbarMode,
                 getScrollMode,
                 subscribeScroll,
                 setScrollMode,

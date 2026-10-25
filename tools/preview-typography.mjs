@@ -31,7 +31,7 @@ const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt
 const ids = ['warm', 'indigo', 'moss']
 
 const panel = (scheme, mode) => {
-  const t = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', false)
+  const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
   const g = (k) => t['--dsw-static-neutral-bluish-' + k][mode]
   const canvas = mode === 'light' ? g('00') : g('950')
   const body = mode === 'light' ? g('1000') : g('50')

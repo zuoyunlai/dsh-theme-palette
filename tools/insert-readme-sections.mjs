@@ -53,7 +53,7 @@ const bodies = {
       'Every setting — including the three custom colours — travels in one short code. Paste it into the import box and press Preview to see exactly what it will change before applying:',
       'This real example decodes to:',
       [
-        'palette: custom · sidebar: deep · text: tinted · rightbar: sidebar',
+        'palette: custom · sidebar: deep · text: tinted',
         'scrollbar: tinted · controls: accent · Markdown emphasis: on · high contrast: off · language: zh-CN',
         'three colours: `#f5efe6` (canvas) · `#1d1a17` (text) · `#3f66a3` (accent)',
       ],

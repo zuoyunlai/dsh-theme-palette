@@ -108,7 +108,7 @@ const scheme = engine.SCHEMES.find((s) => s.id === PALETTE) || engine.SCHEMES.fi
 
 /** 一个模式下设置页会用到的 token → CSS 变量 */
 function vars(mode) {
-  const t = buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on')
+  const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on')
   const pick = (name, fallback) => (t[name] ? t[name][mode] : fallback)
   const stat = (step, fallback) => pick('--dsw-static-neutral-bluish-' + step, fallback)
   const h = mode === 'dark'
@@ -140,12 +140,11 @@ const props = {
   subscribe: () => () => {}, setPalette: () => {},
   getSidebarMode: () => 'deep', subscribeSidebar: () => () => {}, setSidebarMode: () => {},
   getTextMode: () => 'tinted', subscribeText: () => () => {}, setTextMode: () => {},
-  getRightbarMode: () => 'sidebar', subscribeRightbar: () => () => {}, setRightbarMode: () => {},
   getScrollMode: () => 'tinted', subscribeScroll: () => () => {}, setScrollMode: () => {},
   getControlMode: () => 'accent', subscribeControl: () => () => {}, setControlMode: () => {},
   getMdMode: () => 'on', subscribeMd: () => () => {}, setMdMode: () => {},
   getHcMode: () => (HC ? 'on' : 'off'), subscribeHc: () => () => {}, setHcMode: () => {},
-  getConfigCode: () => 'dshs1.eyJ2IjoxLCJwIjoid2FybSIsInMiOiJkZWVwIiwidCI6InRpbnRlZCIsInIiOiJzaWRlYmFyIiwiYyI6InRpbnRlZCIsImsiOiJhY2NlbnQiLCJtIjoib24iLCJoIjoib2ZmIiwibCI6ImF1dG8ifQ',
+  getConfigCode: () => 'dshs1.eyJ2IjoxLCJwIjoid2FybSIsInMiOiJkZWVwIiwidCI6InRpbnRlZCIsImMiOiJ0aW50ZWQiLCJrIjoiYWNjZW50IiwibSI6Im9uIiwiaCI6Im9mZiIsImwiOiJhdXRvIn0',
   applyConfigCode: () => true,
   getCustomColors: () => CUSTOM_COLORS,
   subscribeCustom: () => () => {},
@@ -153,7 +152,7 @@ const props = {
   // 1.9.8 起不再造假读数 —— 预览里的数字就是线上会显示的数字。
   getContrastReport: () => {
     const scheme = engine.SCHEMES.find((s) => s.id === PALETTE) || engine.SCHEMES[0]
-    const t = engine.buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', HC)
+    const t = engine.buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', HC)
     return engine.buildContrastReport(t, HC, { mono: !scheme.tinted })
   },
   getCustomExplain: () => ({
@@ -163,7 +162,7 @@ const props = {
   previewConfigCode: (code) => ({
     ok: true,
     config: {
-      palette: 'warm', sidebar: 'deep', text: 'tinted', rightbar: 'sidebar',
+      palette: 'warm', sidebar: 'deep', text: 'tinted',
       scroll: 'tinted', control: 'accent', md: 'on', hc: 'off', lang: 'auto',
       custom: { bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' },
     },
