@@ -17,8 +17,10 @@ Theme palette for DeepSeek Harness (web & desktop): **4 palettes × light/dark**
 | Surface | Status |
 |---|---|
 | DSH desktop / web client | 0.2.x |
-| Node.js | ≥ 20 |
+| Node.js | 22.19.0+ (on the 22.x line) or 24.0.0+ |
 | Changes to host source | none |
+
+The `engines` field of the package is `^22.19.0 || >=24.0.0` — the row above is the same requirement in prose.
 
 The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does not register a theme, patch the host, or touch the appearance preference.
 
@@ -30,6 +32,8 @@ The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does
 - adjustable: text tint (3), sidebar depth (3), right panel (2), Markdown emphasis, scrollbars, switch colour;
 - **custom palette** (pick surface / text / accent — the engine keeps its contrast guarantees), **config export/import** via a `dshs1.` code, **high-contrast** mode, and 4 UI languages;
 - **self-healing**: if the host drops the override layer, the palette is re-applied;
+- **contrast promises**: body text is promised 12:1 in light and 10:1 in dark (15:1 in high contrast), secondary ≥ 6.2 in light / 8.0 in dark, tertiary and links ≥ 4.62 in light / 6.4 in dark (links also clear an APCA Lc ≥ 60 gate in dark / 75 in HC) — measured on the surfaces the text actually lands on (the dark side needs more, because a WCAG ratio overstates readability on a dark background);
+- the promised surfaces are light 00/60 and dark 950/875; dark 800 (module surface) and 850 (sub-surface) do **not** back body text — the report counts them apart as "out of policy" (neither pass nor fail);
 - UI in 简体中文 / 繁體中文 / English / 日本語 (follows the host language, can be pinned).
 
 ## Install
@@ -38,16 +42,10 @@ The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does
 # from npm
 cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
-
-# or a specific version
-pnpm add dsh-theme-palette@1.4.3
 ```
 
-From the GitHub Release tarball:
-
-```bash
-pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.3/dsh-theme-palette-1.4.3.tgz"
-```
+To pin a version, use `pnpm add dsh-theme-palette@<version>` — the current release is listed in [CHANGELOG.md](CHANGELOG.md).
+From a GitHub Release tarball: pick the asset on the [releases page](https://github.com/zuoyunlai/dsh-theme-palette/releases) and install it with `pnpm add <path-to-tgz>`.
 
 Then **restart the GUI** — a running process keeps the old module. Open it from avatar → Settings → **Color theme**.
 
@@ -72,8 +70,10 @@ OKLCH(L, C, hue) ──► gamut clamp (binary search on C) ──► sRGB hex
 
 - semantic aliases keep `var(--dsw-static-neutral-bluish-NN)` chains, so anything following a token follows the palette;
 - light surfaces use steps 00–300, dark surfaces 800–950;
-- text floors are enforced at build time: body ≥ 12, secondary ≥ 6.1, tertiary/link ≥ 4.6, sidebar text ≥ 7, bubble text ≥ 7;
-- 432 configuration combos are checked by `node palette-dev.mjs`.
+- text floors are enforced at build time: body ≥ 12:1 in light and ≥ 10:1 in dark (high contrast: 15:1), secondary ≥ 6.2 in light / 8.0 in dark (HC 9 / 9.6), tertiary/link ≥ 4.62 in light / 6.4 in dark (HC 7 / 7.6), link APCA Lc ≥ 60 in dark (HC 75), sidebar text ≥ 7, bubble text ≥ 7;
+- the promised surfaces are light 00/60 and dark 950/875; dark 800 (module surface) and 850 (sub-surface) do **not** back body text — the report counts them apart as "out of policy" (neither pass nor fail), and every surface still has to clear the AA floor of 4.5;
+- the report separates three things: the declared target, the physical ceiling (what black or white can reach on that surface) and the policy exemption; 0.93 is only a solver margin, used to decide whether a target sits above the ceiling;
+- 2160 configuration combos (5 palettes × 216 settings × both contrast tiers) are checked by `node palette-dev.mjs`.
 
 Design notes, per-component rationale and the contrast tables live in [docs/DESIGN.md](docs/DESIGN.md). Release history: [CHANGELOG.md](CHANGELOG.md).
 
@@ -99,7 +99,7 @@ The five that surprised us most during the 1.7.0 audit — each one was found by
 - **A white accent produced a white link** (1.13:1). The contrast solver only ever walked away from the background in one direction, so an accent brighter than the background kept moving toward white.
 - **Picking a colour changed the page but not the panel.** The component subscribed to the palette id, which never changes when a colour does — React compared the snapshots, saw no difference, and skipped the re-render.
 - **Sharing a configuration did not share the colours.** The short code carried the modes but not the three custom colours, so importing on another machine reported success and silently kept the local values.
-- **Dark module surfaces have a hard ceiling.** Even pure white reaches only about 10.99:1 on the deepest panel surface, so the 10:1 (high-contrast 15:1) target is physically unreachable there. We clamp to what the surface allows and label it "surface-limited" instead of quietly missing.
+- **"Not promised" is not "impossible".** The report called the dark module surfaces "surface-limited" because it compared the body target against the deepest one (800). But 800 reaches about 10.22:1 and 850 about 15.27:1 with a white foreground — above the 10:1 target — so nothing was ever unreachable; those surfaces simply were not promised. The report now separates the declared target, the physical ceiling and the policy exemption, and counts dark 800/850 as "out of policy" instead of "physically unreachable".
 - **A selector we thought was dead was alive.** The audit initially reported the `_markdown_` hooks as broken; the contract test against the shipped CSS proved otherwise. The finding was wrong, not the code.
 
 ## Sharing
@@ -125,7 +125,7 @@ Other theme plugins in this ecosystem ship glass, wallpapers and animation. We d
 - **No glass or wallpaper.** That race is won on screenshots; we would rather compete on proof.
 - **No theme market, no AI colour generation.** Both introduce colours we cannot guarantee — the contrast solver is the asset, and feeding it unpredictable input spends it.
 - **No more palettes.** Four presets plus a three-colour generator beats ten hand-picked ones; volume is not the moat.
-- **No eye-care claims.** We report measured ratios on the surfaces text actually lands on, and say "surface-limited" when that is all there is. No medical claims.
+- **No eye-care claims.** We report measured ratios on the surfaces text actually lands on, and say "out of policy" when a surface is not one we promise — a measurement, not an excuse.
 
 
 ## License

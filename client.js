@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.7'
+    const PLUGIN_VERSION = '1.9.9'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -134,10 +134,16 @@ window.__ModuleLoader__.load({
      * 参数化色阶只能逼近，这里对三套预置做表面级覆写：页面/卡片/控件/深色四层取参考值，
      * 中间层按 60→150 的明度插值，避免边框/悬浮态跳变。custom 不走这张表。
      */
+    /* 1.9.9 修正（用户实测：苔绿纸面偏黄绿、左栏与主栏差距过大）：浅色三层**回归参考实现原值**，
+       不再自造「拉开三张纸」的取值。参考实现的纸面本来就是近中性白（00 两两 ΔE 0.5–1.0），
+       配色身份靠**次层**（surface-subtle / surface-strong / border）与强调色区分：
+       60 取 surface-subtle、150 取 surface-strong（同套 00↔150 有 6–8 ΔE，跨套 2.5–4.1）。
+       深色仍按 subtle / muted / raised / strong 四级落位，**不取参考的 surface-dark(#0d1310)**：
+       本插件的侧栏在画布**下方**（更深），画布若压到 #0d1310，侧栏会掉到近黑（实测 #050a07）。*/
     const SURFACE_TARGETS = {
-      warm: { '00': '#fdfbf7', '60': '#f5eee3', '150': '#e9dfd0', '950': '#1a1613', '875': '#221d19', '850': '#2b241f', '800': '#4a3f36' },
-      indigo: { '00': '#f8fafc', '60': '#eef2f8', '150': '#e0e7f0', '950': '#121924', '875': '#18212e', '850': '#1b2533', '800': '#2c3a4e' },
-      moss: { '00': '#f9fbf7', '60': '#edf3e8', '150': '#dee8d8', '950': '#131b16', '875': '#1a241d', '850': '#1d2a22', '800': '#2f3f34' },
+      warm: { '00': '#fcfbf9', '60': '#f9f6f2', '150': '#e6e0d6', '950': '#1a1613', '875': '#221d19', '850': '#2b241f', '800': '#4a3f36' },
+      indigo: { '00': '#f9fafb', '60': '#f4f6f9', '150': '#e2e7ec', '950': '#121924', '875': '#18212e', '850': '#1b2533', '800': '#2c3a4e' },
+      moss: { '00': '#f9fbf8', '60': '#f5f7f2', '150': '#e0e7dd', '950': '#131b16', '875': '#1a241d', '850': '#1d2a22', '800': '#2f3f34' },
     }
 
     /* 对比度下限：主文本 16 / 次文本 6 / 三级文本 4.6（AA）/ 链接 4.6 */
@@ -203,15 +209,29 @@ window.__ModuleLoader__.load({
       const tx = toOklch(colors.text)
       const ac = toOklch(colors.accent)
       const clampN = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
+      /* 无彩色底（纯黑/纯白/正灰）的色相是数值噪声（C≈0 时 atan2 给 0° 或 ±180°），
+       * 直接用会派生出一整套「淡粉」色阶（审计 3.10：黑底 + 白字 + 黄强调 → 画布 #f5eef0）。
+       * 取色相的顺序：底 → 字 → 强调；三者都无彩（C < 0.004）时置中性，整套色阶不再染色。
+       */
+      const ACHROMATIC_C = 0.004
+      let hue = bg[2]
+      let achromatic = false
+      if (bg[1] < ACHROMATIC_C) {
+        if (tx[1] >= ACHROMATIC_C) hue = tx[2]
+        else if (ac[1] >= ACHROMATIC_C) hue = ac[2]
+        else { hue = 0; achromatic = true }
+      }
+      const lightC = achromatic ? 0 : clampN(bg[1] * 0.9, 0.008, 0.045)
+      const darkC = achromatic ? 0 : clampN(bg[1] * 0.75, 0.006, 0.035)
       return {
         id: 'custom', label: '自定义', desc: '三色派生', tinted: true, custom: true,
-        hue: bg[2], darkHue: bg[2],
-        lightC: clampN(bg[1] * 0.9, 0.008, 0.045), midC: 0.010,
+        hue, darkHue: hue, achromatic,
+        lightC, midC: achromatic ? 0 : 0.010,
         // 文字色相必须真的来自「文字」这一项：只用色度会让「同色度、不同色相」完全同效，
         // 与 UI 上「三色的色相与色度」的承诺不符。
-        textC: clampN(tx[1], 0.002, 0.030), textHue: tx[2],
-        darkC: clampN(bg[1] * 0.75, 0.006, 0.035), darkLift: 0.030,
-        paperC: clampN(tx[1], 0.004, 0.030), paperHue: tx[2],
+        textC: achromatic ? 0 : clampN(tx[1], 0.002, 0.030), textHue: achromatic ? hue : tx[2],
+        darkC, darkLift: 0.030,
+        paperC: achromatic ? 0 : clampN(tx[1], 0.004, 0.030), paperHue: achromatic ? hue : tx[2],
         // accentL 必须钳位：500 档同时是 --dsw-alias-link、button-info-fill 与勾选支点的来源。
         // 纯白/荧光黄会让填充与白字同色；只在极端输入时归一化，预设色不受影响。
         accentHue: ac[2], accentC: clampN(ac[1], 0.04, 0.18), accentL: clampN(ac[0], 0.30, 0.64), accentScale: 1.0,
@@ -222,17 +242,46 @@ window.__ModuleLoader__.load({
     const MIN_SECONDARY = 6.2
     const MIN_TERTIARY = 4.62
     const MIN_LINK = 4.62
+    /* 深色链接不再用 WCAG 比值兜底（1.9.9 补）：深色面上同一比值换到的 Lc 差得远，
+       4.62 在自定义配色的 875 面上只有 Lc 52.7，低于本插件给文字定的 Lc 60 下限。
+       tuneRamps 里改为沿亮度把 Lc 顶到 60（高对比 75），这里只保留浅色侧的下限。 */
     const MIN_LINK_DARK = 4.62
+
+    /* ---------- 深色侧单独一套文字下限（审计 3.1）----------
+     * WCAG 2.x 的比值是「相对亮度之比」，它在暗底上系统性高估可读性：
+     * 同一个 4.62，在亮底 #f5eee3 上相当于 APCA Lc≈71，在深色模块面 #4a3f36 上只有 Lc≈48。
+     * 所以「过 AA」在深色模块面上是纸面达标 —— 三级文字实测 Lc 45–48（APCA 里属于「勉强、
+     * 只适合大字号」）。这里给深色侧单独定下限：
+     *   次级 8.0 / 三级 6.4 —— 对最亮的深色面(800)换算下来是 Lc≈78 / ≈63，
+     *   仍保留 1.25 的层级比（次级/三级），不会把三级抬到跟次级一样亮。
+     * 浅色侧不动：它的 6.2 / 4.62 换算成 Lc 是 79 / 71，本来就够。
+     * 黑白配色同样受益（它走的是同一条求解路径）。
+     */
+    const MIN_SECONDARY_DARK = 8.0
+    const MIN_TERTIARY_DARK = 6.4
 
     /**
      * 高对比模式（反哺 A-4）：把四档文字下限整体抬到 WCAG AAA 级别。
      * 不改配色，只让求解器把文字压得更狠；默认关闭。
+     * 深色侧另有一套（HC 深色二级/三级在 800 面上已到 Lc 66–72，再抬会让三级逼近正文）。
      */
     const FLOORS_HC = { main: 15, secondary: 9, tertiary: 7, link: 7, linkDark: 7 }
+    const FLOORS_HC_DARK = { secondary: 9.6, tertiary: 7.6 }
     function floors(hc) {
       return hc === true
         ? FLOORS_HC
         : { main: MIN_MAIN, secondary: MIN_SECONDARY, tertiary: MIN_TERTIARY, link: MIN_LINK, linkDark: MIN_LINK_DARK }
+    }
+    /** 深色侧的同一张下限表（只把 secondary/tertiary 换成暗底口径）。 */
+    function floorsDark(hc) {
+      const F = floors(hc)
+      return {
+        main: F.main,
+        secondary: hc === true ? FLOORS_HC_DARK.secondary : MIN_SECONDARY_DARK,
+        tertiary: hc === true ? FLOORS_HC_DARK.tertiary : MIN_TERTIARY_DARK,
+        link: F.link,
+        linkDark: F.linkDark,
+      }
     }
     const HC_KEY = 'dsh-theme-palette.hc.v1'
     // 只记录“已读哪个版本”的升级提示，不参与配色，也不迁移任何用户数据
@@ -262,6 +311,146 @@ window.__ModuleLoader__.load({
       { id: 'tertiary', step: { light: '600', dark: '400' } },
       { id: 'link', step: { light: 'link', dark: 'link' } },
     ]
+    /**
+     * 角色 → **屏幕上真正渲染的那个 token**（按顺序取第一个存在的）。
+     * 只看色阶步进会报错数：宿主把
+     *   --dsw-alias-label-primary   = bluish-1000 / bluish-50
+     *   --dsw-alias-label-secondary = bluish-700  / bluish-300
+     *   --dsw-alias-label-tertiary  = bluish-600  / bluish-400
+     * 而本插件会**再覆盖** label-secondary / label-tertiary（vivid：提高色度后按真实承载面求解），
+     * 覆盖值才是屏幕上的字色。用步进值代替，等于拿一个不渲染的颜色去报对比度
+     *（自定义配色下会把三级文字报成 4.21，实际渲染的别名色已被求解器兜到 ≥ 4.62）。
+     * 黑白配色不覆盖这些别名 → 回落到色阶步进（本来就没有可测读数）。
+     */
+    const CONTRAST_ROLE_TOKENS = {
+      main: { light: ['--dsw-static-neutral-bluish-1000'], dark: ['--dsw-static-neutral-bluish-50'] },
+      secondary: { light: ['--dsw-alias-label-secondary', '--dsw-static-neutral-bluish-700'], dark: ['--dsw-alias-label-secondary', '--dsw-static-neutral-bluish-300'] },
+      tertiary: { light: ['--dsw-alias-label-tertiary', '--dsw-static-neutral-bluish-600'], dark: ['--dsw-alias-label-tertiary', '--dsw-static-neutral-bluish-400'] },
+      link: { light: ['--dsw-alias-link'], dark: ['--dsw-alias-link'] },
+    }
+
+    /* ================= 承诺口径：目标 / 物理上限 / 政策豁免 三者分开 =================
+     * 1.9.7 之前这三件事混在一列里，报表与 UI 还各算各的：
+     *   - 设置页 UI 用 floors(hc)（深色正文 12:1），palette-dev 报表把深色正文截到 10，
+     *     HC 档的 15 被一起截没了（高档反而更松）；
+     *   - 政策豁免的 800/850 被标成「△表面上限」，读起来像「物理上做不到」；
+     *   - 物理上限里混进了 0.93 的求解余量，「上限」不再是纯计算结果。
+     * 1.9.8 起只有一个模型（buildContrastReport），UI / palette-dev 报表 / check-audit 共用。
+     *
+     * 每个格子给出六个量：
+     *   measured         实测对比度（null = 无法测量：黑白配色不覆盖承载面，报出来是假数字）
+     *   declaredTarget   声明目标（政策承诺值）
+     *   physicalCeiling  物理上限（纯计算：该面上黑/白前景能达到的对比度）
+     *   policyApplicable 该格是否在承诺范围内
+     *   limitedByPhysics 声明目标是否高于物理上限（真·物理不可达）
+     *   pass             是否达标（政策外 = null：不计入达标统计，也不算失败）
+     */
+    // 承诺目标：普通档深色正文 10:1（1.9.7 策略 A），浅色正文仍是 12:1；HC 档整体抬到 AAA。
+    const CONTRAST_TARGETS = {
+      main: { light: { normal: MIN_MAIN, hc: FLOORS_HC.main }, dark: { normal: 10, hc: FLOORS_HC.main } },
+      secondary: { light: { normal: MIN_SECONDARY, hc: FLOORS_HC.secondary }, dark: { normal: MIN_SECONDARY_DARK, hc: FLOORS_HC_DARK.secondary } },
+      tertiary: { light: { normal: MIN_TERTIARY, hc: FLOORS_HC.tertiary }, dark: { normal: MIN_TERTIARY_DARK, hc: FLOORS_HC_DARK.tertiary } },
+      link: { light: { normal: MIN_LINK, hc: FLOORS_HC.link }, dark: { normal: MIN_LINK_DARK, hc: FLOORS_HC.linkDark } },
+    }
+    // 政策豁免：1.9.7 策略 A —— 深色 800（模块面）与 850（次级深面）不为正文兜底。
+    // 850 的物理上限（暖砂 15.27:1）远高于 10:1 目标：它不是「物理不可达」，只是策略上不承诺，
+    // 所以这里登记的是 policy 豁免，绝不能挂「△物理不可达」的标签。
+    const CONTRAST_EXEMPT = [
+      { mode: 'dark', role: 'main', surface: '800', reason: 'module-surface' },
+      { mode: 'dark', role: 'main', surface: '850', reason: 'sub-surface' },
+    ]
+    // 政策外也有底线：低于 AA 4.5:1 仍然是真违例，不能拿「政策外」当免罪金牌。
+    const CONTRAST_FLOOR = 4.5
+    // 求解余量：求解器把目标钳到「该面上限 × 0.93」，避免贴着物理极限出字。
+    const CONTRAST_SOLVER_MARGIN = 0.93
+
+    function contrastTarget(role, mode, hc) {
+      const row = CONTRAST_TARGETS[role]
+      if (!row) return null
+      return row[mode][hc ? 'hc' : 'normal']
+    }
+    function contrastExemptReason(role, mode, surfaceId) {
+      const hit = CONTRAST_EXEMPT.find((e) => e.mode === mode && e.role === role && e.surface === surfaceId)
+      return hit ? hit.reason : null
+    }
+    /**
+     * 唯一对比度报告模型。
+     * tokens 必须是**覆盖层实际写出去的那张表**：插件没覆盖的承载面（黑白配色就是如此）
+     * 会被标成无法测量，而不是拿插件自己的期望色冒充屏幕上的颜色。
+     */
+    function buildContrastReport(tokens, hc, meta) {
+      const round2 = (v) => (v === null || v === undefined ? null : Math.round(v * 100) / 100)
+      const rows = CONTRAST_ROLES.map((role) => ({
+        role: role.id,
+        cells: CONTRAST_SURFACES.map((sf) => {
+          const candidates = CONTRAST_ROLE_TOKENS[role.id][sf.mode]
+          let fgPair = null
+          for (const name of candidates) {
+            if (tokens[name]) { fgPair = tokens[name]; break }
+          }
+          const bgPair = sf.token ? tokens[sf.token] : tokens['--dsw-static-neutral-bluish-' + sf.id]
+          const fgHex = fgPair ? fgPair[sf.mode] : null
+          const bgHex = bgPair ? bgPair[sf.mode] : null
+          const canvasPair = tokens['--dsw-static-neutral-bluish-' + (sf.mode === 'light' ? '00' : '950')]
+          const unmeasured = !fgHex || !bgHex || (sf.token ? !canvasPair : false)
+          const bg = unmeasured
+            ? null
+            : (sf.token ? flatten(bgHex, canvasPair[sf.mode]) : bgHex)
+          const declaredTarget = contrastTarget(role.id, sf.mode, hc)
+          const measured = unmeasured ? null : contrast(fgHex, bg)
+          const physicalCeiling = unmeasured ? null : contrast(sf.mode === 'light' ? '#000000' : '#ffffff', bg)
+          const scopeExempt = sf.scope === false
+          const policyExempt = contrastExemptReason(role.id, sf.mode, sf.id)
+          const policyApplicable = !unmeasured && !scopeExempt && !policyExempt
+          const limitedByPhysics = !unmeasured && declaredTarget > physicalCeiling
+          const feasibleTarget = policyApplicable
+            ? (limitedByPhysics ? physicalCeiling * CONTRAST_SOLVER_MARGIN : declaredTarget)
+            : declaredTarget
+          const meetsFloor = unmeasured ? null : measured >= CONTRAST_FLOOR - 0.02
+          const pass = policyApplicable ? measured >= feasibleTarget - 0.02 : null
+          return {
+            surface: sf.id, mode: sf.mode, scope: sf.scope,
+            measured: round2(measured),
+            // APCA 感知对比度（审计 3.1）：WCAG 只管「比值」，感知上暗底会虚高；
+            // 这一列不改判定，只让报表能看出「过 AA 但看着淡」的格子。
+            apca: unmeasured ? null : Math.round(apcaContrast(fgHex, bg) * 1000) / 10,
+            declaredTarget,
+            physicalCeiling: round2(physicalCeiling),
+            feasibleTarget: round2(feasibleTarget),
+            policyApplicable,
+            limitedByPhysics,
+            meetsFloor,
+            pass,
+            exemptReason: scopeExempt ? 'surface-scope' : policyExempt,
+            unmeasured,
+          }
+        }),
+      }))
+      const cells = rows.reduce((acc, row) => acc.concat(row.cells), [])
+      const summary = {
+        cells: cells.length,
+        passed: cells.filter((c) => c.pass === true).length,
+        failed: cells.filter((c) => c.pass === false).length,
+        exempt: cells.filter((c) => c.pass === null && !c.unmeasured).length,
+        unmeasured: cells.filter((c) => c.unmeasured).length,
+        floorViolations: cells.filter((c) => !c.unmeasured && c.pass === null && c.meetsFloor === false).length,
+        physicallyLimited: cells.filter((c) => c.policyApplicable && c.limitedByPhysics).length,
+        // 感知口径提示（不改判定）：正文至少要 Lc 60 才算「舒适」，低于 60 的格子标出来。
+        apcaBelowBody: cells.filter((c) => !c.unmeasured && Math.abs(c.apca) < 60).length,
+        apcaBelowLarge: cells.filter((c) => !c.unmeasured && Math.abs(c.apca) < 45).length,
+      }
+      return {
+        hc: hc === true,
+        mono: !!(meta && meta.mono),
+        applicable: summary.passed + summary.failed > 0,
+        rows,
+        summary,
+        targets: CONTRAST_TARGETS,
+        exempt: CONTRAST_EXEMPT,
+        floor: CONTRAST_FLOOR,
+        margin: CONTRAST_SOLVER_MARGIN,
+      }
+    }
 
     /**
      * 区块底色：左侧栏相对主画布的深浅档位。
@@ -284,11 +473,17 @@ window.__ModuleLoader__.load({
     /**
      * 文字着色强度。textScale 作用于浅色模式正文（textC），paperScale 作用于深色模式正文（paperC）。
      * 底色不动、只加文字色度 —— 对比度仍由求解器兜底，所以「浓一些」也不会掉到 AA 以下。
+     *
+     * inkC / inkDarkC（审计 3.3）：预置配色的正/次/三级文字走的是 TEXT_TARGETS 里的**参考墨色**，
+     * 它们不读 textC，于是 1.9.0 起「静 / 标准 / 浓」三档对预置完全无效（实测 ΔE 0）。
+     * 这两项按档位给参考墨色加减色度（色相不动），让三档真的能看出来：
+     *   静 −0.026 / 标准 0 / 浓 +0.021（浅色）；深色侧幅度小一些（−0.018 / 0 / +0.016），
+     * 因为深色画面上的彩色文字更容易显脏。标准档加减为 0 —— 1.9.0 的参考对齐原样保留。
      */
     const TEXT_MODES = [
-      { id: 'neutral', label: '静', textScale: 1, paperScale: 1, textLift: 0 },
-      { id: 'tinted', label: '标准', textScale: 3.0, paperScale: 2.4, textLift: 0.055 },
-      { id: 'deep', label: '浓', textScale: 4.6, paperScale: 3.6, textLift: 0.085 },
+      { id: 'neutral', label: '静', textScale: 1, paperScale: 1, textLift: 0, inkC: -0.026, inkDarkC: -0.018 },
+      { id: 'tinted', label: '标准', textScale: 3.0, paperScale: 2.4, textLift: 0.055, inkC: 0, inkDarkC: 0 },
+      { id: 'deep', label: '浓', textScale: 4.6, paperScale: 3.6, textLift: 0.085, inkC: 0.021, inkDarkC: 0.016 },
     ]
     const DEFAULT_TEXT = 'tinted'
     const TEXT_KEY = 'dsh-theme-palette.text.v1'
@@ -351,6 +546,31 @@ window.__ModuleLoader__.load({
     ]
     const DEFAULT_CONTROL = 'accent'
     const CONTROL_KEY = 'dsh-theme-palette.control.v1'
+
+    /* ---------- 未知模式 id 必须告警（审计 3.9）----------
+     * 各 mode 的取用都是 `TEXT_MODES.find(x => x.id === mode) || TEXT_MODES[1]`：
+     * 拼错一个 id 就整套配色静默退回默认，而所有检查都是绿的 —— 这是最容易埋雷的一种。
+     * UI 只给合法值，所以这里只 warn、不抛错（palette-dev 这类开发工具会自己抛）。
+     */
+    const warnedModeIds = {}
+    function warnUnknownModes(ids) {
+      const tables = [
+        ['sidebarMode', SIDEBAR_MODES], ['textMode', TEXT_MODES], ['rightbarMode', RIGHTBAR_MODES],
+        ['scrollMode', SCROLL_MODES], ['controlMode', CONTROL_MODES], ['mdMode', MD_MODES],
+      ]
+      for (const [field, table] of tables) {
+        const value = ids[field]
+        if (value === undefined || value === null || value === '') continue
+        if (table.some((x) => x.id === value)) continue
+        const sig = field + '=' + value
+        if (warnedModeIds[sig]) continue
+        warnedModeIds[sig] = true
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('[dsh-theme-palette] unknown ' + field + ' id "' + value + '"，已回落默认值；合法值：' +
+            table.map((x) => x.id).join(' / '))
+        }
+      }
+    }
 
     /* ================= 颜色数学（sRGB <-> OKLab） ================= */
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v))
@@ -429,6 +649,57 @@ window.__ModuleLoader__.load({
       return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
     }
 
+    /* ---------- APCA（审计 3.1：报表要同时给出感知对比度）----------
+     * WCAG 2.x 的比值只与相对亮度有关，不看极性、不看空间频率，
+     * 在暗底上会系统性高估可读性（同样 4.62，亮底 Lc≈71，暗底 Lc≈48）。
+     * APCA（SAPC-98G-4g，0.0.98G）是目前唯一广泛使用的感知对比度模型：
+     * 它的低对比端用 1.14 次幂「软钳位」，高对比端用 0.65 次幂压缩，
+     * 两个锚点 106.04 / -107.88 对应 0–100 的刻度。
+     * 这里只用来**报告**（不改求解目标）：求解仍走 WCAG —— 被广泛承诺的仍是 AA/AAA。
+     */
+    const APCA_MAIN_TRC = 2.4
+    const APCA_R_CO = 0.2126729
+    const APCA_G_CO = 0.7151522
+    const APCA_B_CO = 0.072175
+    const APCA_NORM_BG = 0.56
+    const APCA_NORM_TXT = 0.57
+    const APCA_REV_TXT = 0.62
+    const APCA_REV_BG = 0.65
+    const APCA_BLK_THRS = 0.022
+    const APCA_BLK_CLMP = 1.414
+    const APCA_SCALE = 1.14
+    const APCA_LO_OFF = 0.027
+    const APCA_LO_CLIP = 0.1
+    const APCA_DELTA_Y_MIN = 0.0005
+
+    function apcaY(hex) {
+      const [r, g, b] = hexToRgb(hex).map((v) => Math.pow(v / 255, APCA_MAIN_TRC))
+      return APCA_R_CO * r + APCA_G_CO * g + APCA_B_CO * b
+    }
+    /**
+     * APCA 亮度对比（Lc）。前景比背景亮为正值，反之负值；
+     * 返回 0 表示「对比不可用」（亮度差过小，低于模型的分辨下限）。
+     */
+    function apcaContrast(fgHex, bgHex) {
+      let txt = apcaY(fgHex)
+      let bg = apcaY(bgHex)
+      // 软钳位：极暗的文字/背景统一抬到阈值上，避免 0.0x 段的病态放大
+      txt = txt > APCA_BLK_THRS ? txt : txt + Math.pow(APCA_BLK_THRS - txt, APCA_BLK_CLMP)
+      bg = bg > APCA_BLK_THRS ? bg : bg + Math.pow(APCA_BLK_THRS - bg, APCA_BLK_CLMP)
+      if (Math.abs(bg - txt) < APCA_DELTA_Y_MIN) return 0
+      let out
+      if (bg > txt) {
+        // 亮底黑字（正常极性）
+        out = (Math.pow(bg, APCA_NORM_BG) - Math.pow(txt, APCA_NORM_TXT)) * APCA_SCALE
+        out = out < APCA_LO_CLIP ? 0 : out - APCA_LO_OFF
+      } else {
+        // 暗底白字（反极性）：极性换了，指数也要换
+        out = (Math.pow(bg, APCA_REV_BG) - Math.pow(txt, APCA_REV_TXT)) * APCA_SCALE
+        out = out > -APCA_LO_CLIP ? 0 : out + APCA_LO_OFF
+      }
+      return Math.round(out * 100) / 100
+    }
+
     /** 沿亮度把 fg 压暗，直到与 bg 的对比度达标（用于「实心按钮 + 浅色文字」）。 */
     function darkenUntil(hex, bgHex, target) {
       const [L, C, hue] = toOklch(hex)
@@ -480,11 +751,14 @@ window.__ModuleLoader__.load({
      *      左侧栏会变成「不管选哪套配色都是白」。
      *   2. 只有真正贴到纯白（L>0.980 之后）才把色度掐到 0，否则 sRGB 削通道会让冷白泛青。
      */
-    const LIGHT_CAP = 0.985
+    /* 1.9.9：上限从 0.985 抬到 0.995 —— 参考实现的暖砂纸面 L 已经是 0.9888，
+       低于上限时 clamp 会把「更浅」推到比画布**更暗**（实测 #fdfbf8 → #fafaf9）。 */
+    const LIGHT_CAP = 0.995
 
     function lift(hex, delta, chromaScale) {
       const [L, C, hue] = toOklch(hex)
-      const nextL = clamp(L + delta, 0, LIGHT_CAP)
+      let nextL = clamp(L + delta, 0, LIGHT_CAP)
+      if (delta > 0 && nextL < L) nextL = L   // 提亮不许把亮度压下去（贴顶时不反向）
       const headroom = clamp((1 - nextL) / 0.02, 0, 1)
       return fromOklch(nextL, C * chromaScale * headroom, hue)
     }
@@ -493,13 +767,30 @@ window.__ModuleLoader__.load({
     /**
      * 近白端必须压暗一点：纯白在任何色度下都还是白，颜色出不来。
      * 近黑端同理，轻微上提。中间亮度原样保留 —— 对比度基线因此不变。
+     *
+     * 审计 3.3：这里原来是两段硬阈值（L>=0.92 减 0.044、L<0.14 乘 1.06），
+     * 在阈值处**跳变 0.044**，而浅色 60 档（卡片面）恰好落在 0.917，被推过边界就成了白。
+     * 现在改成平滑过渡：同样的位移量（0.044 / ×1.06），但用 smoothstep 在阈值附近
+     * 0.07 的窗口内渐进生效，曲线在两端连续、导数也连续，不再有断层。
      */
+    const COMPRESS_TOP = 0.92        // 近白端起点
+    const COMPRESS_TOP_EDGE = 0.07   // 过渡窗口宽度
+    const COMPRESS_TOP_DROP = 0.044  // 最大下移量（与原实现一致）
+    const COMPRESS_BOTTOM = 0.14     // 近黑端起点
+    const COMPRESS_BOTTOM_EDGE = 0.06
+    const COMPRESS_BOTTOM_GAIN = 0.06 // 最大上提比例（与原实现一致）
+
+    function smoothstep(edge0, edge1, x) {
+      const t = clamp((x - edge0) / (edge1 - edge0), 0, 1)
+      return t * t * (3 - 2 * t)
+    }
+
     function compressL(L) {
       // 等量下移而不是压缩斜率：压缩会把「画布↔卡层」的 ΔL 从 0.031 压到 0.0147，
       // 而 L<0.93 的那一段又没压，明度节奏会在边界处断层。
-      if (L >= 0.92) return L - 0.044
-      if (L < 0.14) return L * 1.06
-      return L
+      const top = smoothstep(COMPRESS_TOP - COMPRESS_TOP_EDGE, COMPRESS_TOP + COMPRESS_TOP_EDGE / 4, L)
+      const bottom = smoothstep(COMPRESS_BOTTOM + COMPRESS_BOTTOM_EDGE, COMPRESS_BOTTOM - COMPRESS_BOTTOM_EDGE, L)
+      return L - COMPRESS_TOP_DROP * top + L * (COMPRESS_BOTTOM_GAIN * bottom)
     }
 
     function roleChroma(role, weight, scheme, scales) {
@@ -567,17 +858,42 @@ window.__ModuleLoader__.load({
       }
       const T = SURFACE_TARGETS[scheme.id]
       if (scheme.tinted && T) {
-        for (const step of ['00', '60', '150', '950', '875', '850', '800']) {
-          if (T[step]) bluish[step] = T[step]
+        /* ---------- 承载面色度跟随档位（审计 3.7）----------
+         * SURFACE_TARGETS 是 1.9.0 为「与参考实现精确对齐」定死的，连色度一起钉住，
+         * 于是三套预置在浅色下几乎是同一张白纸（画布 ΔE 1.3–1.6，刚过 JND），
+         * 而切到「浓」档时正文明显加深、承载面却一动不动（C 恒定 0.0035–0.0104）。
+         * 这里保留参考实现的**明度**（明暗节奏与对比度身份不变），只缩放色度：
+         *   静 档 ≈ 参考原值（1.01×，几乎就是 1.9.8 的像素）
+         *   标准档 1.60×  → 画布/模块面的色温真正可辨，三套预置能分出来
+         *   浓 档 2.10×  → 与正文着色强度同步加码
+         * 明度不动、只动色度，因此承载面之间的对比度关系不变，文字求解结果只受极小幅影响。
+         */
+        const SURFACE_CHROMA_REF = 2.4
+        const SURFACE_CHROMA_BASE = 1.6
+        const surfaceK = SURFACE_CHROMA_BASE + (scales.paperScale - SURFACE_CHROMA_REF) * 0.42
+        const retint = (hex) => {
+          if (Math.abs(surfaceK - 1) < 0.01) return hex
+          const [Ls, Cs, hs] = toOklch(hex)
+          return fromOklch(Ls, Cs * surfaceK, hs)
         }
-        // 60→150 之间按 OKLCH 插值，保证 75/100/200 与两端连续
-        const [l60, c60, h60] = toOklch(T['60'])
-        const [l150, c150, h150] = toOklch(T['150'])
+        const pin = {}
+        for (const step of ['00', '60', '150', '950', '875', '850', '800']) {
+          if (!T[step]) continue
+          // 深色面（950/875/850/800）保持钉死：深色侧的层次由 darkLift 与 12:1 求解决定，
+          // 动它的色度会连带改掉压暗曲线的落点。
+          pin[step] = ['00', '60', '150'].includes(step) ? retint(T[step]) : T[step]
+          bluish[step] = pin[step]
+        }
+        // 60→150 之间按 OKLCH 插值，保证 75/100/200 与两端连续。
+        // 200 用**外推**（t=1.25）而不是内插：150 与 200 原来只差 ΔE 0.36，两档撞成同色，
+        // 而「比 150 更深→更浅」的语义要求 200 继续沿着 60→150 的斜率往下走。
+        const [l60, c60, h60] = toOklch(pin['60'])
+        const [l150, c150, h150] = toOklch(pin['150'])
         const dh = ((h150 - h60 + 540) % 360) - 180
         const lerp = (t) => fromOklch(l60 + (l150 - l60) * t, c60 + (c150 - c60) * t, h60 + dh * t)
         bluish['75'] = lerp(0.25)
         bluish['100'] = lerp(0.55)
-        bluish['200'] = lerp(0.90)
+        bluish['200'] = lerp(1.25)
       }
       return { bluish, neutral, deepseek: accent(BASE.deepseek), blue: accent(BASE.blue) }
     }
@@ -588,6 +904,61 @@ window.__ModuleLoader__.load({
      * 只朝「远离背景」一个方向走会漏掉可行解：当强调色比浅色背景还亮（纯白/荧光黄），
      * 继续往白走只会更不可读，正确解在暗的一侧。bgs 可以是多个承载面，要求同时达标。
      */
+    /**
+     * 朝 fg 方向按比例混掉 bg 的底，取「刚好达到 target 对比度」的实色（审计 3.4 用）。
+     *
+     * `solveForeground` 找的是「第一步就够」的解，从墨色出发时常常原地返回 ——
+     * HC 边框如果直接返回墨色就是 16:1 的黑框，比发丝线还难看。这里做的是**定量**：
+     * 在 bg→fg 直线上二分混合比，命中 3.0 / 3.4 / 4.0 这些目标值本身。
+     * 混合比越大越靠近 fg，对比度单调上升，二分安全；bgs 取一组时要保证**最差的那一面**达标。
+     */
+    function mixToContrast(bgs, fg, target) {
+      const list = Array.isArray(bgs) ? bgs : [bgs]
+      const worst = (candidate) => Math.min(...list.map((bg) => contrast(candidate, bg)))
+      if (worst(fg) <= target) return fg
+      // 以最难达标的那一面为混合终点：混色的另一端选最差面，才能保证这条线上单调
+      const bgWorst = list.reduce((a, b) => (contrast(fg, b) < contrast(fg, a) ? b : a))
+      const at = (w) => mixHex(fg, bgWorst, w)
+      let lo = 0
+      let hi = 1
+      for (let i = 0; i < 18; i++) {
+        const mid = (lo + hi) / 2
+        if (worst(at(mid)) < target) lo = mid
+        else hi = mid
+      }
+      // 命中的是「刚好够」，四舍五入成 8 位 hex 可能掉回一点点，往上多推半格留余量
+      const out = at(Math.min(1, hi + 0.004))
+      return worst(out) >= target ? out : at(1)
+    }
+
+    /**
+     * 沿亮度把颜色顶到 APCA Lc 下限（只往亮的方向走：用于深色面上的浅色文字/链接）。
+     *
+     * 为什么需要它：`solveOn` / `solveForeground` 守的是 WCAG 比值，而深色面上
+     * 「比值达标」并不等于「看得清」—— 链接的 4.62 在 875 面上只有 Lc 52，
+     * 低于本插件给文字定的 Lc 60。直接抬 WCAG 下限又会过度：要让最亮的深色面(800)
+     * 到 Lc 60，比值得抬到 8 以上，而 8 在 950 面上已是 Lc≈85 的近白链接。
+     * 所以这里按 Lc 本身收敛：以最难的一面为准，够到就停。
+     */
+    function raiseToLc(hex, bgs, lcMin) {
+      const list = Array.isArray(bgs) ? bgs : [bgs]
+      // apcaContrast 返回 Lc/100（暗底浅字为负），取绝对值再 ×100 才是 Lc 读数
+      const worst = (candidate) => Math.min(...list.map((bg) => Math.abs(apcaContrast(candidate, bg)) * 100))
+      if (worst(hex) >= lcMin) return hex
+      const [L0, C, hue] = toOklch(hex)
+      let best = hex
+      let bestLc = worst(hex)
+      for (let i = 1; i <= 80; i++) {
+        const L = L0 + i * 0.004
+        if (L > 0.97) break
+        const candidate = fromOklch(L, C, hue)
+        const lc = worst(candidate)
+        if (lc > bestLc) { best = candidate; bestLc = lc }
+        if (lc >= lcMin) return candidate
+      }
+      return best
+    }
+
     function solveForeground(hexes, step, bgs, target, cap) {
       const list = Array.isArray(bgs) ? bgs : [bgs]
       const maxShift = typeof cap === 'number' ? cap : 0.13
@@ -645,12 +1016,19 @@ window.__ModuleLoader__.load({
         const target = Math.min(F.main, maxOn(darkModule, true) * 0.93)
         ramps.bluish['50'] = solveForeground(ramps.bluish, '50', darkModule, target, hc ? 0.30 : 0.13)
       }
-      // 链接按「最亮的深色承载面（800）」兜底。
-      // 注意这里**只有 400**：浅色链接不走这条色阶的中段（500 是设计稿的标准色，
-      // 不能被求解器按承载面改写），浅色链接在 aliasOverrides 里从 500 派生。
-      if (contrast(ramps.deepseek['400'], darkModule) < F.linkDark) {
-        const effective = clampTarget(darkModule, F.linkDark, true)
-        ramps.deepseek['400'] = solveForeground(ramps.deepseek, '400', darkModule, effective, hc ? 0.30 : 0.13)
+      /* 深色链接：按 **APCA Lc** 兜底，而不是 WCAG 比值（1.9.9 补）。
+       *
+       * 为什么不用比值：深色面上同一比值换到的 Lc 差得远 —— 自定义配色在 875 面上
+       * 4.62 只等于 Lc 52.7，而本插件给所有文字定的可读下限是 Lc 60。
+       * 直接抬 WCAG 下限也不行：要让最亮的深色面(800)达到 Lc 60，比值得抬到 8 以上，
+       * 而 8 在 950 面上已经是 Lc≈85 的「近白链接」，链接与正文的层级感全没了。
+       * 所以这里沿亮度走，**以最难达标的那一面(800)为准**把 Lc 顶到下限：
+       *   普通档 60（正文/次级的下限同档）· 高对比 75
+       * 只改 deepseek-400：500 是设计稿的品牌基准，浅色链接从它派生（见 lightLink）。
+       */
+      {
+        const linkSurfaces = [ramps.bluish['800'], ramps.bluish['850'], ramps.bluish['875'], ramps.bluish['950']]
+        ramps.deepseek['400'] = raiseToLc(ramps.deepseek['400'], linkSurfaces, hc ? 75 : 60)
       }
       return ramps
     }
@@ -676,16 +1054,22 @@ window.__ModuleLoader__.load({
 
     /* ================= token 组装 ================= */
     /** 重建结果缓存：一个配色只算一次（渲染时每张卡片都会取预览色）。 */
+    // 审计 3.11：从 48 提到 96 —— 设置页连着拖色时，48 会在两个方向上反复淘汰重建。
+    const RAMP_CACHE_LIMIT = 96
     const rampCache = new Map()
     // 自定义取色会持续产生新键；给一个小上限，避免长会话里只增不减
     function rememberRamp(key, value) {
       rampCache.set(key, value)
-      while (rampCache.size > 48) rampCache.delete(rampCache.keys().next().value)
+      while (rampCache.size > RAMP_CACHE_LIMIT) rampCache.delete(rampCache.keys().next().value)
       return value
     }
     function scalesFor(textMode) {
       const m = TEXT_MODES.find((x) => x.id === textMode) || TEXT_MODES[1]
-      return { textScale: m.textScale, paperScale: m.paperScale, textLift: m.textLift || 0 }
+      return {
+        textScale: m.textScale, paperScale: m.paperScale, textLift: m.textLift || 0,
+        // 审计 3.3：预置参考墨色的档位色度增减（自定义配色不读这两项，它的档位走 textScale）
+        inkC: m.inkC || 0, inkDarkC: m.inkDarkC || 0,
+      }
     }
     function rampsFor(scheme, textMode, hc) {
       const hcKey = hc === true ? ':hc' : ''
@@ -731,6 +1115,27 @@ window.__ModuleLoader__.load({
       const ink = r.bluish['1000'] // 浅色模式的墨色
       const paper = r.bluish['50'] // 深色模式的纸白
       const grey = r.bluish['700'] // 悬浮在媒体上的工具条用中性灰
+      /* ---- 边框：默认低噪、高对比档必须过 3:1（审计 3.4）----
+       * 默认档是 4%–16% 墨色叠加，合成后在画布上只有 1.2–1.9:1 —— 这是**有意**的低噪设计
+       * （参考实现也是这个量级，界面不会变成表格）。但高对比模式继续用 alpha 就说不过去了：
+       * 1.9.8 的 HC 只改了文字，边框 alpha 没动，实测数值完全一样，HC 名不副实。
+       * 现在 HC 下按 SC 1.4.11 对承载面反解到 3:1 / 3.4:1 / 4:1，三档保留层级。
+       */
+      const inkOf = (mode) => (mode === 'light' ? ink : paper)
+      const alphaBorder = (mode, alpha) => withAlpha(inkOf(mode), alpha)
+      /**
+       * HC 的边框要的是**定量**：3.0 / 3.4 / 4.0。之前用 solveForeground 求解，
+       * 从墨色起步时它一步都不用挪就「已达标」→ 直接返回墨色，实测 16.9:1 ——
+       * 发丝线变成黑框，比不改还难看。混色求解才命中目标本身。
+       * 承载面取该模式**最亮的那一层**（浅：00/60；深：800/850），因为边框是深于/亮于
+       * 背景的那一侧，最亮的承载面对它才是最难的一关。
+       */
+      const solidBorder = (mode, target) => mixToContrast(
+        mode === 'light' ? [r.bluish['00'], r.bluish['60']] : [r.bluish['800'], r.bluish['850']],
+        inkOf(mode),
+        target,
+      )
+      const border = (mode, alpha, target) => (hc ? solidBorder(mode, target) : alphaBorder(mode, alpha))
       return {
         /* ---- 链接：唯一一条「不是标准色、而是从标准色派生」的强调色 ----
            宿主 `--dsw-alias-link` 指 deepseek-500（浅）/ 400（深），而 500 是品牌基准色。
@@ -738,12 +1143,17 @@ window.__ModuleLoader__.load({
            用同色相的派生色；深色链接直接用 400（已由求解器兜到 4.62 起）。 */
         '--dsw-alias-link': { light: lightLink(r, hc), dark: r.deepseek['400'] },
 
-        '--dsw-alias-border-l1': { light: withAlpha(ink, 0.04), dark: withAlpha(paper, 0.06) },
-        '--dsw-alias-border-l2': { light: withAlpha(ink, 0.10), dark: withAlpha(paper, 0.12) },
-        '--dsw-alias-border-l2-darkmode-thin': { light: withAlpha(ink, 0.10), dark: withAlpha(paper, 0.06) },
-        '--dsw-alias-border-l3': { light: withAlpha(ink, 0.12), dark: withAlpha(paper, 0.16) },
-        '--dsw-alias-border-l4': { light: withAlpha(ink, 0.16), dark: withAlpha(paper, 0.20) },
-        '--dsw-alias-bg-skeleton': { light: withAlpha(ink, 0.04), dark: withAlpha(paper, 0.08) },
+        '--dsw-alias-border-l1': { light: alphaBorder('light', 0.04), dark: alphaBorder('dark', 0.06) },
+        '--dsw-alias-border-l2': { light: border('light', 0.10, 3.0), dark: border('dark', 0.12, 3.0) },
+        '--dsw-alias-border-l2-darkmode-thin': { light: alphaBorder('light', 0.10), dark: alphaBorder('dark', 0.06) },
+        '--dsw-alias-border-l3': { light: border('light', 0.12, 3.4), dark: border('dark', 0.16, 3.4) },
+        '--dsw-alias-border-l4': { light: border('light', 0.16, 4.0), dark: border('dark', 0.20, 4.0) },
+        /* 组件边界（勾选框 / 输入框 / 开关 / 焦点环）：宿主只有 l1..l4 四级，没有
+           「装饰性分隔线」与「组件边界」的区分，而 SC 1.4.11 只管后者。
+           这里额外给一档 3:1 的实色，本插件设置页自己的控件用它（审计 3.5）；
+           宿主自身的控件边框仍由宿主负责，不在本插件的覆盖范围内。 */
+        '--dshtp-border-control': { light: solidBorder('light', 3.0), dark: solidBorder('dark', 3.0) },
+        '--dsw-alias-bg-skeleton': { light: alphaBorder('light', 0.04), dark: alphaBorder('dark', 0.08) },
 
         /* ---- 悬停 / 按下：内置是蓝灰墨 #263148，暖色主题下会显冷 ---- */
         /* 深色的 alpha 比浅色小 1/3：深色叠的是近白纸色，8% 的纸色在 L 0.22 上抬起的明度
@@ -811,7 +1221,7 @@ window.__ModuleLoader__.load({
      * 滚动条四条 token：底色取 neutral 色阶的对应步，只把色度抬到指定档位。
      * 明度完全沿用宿主，所以滚动条与背景的明暗关系不变，只是带上色相。
      */
-    function scrollbarTokens(ramps, scheme, mode) {
+    function scrollbarTokens(ramps, scheme, mode, hc) {
       const m = SCROLL_MODES.find((x) => x.id === mode) || SCROLL_MODES[1]
       if (!m.chroma || !scheme.tinted) return {}
       const hue = m.useAccent ? scheme.accentHue : scheme.hue
@@ -819,11 +1229,32 @@ window.__ModuleLoader__.load({
         const [L, C] = toOklch(ramps.neutral[step])
         return fromOklch(L, Math.max(C, m.chroma), hue)
       }
+      /* 高对比档（审计 3.4）：滚动条是非文字的可操作组件，SC 1.4.11 要求 3:1。
+       * 默认档的条纹只有 1.4–2.4:1（有意：滚动条不该抢视线）；
+       * HC 下沿远离画布的方向提明度，直到过 3:1，色相与色度保持不变。
+       * 「悬停/按下」再高 0.6 —— 四个 token 全部提到 3:1 会让 hover 与常态一模一样，
+       * 滚动条按下去没有任何反馈。
+       */
+      const ensure = (hex, canvas, target) => {
+        const need = target === undefined ? 3.0 : target
+        if (!hc) return hex
+        const [L, C, h] = toOklch(hex)
+        const dir = contrast('#ffffff', canvas) >= contrast('#000000', canvas) ? 1 : -1
+        let cur = L
+        for (let i = 0; i < 160; i++) {
+          const c = fromOklch(clamp(cur, 0.05, 0.99), C, h)
+          if (contrast(c, canvas) >= need) return c
+          cur += dir * 0.004
+        }
+        return fromOklch(clamp(cur, 0.05, 0.99), C, h)
+      }
+      const lightCanvas = ramps.bluish['00']
+      const darkCanvas = ramps.bluish['950']
       return {
-        '--dsw-alias-scrollbar-bg-l1': { light: paint('200'), dark: paint('700') },
-        '--dsw-alias-scrollbar-bg-l2': { light: paint('200'), dark: paint('600') },
-        '--dsw-alias-scrollbar-hover-l1': { light: paint('300'), dark: paint('600') },
-        '--dsw-alias-scrollbar-hover-l2': { light: paint('300'), dark: paint('550') },
+        '--dsw-alias-scrollbar-bg-l1': { light: ensure(paint('200'), lightCanvas), dark: ensure(paint('700'), darkCanvas) },
+        '--dsw-alias-scrollbar-bg-l2': { light: ensure(paint('200'), lightCanvas), dark: ensure(paint('600'), darkCanvas) },
+        '--dsw-alias-scrollbar-hover-l1': { light: ensure(paint('300'), lightCanvas, 3.6), dark: ensure(paint('600'), darkCanvas, 3.6) },
+        '--dsw-alias-scrollbar-hover-l2': { light: ensure(paint('300'), lightCanvas, 3.6), dark: ensure(paint('550'), darkCanvas, 3.6) },
       }
     }
 
@@ -849,12 +1280,30 @@ window.__ModuleLoader__.load({
       const s = m.chroma
       const paper = r.bluish['00']
       const fillRaw = !tinted && m.lift >= 0 ? '#ffffff' : lift(paper, lightLift, s)
-      // 显式补色度：保持明度，只把 C 抬到目标值（有 scheme 才做，custom 走自身参数）
-      const lightFill = tinted && scheme && scheme.lightC !== undefined
-        ? (() => {
-            const [L] = toOklch(fillRaw)
-            return fromOklch(L, Math.max(toOklch(fillRaw)[1], Math.min(0.010, scheme.lightC * 0.75)), scheme.hue)
-          })()
+      /**
+       * 1.9.9 修补（用户实测：苔绿「同色」被染成薄荷绿、靛蓝「同色」与画布不同色）：
+       *   ① 色度补偿原来固定用 `scheme.hue`，而画布 00 的色相来自 BASE 那条色阶（苔绿画布 h≈121，
+       *      scheme.hue 是 162）—— 于是「补色度」那一步顺手把橄榄绿染成了薄荷绿。改为一律沿用
+       *      **画布自己的色相**；
+       *   ② 补偿只补「不够」的那部分，不再无条件把 C 抬到 0.010；
+       *   ③ 「同色」档直接取画布本身 —— 走一遍 lift + 补偿会留下 0.4–2.5 的 ΔE，
+       *      而用户点「同色」要的是「与主栏一模一样」，不是「接近」。
+       */
+      const lightFill = tinted
+        ? (lightLift === 0
+            ? paper
+            : (() => {
+                const [L, C, h] = toOklch(fillRaw)
+                const want = Math.min(
+                  0.012,
+                  Math.max(C, (scheme && scheme.lightC !== undefined ? scheme.lightC : C) * 0.75),
+                )
+                // 近白纸面（苔绿画布 L≈0.983）抬不动：LIGHT_CAP 只给 0.002 余量，实测与画布
+                // 只差 ΔE 0.13 —— 用户点「更浅」等于什么都没发生。明度换不了就换色度：
+                // 削到 0.25 倍并顶到明度上限，"更浅"读作「更白的一张纸」，ΔE ≈ 0.5。
+                if (LIGHT_CAP - L < 0.012) return fromOklch(LIGHT_CAP, C * 0.25, h)
+                return C >= want ? fillRaw : fromOklch(L, want, h)
+              })())
         : fillRaw
       const darkFill = lift(r.bluish['950'], darkLift, s)
       // 悬停/选中相对「侧栏最终底色」推导，不能再各自抬一次 ——
@@ -864,8 +1313,18 @@ window.__ModuleLoader__.load({
       const canvasL = toOklch(paper)[0]
       const fillL = toOklch(lightFill)[0]
       const room = (fillL - canvasL) / 2 - 0.004
+      // 近白纸面上「更浅」几乎没有向下空间（苔绿 canvas L≈0.983），fitStep 会被压到 0 ——
+      // 那样悬停/选中与底色同色，用户点了没反应。给一步 0.012 的地板（ΔE≈1.2），
+      // 宁可微微贴到画布，也不要「看起来没选中」。
       const fitStep = room > 0 ? Math.min(0.024, room) : 0
-      const lightStep = tinted ? (fillL > canvasL ? fitStep : 0.024) : 0.020
+      // 地板与「不许穿回画布」在近白纸面上是矛盾的：可用空间只有 0.005–0.012，
+      // 想给出可见的悬停步进就必然小幅下穿画布。这里定下口径 —— **允许最多 0.008 的下穿**
+      // （实测 0.0026–0.0057，ΔE ≤ 1.4，读作「这一行被按下去一点」），
+      // 但绝不允许旧版那种「悬停与底色完全相同」（ΔE 0.00）。
+      const dipCap = Math.max(0, fillL - canvasL + 0.008)
+      const lightStep = tinted
+        ? (fillL > canvasL ? Math.min(Math.max(fitStep, 0.012), dipCap) : 0.024)
+        : 0.020
       const darkStep = tinted ? 0.030 : 0.018
       return {
         '--dsw-specific-sidebar-fill': { light: lightFill, dark: darkFill },
@@ -880,8 +1339,98 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /**
+     * 覆盖层标记：只由本插件的覆盖层写出去。
+     * 宿主撤销这一层（插件卸载 / fiber 清理）时标记会一起消失 ——
+     * 自愈因此能看出「层真的没了」，而不是靠「token 属性是否非空」去猜
+     * （覆盖层没了以后宿主的基础 token 仍然有值，旧判据会一直报假健康）。
+     */
+    const LAYER_MARK = '--dshtp-layer'
+
+    /* ---------- 色阶排序归一化（审计 3.2）----------
+     * 单条色阶同时服务明暗两侧，语义是「序号越大越深」。但求解器是逐个承载面反解明度的，
+     * 收尾时不排序就会出现反序：浅色 1000（正文墨色）为凑 12:1 被拉亮到 L≈0.250，
+     * 反而比 950（侧栏深底 L≈0.194）更亮 —— 「越深越黑」在最后两档失效。
+     * 这里只做最小必要修正，不重排设计：
+     *   1) 面/中性档之间严格递减（间隔 ≥ RAMP_MIN_GAP，约 ΔE 0.6，肉眼不可辨但不再是同色）；
+     *   2) 浅色墨色档（600/700/1000）必须比它前面那一档更深。
+     * 深色墨色档（50/300/400）**有意**比相邻面更亮（字要比底亮），不参与排序 ——
+     * 它们的下限由对比度求解器负责，排序会把它们压暗、直接违反 3.1 的新下限。
+     * 归一化只会把颜色压深（明度只减不增）：浅色侧背景变暗、深色侧背景变暗，
+     * 两侧的文字对比度都只会上升，不会破新下限。
+     */
+    const RAMP_MIN_GAP = 0.006
+    const RAMP_INK_LIGHT = ['600', '700', '1000']
+    const RAMP_INK_DARK = ['50', '300', '400']
+    const RAMP_ORDER = ['00', '50', '60', '75', '100', '150', '200', '300', '400', '500', '600', '700', '750', '800', '850', '875', '950', '1000']
+
+    function enforceRampOrder(pairs) {
+      const key = (step) => '--dsw-static-neutral-bluish-' + step
+      const present = RAMP_ORDER.filter((s) => pairs[key(s)])
+      if (present.length < 8) return false
+      let changed = false
+      const clampTo = (step, side, Lmax, C, h) => {
+        const [L] = toOklch(pairs[key(step)][side])
+        if (L <= Lmax) return
+        pairs[key(step)][side] = fromOklch(Lmax, C, h)
+        changed = true
+      }
+      for (const side of ['light', 'dark']) {
+        const inks = side === 'light' ? RAMP_INK_LIGHT : RAMP_INK_DARK
+        // 1) 面/中性档严格递减（跳过墨色档，它们不按序号排）
+        let prev = null
+        for (const step of present) {
+          const [L, C, h] = toOklch(pairs[key(step)][side])
+          const ink = inks.includes(step)
+          if (!ink && prev !== null && L > prev - RAMP_MIN_GAP) clampTo(step, side, prev - RAMP_MIN_GAP, C, h)
+          const [Lf] = toOklch(pairs[key(step)][side])
+          prev = Lf
+        }
+        // 2) 浅色墨色档（700 / 1000）：只在墨色之间保证「序号越大越深」。
+        //    不能拿它跟 950 之类的深色**面**比大小 —— 参考墨色 #2b2622（L≈0.27）本来就比
+        //    浅色模式里最深的 950 面（L≈0.15）浅，强行压成反序会让正文变成近黑（ΔE 7.4），
+        //    违背 1.9.0「参考墨色精确对齐」的承诺。墨色是文字，不参与面的阶梯。
+        if (side === 'light') {
+          let prevInk = null
+          for (const step of present) {
+            if (!inks.includes(step)) continue
+            const [L, C, h] = toOklch(pairs[key(step)][side])
+            if (prevInk !== null && L > prevInk - RAMP_MIN_GAP) clampTo(step, side, prevInk - RAMP_MIN_GAP, C, h)
+            prevInk = toOklch(pairs[key(step)][side])[0]
+          }
+        }
+      }
+      return changed
+    }
+
+    /* ---------- token 层结果缓存（审计 3.11）----------
+     * buildTokens 实测 2.4 ms/次，而设置页一次渲染会算好几遍（渲染 + 对比度报表 + 自定义解释）。
+     * 色阶早就有缓存（rampCache），token 层没有；这里按「配色 + 三色 + 七个 mode」缓存整张表。
+     * 表只读（覆盖层与报表都只读它），所以可以安全复用同一个对象。
+     */
+    const tokenCache = new Map()
+    const TOKEN_CACHE_LIMIT = 24
     function buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode) {
-      const hc = hcMode === true
+      const customKey = scheme && scheme.custom === true
+        ? (() => { const c = readCustom(); return c ? c.bg + c.text + c.accent : '' })()
+        : ''
+      const key = [
+        scheme && scheme.id, customKey, sidebarMode, textMode, rightbarMode,
+        scrollMode, controlMode, mdMode, hcMode === true ? 1 : 0,
+      ].join('|')
+      const hit = tokenCache.get(key)
+      if (hit) return hit
+      const built = buildTokensRaw(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode)
+      tokenCache.set(key, built)
+      while (tokenCache.size > TOKEN_CACHE_LIMIT) tokenCache.delete(tokenCache.keys().next().value)
+      return built
+    }
+
+    function buildTokensRaw(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hcMode) {
+      // hc 同时接受布尔与 HC_MODES 的 id（'on' / 'off'）：两条调用路径历史上混用过
+      const hc = hcMode === true || hcMode === 'on'
+      // 审计 3.9：入口先校验模式 id（拼错就静默退回默认是最难查的一类问题）
+      warnUnknownModes({ sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode })
       // 自定义配色必须先解引用：ramps 内部会派生参数，但 accent / scroll / control
       // 这些直接读 params.accentHue、params.hue 的地方若拿到占位值，就会"不跟取色"
       const params = scheme && scheme.custom === true ? customScheme(readCustom()) : scheme
@@ -1065,7 +1614,7 @@ window.__ModuleLoader__.load({
         pairs['--shiki-background'] = codeFill
         pairs['--shiki-foreground'] = { light: ramps.bluish['1000'], dark: ramps.bluish['50'] }
       }
-      const scroll = scrollbarTokens(ramps, params, scrollMode)
+      const scroll = scrollbarTokens(ramps, params, scrollMode, hc)
       for (const [name, pair] of Object.entries(scroll)) pairs[name] = pair
       // 开关/勾选/单选的共用支点：brand-primary 本来是近黑/近白，改成强调色。
       if (controlMode === 'accent') {
@@ -1089,83 +1638,79 @@ window.__ModuleLoader__.load({
       const TT = TEXT_TARGETS[scheme.id]
       // 三套预置走参考目标；自定义没有参考表，但同样要拿到跟随主题的注释/文字
       if (scheme.tinted) {
-        const fit = (hex, bgs, target) => {
-          const dir = contrast('#ffffff', bgs[0]) >= contrast('#000000', bgs[0]) ? 1 : -1
+        /* 一个求解器管三类用途（审计 3.11：原来 fit / boost / vivid 是三份近似复制）：
+         * 给定色相与色度，沿「远离背景」的方向微调明度，直到每一步承载面都过 floor。
+         *   addC：按档位给参考墨色加减色度（审计 3.3，静/标准/浓三档由此可辨）
+         *   minC：色度不足时先抬到该值（注释层 / 二三级文字的「鲜艳度」）
+         *   from：从指定明度起步（菜单文字的 dimTo）
+         */
+        const solveOn = (hex, bgs, floor, opts) => {
+          const o = opts || {}
+          const lo = o.lo === undefined ? 0.02 : o.lo
+          const hi = o.hi === undefined ? 0.99 : o.hi
           const [L0, C0, h0] = toOklch(hex)
-          let L = L0
-          for (let i = 0; i < 200; i++) {
-            const c = fromOklch(clamp(L, 0.02, 0.99), C0, h0)
-            if (bgs.every((b) => contrast(c, b) >= target)) return c
+          // minC 与 addC 叠加：光有 minC 会把三档的「鲜艳度」拉平（靛蓝次级实测 ΔE 0.9），
+          // 光有 addC 则二三级文字在低色度配色上根本抬不起来。
+          const baseC = o.minC === undefined ? Math.abs(C0) : Math.max(Math.abs(C0), o.minC)
+          const C = Math.max(0, baseC + (o.addC || 0))
+          const dir = o.dir || (contrast('#ffffff', bgs[0]) >= contrast('#000000', bgs[0]) ? 1 : -1)
+          let L = o.from === undefined ? L0 : o.from
+          const steps = o.steps || 200
+          for (let i = 0; i < steps; i++) {
+            const c = fromOklch(clamp(L, lo, hi), C, h0)
+            if (bgs.every((b) => contrast(c, b) >= floor)) return c
             L += dir * 0.003
           }
-          return fromOklch(clamp(L, 0.02, 0.99), C0, h0)
+          return fromOklch(clamp(L, lo, hi), C, h0)
         }
+        const SC = scalesFor(textMode)
         const lightBgs = ['00', '60', '150'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].light)
         const darkBgs = ['950', '875', '850', '800'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].dark)
         const F = floors(hc)
+        // 深色侧单独一套下限（审计 3.1）：同样是 4.62，深色模块面上的 APCA Lc 只有 45–48，
+        // WCAG 的「过 AA」在暗底上并不等于真的看得清。
+        const FD = floorsDark(hc)
         if (TT) {
-        pairs['--dsw-static-neutral-bluish-1000'].light = fit(TT.light['1000'], lightBgs, F.main)
-        pairs['--dsw-static-neutral-bluish-700'].light = fit(TT.light['700'], lightBgs, F.secondary)
-        pairs['--dsw-static-neutral-bluish-600'].light = fit(TT.light['600'], lightBgs, F.tertiary)
-        pairs['--dsw-static-neutral-bluish-50'].dark = fit(TT.dark['50'], darkBgs, F.main)
-        pairs['--dsw-static-neutral-bluish-300'].dark = fit(TT.dark['300'], darkBgs, F.secondary)
-        pairs['--dsw-static-neutral-bluish-400'].dark = fit(TT.dark['400'], darkBgs, F.tertiary)
-        pairs['--dsw-alias-link'] = { light: fit(TT.light.link, lightBgs, F.link), dark: fit(TT.dark.link, darkBgs, F.link) }
+        pairs['--dsw-static-neutral-bluish-1000'].light = solveOn(TT.light['1000'], lightBgs, F.main, { addC: SC.inkC })
+        pairs['--dsw-static-neutral-bluish-700'].light = solveOn(TT.light['700'], lightBgs, F.secondary, { addC: SC.inkC })
+        pairs['--dsw-static-neutral-bluish-600'].light = solveOn(TT.light['600'], lightBgs, F.tertiary, { addC: SC.inkC })
+        pairs['--dsw-static-neutral-bluish-50'].dark = solveOn(TT.dark['50'], darkBgs, F.main, { addC: SC.inkDarkC })
+        pairs['--dsw-static-neutral-bluish-300'].dark = solveOn(TT.dark['300'], darkBgs, FD.secondary, { addC: SC.inkDarkC })
+        pairs['--dsw-static-neutral-bluish-400'].dark = solveOn(TT.dark['400'], darkBgs, FD.tertiary, { addC: SC.inkDarkC })
+        pairs['--dsw-alias-link'] = {
+          light: solveOn(TT.light.link, lightBgs, F.link, { addC: SC.inkC }),
+          // 深色链接再过一道 Lc 闸（1.9.9）：参考实现的链接色在 800 面上只有 Lc 59，
+          // 刚好差一点；抬 WCAG 下限会把它推成近白，所以按 Lc 收。
+          dark: raiseToLc(solveOn(TT.dark.link, darkBgs, F.link, { addC: SC.inkDarkC }), darkBgs, hc ? 75 : 60),
+        }
         }
         // 更弱的注释层（label-dimmed / document-preview）也跟随主题：
         // 这些 token 走的是 200/750、300/700 这类低色度档，之前几乎是中性灰。
-        const boost = (hex, C, bgs, floor) => {
-          const [L0, C0, h0] = toOklch(hex)
-          const dir = contrast('#ffffff', bgs[0]) >= contrast('#000000', bgs[0]) ? 1 : -1
-          let L = L0
-          for (let i = 0; i < 200; i++) {
-            const c = fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
-            if (bgs.every((b) => contrast(c, b) >= floor)) return c
-            L += dir * 0.003
-          }
-          return fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
-        }
-        const dimLight = boost(pairs['--dsw-static-neutral-bluish-200'].light, 0.040, lightBgs, 3.0)
-        const dimDark = boost(pairs['--dsw-static-neutral-bluish-750'].dark, 0.040, darkBgs, 3.0)
+        const dimLight = solveOn(pairs['--dsw-static-neutral-bluish-200'].light, lightBgs, 3.0, { minC: 0.040, addC: SC.inkC })
+        const dimDark = solveOn(pairs['--dsw-static-neutral-bluish-750'].dark, darkBgs, 3.0, { minC: 0.040, addC: SC.inkDarkC })
         pairs['--dsw-alias-label-dimmed'] = { light: dimLight, dark: dimDark }
-        // 明暗两套都提高「鲜艳度」：二级/三级文字按主题色相给足色度（0.05），
-        // 再对真实承载面求解对比度；只动色度不动语义。
-        const vivid = (hex, C, bgs, floor) => {
-          const [L0, C0, h0] = toOklch(hex)
-          const dir = contrast('#ffffff', bgs[0]) >= contrast('#000000', bgs[0]) ? 1 : -1
-          let L = L0
-          for (let i = 0; i < 240; i++) {
-            const c = fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
-            if (bgs.every((b) => contrast(c, b) >= floor)) return c
-            L += dir * 0.003
-          }
-          return fromOklch(clamp(L, 0.02, 0.99), Math.max(C0, C), h0)
-        }
+        // 明暗两套都提高「鲜艳度」：二级/三级文字按主题色相给足色度，再对真实承载面求解对比度；
+        // 只动色度不动语义。
         pairs['--dsw-alias-label-tertiary'] = {
-          light: vivid(pairs['--dsw-static-neutral-bluish-600'].light, 0.055, lightBgs, F.tertiary),
-          dark: vivid(pairs['--dsw-static-neutral-bluish-400'].dark, 0.055, darkBgs, F.tertiary),
+          light: solveOn(pairs['--dsw-static-neutral-bluish-600'].light, lightBgs, F.tertiary, { minC: 0.055, addC: SC.inkC, steps: 240 }),
+          dark: solveOn(pairs['--dsw-static-neutral-bluish-400'].dark, darkBgs, FD.tertiary, { minC: 0.055, addC: SC.inkDarkC, steps: 240 }),
         }
         pairs['--dsw-alias-label-secondary'] = {
-          light: vivid(pairs['--dsw-static-neutral-bluish-700'].light, 0.050, lightBgs, F.secondary),
-          dark: vivid(pairs['--dsw-static-neutral-bluish-300'].dark, 0.050, darkBgs, F.secondary),
+          light: solveOn(pairs['--dsw-static-neutral-bluish-700'].light, lightBgs, F.secondary, { minC: 0.050, addC: SC.inkC, steps: 240 }),
+          dark: solveOn(pairs['--dsw-static-neutral-bluish-300'].dark, darkBgs, FD.secondary, { minC: 0.050, addC: SC.inkDarkC, steps: 240 }),
         }
-        // 深色模式菜单/说明文字：默认解到 800 面会偏亮，这里按导航实际承载面（950/875）
+        // 深色模式菜单/说明文字：默认解到 800 面会偏亮，这里按导航实际承载面（950/875 起）
         // 压到更低的明度目标，达不到下限时才回抬，避免"菜单一片白"。
-        const dimTo = (hex, Lwant, bgs, floor) => {
-          const [, C0, h0] = toOklch(hex)
-          let L = Lwant
-          for (let i = 0; i < 120; i++) {
-            const c = fromOklch(clamp(L, 0.2, 0.99), C0, h0)
-            if (bgs.every((b) => contrast(c, b) >= floor)) return c
-            L += 0.003
-          }
-          return fromOklch(clamp(L, 0.2, 0.99), C0, h0)
-        }
-        const navBgs = ['950', '875'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].dark)
-        pairs['--dsw-alias-label-secondary'].dark = dimTo(pairs['--dsw-alias-label-secondary'].dark, 0.78, navBgs, F.secondary)
-        pairs['--dsw-alias-label-tertiary'].dark = dimTo(pairs['--dsw-alias-label-tertiary'].dark, 0.70, navBgs, F.tertiary)
-        const prevLight = boost(pairs['--dsw-static-neutral-bluish-300'].light, 0.030, lightBgs, 3.0)
-        const prevDark = boost(pairs['--dsw-static-neutral-bluish-700'].dark, 0.030, darkBgs, 3.0)
+        // 1.9.8：承压面必须把 850/800 一起算进去 —— 只按 950/875 压暗，
+        // 压出来的字色在更亮的 800（模块面）上对比度会掉到下限以下
+        // （暖砂普通档三级文字 3.79、HC 4.29，低于 AA 4.5），
+        // 而色阶步进（600/400）本来是按 800 求解的 —— 两边口径必须一致。
+        const navBgs = ['950', '875', '850', '800'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].dark)
+        const dimTo = (hex, Lwant, bgs, floor) => solveOn(hex, bgs, floor, { from: Lwant, lo: 0.2, dir: 1, steps: 120 })
+        pairs['--dsw-alias-label-secondary'].dark = dimTo(pairs['--dsw-alias-label-secondary'].dark, 0.78, navBgs, FD.secondary)
+        pairs['--dsw-alias-label-tertiary'].dark = dimTo(pairs['--dsw-alias-label-tertiary'].dark, 0.70, navBgs, FD.tertiary)
+        const prevLight = solveOn(pairs['--dsw-static-neutral-bluish-300'].light, lightBgs, 3.0, { minC: 0.030, addC: SC.inkC })
+        const prevDark = solveOn(pairs['--dsw-static-neutral-bluish-700'].dark, darkBgs, 3.0, { minC: 0.030, addC: SC.inkDarkC })
         pairs['--dsw-alias-label-document-preview'] = { light: prevLight, dark: prevDark }
       }
             /* ---- 暗色正文按 10:1 定标（1.9.7）----
@@ -1176,13 +1721,23 @@ window.__ModuleLoader__.load({
         const hex = pairs['--dsw-static-neutral-bluish-50'].dark
         const bgs = ['875', '950', '850'].map((k) => pairs['--dsw-static-neutral-bluish-' + k].dark)
         const [L0, C0, h0] = toOklch(hex)
+        // 承诺面是 875/950（目标 10:1）。定标把正文压到「875 上限 10.2」，
+        // 但压完必须仍 ≥ 10.0 —— 宁可亮一点也不失约；压过头就保持原色。
+        let chosen = null
         let L = L0
         for (let j = 0; j < 240; j++) {
           const c = fromOklch(clamp(L, 0.2, 0.99), C0, h0)
-          if (contrast(c, bgs[0]) <= 10.2) { pairs['--dsw-static-neutral-bluish-50'].dark = c; break }
+          const r = contrast(c, bgs[0])
+          if (r <= 10.2) { if (r >= 10) chosen = c; break }
           L -= 0.002
         }
+        if (chosen) pairs['--dsw-static-neutral-bluish-50'].dark = chosen
       }
+      // 色阶排序归一化（审计 3.2）：放在最后 —— 前面的求解与参考墨色对齐都可能把某一档
+      // 推出反序，收尾统一压一次，保证「序号越大越深」在整条色阶上成立。
+      if (params.tinted) enforceRampOrder(pairs)
+      // 覆盖层标记（自愈判据用）：宿主撤销这一层时它会一起消失。
+      pairs[LAYER_MARK] = { light: '1', dark: '1' }
 return pairs
     }
 
@@ -1261,6 +1816,9 @@ return pairs
 .dsh-tp-card{position:relative;display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;color:var(--dsw-alias-label-primary);cursor:pointer;padding:9px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:transparent;transition:background .12s ease,border-color .12s ease}
 .dsh-tp-card:hover{background:var(--dsw-alias-interactive-bg-hover)}
 .dsh-tp-card:focus-visible{outline-offset:2px}
+/* 焦点环统一用宿主的主文字色（审计 3.11）：原来只写 outline-offset、颜色交给 UA，
+ * 在部分浏览器/系统主题下这一圈会低到 1.x:1。2px 实线 + 主文字色，任何配色下都够亮。 */
+.dsh-tp-card:focus-visible,.dsh-tp-seg button:focus-visible,.dsh-tp-mini:focus-visible,.dsh-tp-more:focus-visible,.dsh-tp-color:focus-visible,.dsh-tp-hexinput:focus-visible,.dsh-tp-matrix-scroll:focus-visible{outline:2px solid var(--dsw-alias-label-primary);outline-offset:2px}
 .dsh-tp-card.is-on{background:var(--dshtp-card-picked,var(--dsw-alias-bg-module-platform));border-color:var(--t-accent-l)}
 body[data-ds-dark-theme] .dsh-tp-card.is-on{border-color:var(--t-accent-d)}
 .dsh-tp-thumb{display:flex;height:56px;border-radius:9px;overflow:hidden;border:.5px solid rgba(128,128,128,.28)}
@@ -1292,7 +1850,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-more{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12.5px;color:var(--dsw-alias-label-tertiary);background:0 0;border:0;padding:6px 0 2px;cursor:pointer;align-self:flex-start;transition:color .12s}
 .dsh-tp-more:hover{color:var(--dsw-alias-label-primary)}
 .dsh-tp-adv{display:flex;flex-direction:column}
-.dsh-tp-input{flex:1 1 220px;min-width:0;font:12px/20px ui-monospace,Consolas,monospace;padding:5px 9px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
+.dsh-tp-input{flex:1 1 220px;min-width:0;font:12px/20px ui-monospace,Consolas,monospace;padding:5px 9px;border-radius:8px;border:1px solid var(--dshtp-border-control,var(--dsw-alias-border-l4));background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary)}
 .dsh-tp-input::placeholder{color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-mini{font:inherit;font-size:12.5px;line-height:20px;padding:5px 12px;border-radius:8px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-interactive-bg-hover);color:var(--dsw-alias-label-primary);cursor:pointer}
 .dsh-tp-mini:hover{background:var(--dsw-alias-bg-layer-1)}
@@ -1306,10 +1864,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-color::-webkit-color-swatch{border:none;border-radius:8px}
 .dsh-tp-swatch-name{font-size:12px;color:var(--dsw-alias-label-secondary)}
 .dsh-tp-hex{font:11.5px/1 ui-monospace,Consolas,monospace;color:var(--dsw-alias-label-tertiary)}
-.dsh-tp-hexinput{width:100%;box-sizing:border-box;font:11.5px/16px ui-monospace,Consolas,monospace;padding:3px 6px;border-radius:6px;border:.5px solid var(--dsw-alias-border-l4);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
+.dsh-tp-hexinput{width:100%;box-sizing:border-box;font:11.5px/16px ui-monospace,Consolas,monospace;padding:3px 6px;border-radius:6px;border:1px solid var(--dshtp-border-control,var(--dsw-alias-border-l4));background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)}
 .dsh-tp-hexinput:focus-visible{outline-offset:1px}
 .dsh-tp-hexinput[aria-invalid="true"]{border-color:var(--dsw-alias-state-error-primary)}
 .dsh-tp-hexerror{font-size:11.5px;line-height:16px;color:var(--dsw-alias-state-error-primary)}
+.dsh-tp-hexnote{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
 .dsh-tp-custom-hint{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
 .dsh-tp-note{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status{margin:0;font-size:11.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
@@ -1318,18 +1877,35 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-matrix-head{display:flex;align-items:center;gap:8px}
 .dsh-tp-matrix-title{font-size:13.5px;font-weight:500}
 .dsh-tp-matrix-sub{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-tertiary)}
-.dsh-tp-matrix table{border-collapse:collapse;width:100%;font-size:11.5px;line-height:16px;font-variant-numeric:tabular-nums}
+.dsh-tp-matrix-scroll{overflow-x:auto;max-width:100%;padding-bottom:2px}
+.dsh-tp-matrix-scroll:focus-visible{outline-offset:2px}
+.dsh-tp-matrix table{border-collapse:collapse;width:max-content;min-width:100%;font-size:11.5px;line-height:16px;font-variant-numeric:tabular-nums}
 .dsh-tp-matrix th,.dsh-tp-matrix td{padding:4px 6px;text-align:right;border-top:.5px solid var(--dsw-alias-border-l2);white-space:nowrap}
 .dsh-tp-matrix th:first-child,.dsh-tp-matrix td:first-child{text-align:left}
 .dsh-tp-matrix thead th{font-weight:500;color:var(--dsw-alias-label-tertiary);border-top:0}
 .dsh-tp-matrix td.is-ok{color:var(--dsw-alias-label-secondary)}
 .dsh-tp-matrix td.is-limited{color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-matrix td.is-exempt{color:var(--dsw-alias-label-tertiary)}
+.dsh-tp-matrix td.is-na{color:var(--dsw-alias-label-tertiary);opacity:.55}
 .dsh-tp-matrix td.is-bad{color:var(--dsw-alias-state-error-primary);font-weight:500}
 .dsh-tp-matrix td .dsh-tp-matrix-mark{font-size:10px;margin-left:2px}
 .dsh-tp-field{display:flex;flex-direction:column;gap:8px;padding:11px 0;border-top:.5px solid var(--dsw-alias-border-l2)}
 .dsh-tp-field-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .dsh-tp-field-title{font-size:13.5px;font-weight:500}
 .dsh-tp-input{text-overflow:ellipsis}
+/* 面板区域显式声明配色方案（审计 3.11）：原生横向滚动条、取色器、数字控件按它决定明暗，
+ * 否则深色界面里「对比度表」的横向滚动条仍然是一条浅色的。 */
+.dsh-tp{color-scheme:light}
+body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
+/* 强制配色模式（Windows 高对比 / forced-colors）：
+ * 颜色本身会被系统接管，不用对抗；但「选中态」靠的是 box-shadow 与 opacity，
+ * 这两样不会被接管 —— 于是卡片与分段控件在强制配色下会分不出选中的是哪一个。这里补一个显式描边。 */
+@media (forced-colors:active){
+  .dsh-tp-card,.dsh-tp-seg,.dsh-tp-custom,.dsh-tp-color,.dsh-tp-hexinput,.dsh-tp-input,.dsh-tp-mini{border:1px solid ButtonBorder}
+  .dsh-tp-card.is-on,.dsh-tp-seg button.is-on{box-shadow:none;outline:2px solid Highlight;outline-offset:1px}
+  .dsh-tp-check{forced-color-adjust:none;background:Highlight;color:HighlightText}
+  .dsh-tp-status.is-bad,.dsh-tp-hexerror{color:LinkText}
+}
 @media (prefers-reduced-motion:reduce){.dsh-tp-card,.dsh-tp-seg button,.dsh-tp-more,.dsh-tp-check,.dsh-tp-mini{transition:none}}
 `
 
@@ -1378,6 +1954,11 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       '--dsw-alias-link',
       '--dsw-specific-sidebar-fill',
       '--dsw-alias-label-caption',
+      // 审计 3.11：菜单底色是唯一被宿主用更高特异性规则声明过的 token
+      // （html[data-platform=darwin] body{--dsw-specific-menu:…} 自带 #f8f9faf0 的冷灰）。
+      // 覆盖层若在它面前失效，菜单会悄悄回到宿主的冷灰 —— 探一针就能发现。
+      '--dsw-specific-menu',
+      '--dsw-alias-label-tertiary',
     ]
 
     /** 只用于比对的颜色解析：支持 #rgb/#rrggbb/#rrggbbaa 与 rgb()/rgba()。 */
@@ -1662,7 +2243,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         hc: '高对比',
         custom: '自定义配色',
         customHint: '取三个色的色相与色度；过亮/过暗的强调色会归一化以保证可读，明度由引擎按模式计算。',
-        notice: '1.7.0 调整了派生规则：极端强调色会归一化、文字色相参与派生、深色模块面按可达上限报告对比度。',
+        notice: '1.9.9 按独立审计逐条修订：深色文字下限单独提高（次级 8 / 三级 6.4）、文字着色三档对预置配色真正生效、色阶不再出现「编号越大反而越亮」、高对比档的边框与滚动条也真提高了；报表新增 APCA 列。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -1670,12 +2251,23 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         sample: '试试示例',
         copyDiag: '复制诊断',
         contrast: '对比度',
-        contrastSub: '实测 / 目标（按承载面；※ 不计硬门·△ 表面受限）',
+        contrastSub: '实测 / 目标（按承载面；※ 政策外不计硬门 · △ 物理不可达）',
         cMain: '正文',
         cSecondary: '次级',
         cTertiary: '三级',
         cLink: '链接',
-        cLimited: '表面受限',
+        cLimited: '物理不可达',
+        cExempt: '政策外',
+        cUnmeasured: '未覆盖',
+        cCeiling: '物理上限',
+        cTarget: '目标',
+        cLegend: '统计（达标 / 未达标 / 政策外）',
+        cLimitedCount: '物理不可达（按物理上限判定，仍计入达标）',
+        cFloor: 'AA 底线 4.5',
+        cFloorViolations: '低于 AA 底线',
+        matrixLabel: '对比度矩阵',
+        matrixNa: '当前配色不覆盖承载面（黑白配色只改文字与强调色），矩阵不适用',
+        applyFailed: '配置已保存，但主题没有应用成功',
         cancel: '取消',
         importSummary: '将覆盖：',
         config: '配置',
@@ -1689,7 +2281,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         importLegacy: '已导入（旧短码不含自定义三色）',
         importBad: '短码无效，已忽略',
         badHex: 'HEX 需为 #RRGGBB',
-        hcSub: '尽量把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三级 ≥7）；深色模块面的上限受表面亮度限制。',
+        hexStale: '这个值刚被别处改过，已保留最新值',
+        hcSub: '尽量把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三级 ≥7）；深色 800/850 不为正文兜底（政策外），但仍守 AA 底线。',
       },
       'zh-TW': {
         nav: '主題色',
@@ -1716,7 +2309,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         hc: '高對比',
         custom: '自訂配色',
         customHint: '取三個色的色相與色度；過亮/過暗的強調色會正規化以確保可讀性，明度由引擎依模式計算。',
-        notice: '1.7.0 調整了衍生規則：極端強調色會正規化、文字色相參與衍生、深色模組面按可達上限回報對比度。',
+        notice: '1.9.9 依獨立稽核逐條修訂：深色文字下限另行提高（次要 8 / 三級 6.4）、文字著色三檔對預設配色真正生效、色階不再出現「編號越大反而越亮」、高對比檔的邊框與捲軸也真提高了；報表新增 APCA 欄。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -1724,12 +2317,23 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         sample: '試試示例',
         copyDiag: '複製診斷',
         contrast: '對比度',
-        contrastSub: '實測 / 目標（依承載面；※ 不計硬門·△ 表面受限）',
+        contrastSub: '實測 / 目標（依承載面；※ 政策外不計硬門 · △ 物理不可達）',
         cMain: '正文',
         cSecondary: '次級',
         cTertiary: '三級',
         cLink: '連結',
-        cLimited: '表面受限',
+        cLimited: '物理不可達',
+        cExempt: '政策外',
+        cUnmeasured: '未覆蓋',
+        cCeiling: '物理上限',
+        cTarget: '目標',
+        cLegend: '統計（達標 / 未達標 / 政策外）',
+        cLimitedCount: '物理不可達（按物理上限判定，仍計入達標）',
+        cFloor: 'AA 底線 4.5',
+        cFloorViolations: '低於 AA 底線',
+        matrixLabel: '對比度矩陣',
+        matrixNa: '目前配色不覆蓋承載面（黑白配色只改文字與強調色），矩陣不適用',
+        applyFailed: '設定已儲存，但主題沒有套用成功',
         cancel: '取消',
         importSummary: '將覆蓋：',
         config: '設定',
@@ -1743,7 +2347,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         importLegacy: '已匯入（舊短碼不含自訂三色）',
         importBad: '短碼無效，已忽略',
         badHex: 'HEX 需為 #RRGGBB',
-        hcSub: '盡量把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三級 ≥7）；深色模組面的上限受表面亮度限制。',
+        hexStale: '這個值剛被別處改過，已保留最新值',
+        hcSub: '盡量把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三級 ≥7）；深色 800/850 不為正文兜底（政策外），但仍守 AA 底線。',
       },
       en: {
         nav: 'Color theme',
@@ -1770,7 +2375,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         hc: 'High contrast',
         custom: 'Custom palette',
         customHint: 'Takes hue and chroma from three colours; extreme accents are normalised for readability; lightness comes from the engine per mode.',
-        notice: '1.7.0 changes how colours are derived: extreme accents are normalised, text hue now affects derivation, and dark module surfaces report contrast against their achievable ceiling.',
+        notice: '1.9.9 fixes the issues from an independent audit: dark text gets its own higher floors (secondary 8 / tertiary 6.4), the text-tint tiers now really work on presets, ramps no longer go "higher step, lighter colour", and high-contrast borders and scrollbars are genuinely raised; the report gains an APCA column.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -1778,12 +2383,23 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         sample: 'Try a sample',
         copyDiag: 'Copy diagnostics',
         contrast: 'Contrast',
-        contrastSub: 'measured / target per surface (※ not gated · △ surface-limited)',
+        contrastSub: 'measured / target per surface (※ out of policy, not gated · △ physically unreachable)',
         cMain: 'Body',
         cSecondary: 'Secondary',
         cTertiary: 'Tertiary',
         cLink: 'Link',
-        cLimited: 'surface-limited',
+        cLimited: 'physically unreachable',
+        cExempt: 'out of policy',
+        cUnmeasured: 'not overridden',
+        cCeiling: 'physical ceiling',
+        cTarget: 'target',
+        cLegend: 'counts (pass / fail / out of policy)',
+        cLimitedCount: 'physically unreachable (judged by the physical ceiling; still counted as a pass)',
+        cFloor: 'AA floor 4.5',
+        cFloorViolations: 'below the AA floor',
+        matrixLabel: 'Contrast matrix',
+        matrixNa: 'This palette does not override the surfaces (mono changes only text and accents), so the matrix does not apply',
+        applyFailed: 'Settings were saved, but the theme could not be applied',
         cancel: 'Cancel',
         importSummary: 'Will overwrite:',
         config: 'Config',
@@ -1797,7 +2413,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         importLegacy: 'Imported (old code has no custom colours)',
         importBad: 'Invalid code, ignored',
         badHex: 'HEX must be #RRGGBB',
-        hcSub: 'Raises text floors toward AAA (body ≥15, secondary ≥9, tertiary ≥7); dark module surfaces are limited by surface luminance.',
+        hexStale: 'This value was changed elsewhere; the latest value was kept',
+        hcSub: 'Raises text floors toward AAA (body ≥15, secondary ≥9, tertiary ≥7); dark 800/850 no longer back the body text (out of policy) but still hold the AA floor.',
       },
       ja: {
         nav: 'カラーテーマ',
@@ -1824,7 +2441,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         hc: 'ハイコントラスト',
         custom: 'カスタム配色',
         customHint: '3 色の色相と彩度を使用。極端なアクセント色は可読性のため正規化され、明度はモードごとにエンジンが決めます。',
-        notice: '1.7.0 で派生ルールを変更しました：極端なアクセント色は正規化され、文字の色相が派生に使われ、暗いモジュール面は到達可能な上限でコントラストを報告します。',
+        notice: '1.9.9 は独立監査の指摘を順に修正しました：ダークの文字下限を個別に引き上げ（二次 8 / 三次 6.4）、テキストの色味 3 段階がプリセットでも実際に効くようになり、色階が「番号が大きいほど明るい」現象も解消、ハイコントラストの枠線とスクロールバーも実際に強まりました。レポートに APCA 列を追加。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
@@ -1832,12 +2449,23 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         sample: 'サンプルを試す',
         copyDiag: '診断をコピー',
         contrast: 'コントラスト',
-        contrastSub: '実測 / 目標（面ごと；※ 判定外・△ 面の上限）',
+        contrastSub: '実測 / 目標（面ごと；※ 対象外・△ 物理的に到達不可）',
         cMain: '本文',
         cSecondary: '副次',
         cTertiary: '三次',
         cLink: 'リンク',
-        cLimited: '面の上限',
+        cLimited: '物理的に到達不可',
+        cExempt: '対象外',
+        cUnmeasured: '未上書き',
+        cCeiling: '物理上限',
+        cTarget: '目標',
+        cLegend: '内訳（合格 / 不合格 / 対象外）',
+        cLimitedCount: '物理不可達（物理上限で判定、合格に計上）',
+        cFloor: 'AA 下限 4.5',
+        cFloorViolations: 'AA 下限未満',
+        matrixLabel: 'コントラスト表',
+        matrixNa: 'この配色は面を上書きしません（白黒は文字とアクセントのみ）。表は適用外です',
+        applyFailed: '設定は保存されましたが、テーマを適用できませんでした',
         cancel: 'キャンセル',
         importSummary: '上書きする内容：',
         config: '設定の共有',
@@ -1851,7 +2479,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         importLegacy: '読み込みました（旧コードにカスタム 3 色は含まれません）',
         importBad: '無効なコードです',
         badHex: 'HEX は #RRGGBB 形式で入力してください',
-        hcSub: '本文の下限を AAA に近づけます（本文 ≥15、副次 ≥9、三次 ≥7）。暗いモジュール面は表面の明るさで上限が決まります。',
+        hexStale: 'この値は別の場所で変更されました。最新の値を保持しています',
+        hcSub: '本文の下限を AAA に近づけます（本文 ≥15、副次 ≥9、三次 ≥7）。暗い 800/850 は本文を受け皿にしません（対象外）ですが、AA 下限は守ります。',
       },
     }
 
@@ -1939,6 +2568,10 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       // HEX 输入需要「草稿」态：非法值不能写进主题，但用户还在输入时也不该被立刻回滚。
       const [hexDraft, setHexDraft] = React.useState({})
       const [hexError, setHexError] = React.useState({})
+      // 草稿起点（当时看到的外部值）与「草稿已过期」提示：外部改动（导入短码、取色器、
+      // 恢复默认）发生在草稿之后时，失焦提交会拿旧草稿盖掉新值 —— 过期就丢弃草稿。
+      const [hexBase, setHexBase] = React.useState({})
+      const [hexStale, setHexStale] = React.useState({})
       // 自定义色有自己的不可变快照与订阅；只订阅 current 不会因三色变化而重渲染。
       const customColors = React.useSyncExternalStore(props.subscribeCustom, props.getCustomColors)
       const locale = React.useSyncExternalStore(props.subscribeLocale, props.getLocale)
@@ -2012,13 +2645,25 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       )
 
       // A06：HEX 以「草稿 + 提交」处理；非法值不写主题，也不假装保存成功。
+      // 1.9.8：草稿还要记住「它是从哪个外部值开始的」。外部改动（导入短码、取色器、
+      // 恢复默认）发生在草稿之后时，失焦提交会拿旧草稿盖掉新值 —— 发现基底变了就丢弃草稿。
       const commitHex = (field) => {
         const draft = hexDraft[field]
-        const raw = String(draft !== undefined ? draft : customColors[field]).trim()
+        const base = hexBase[field]
+        const currentValue = customColors[field]
+        if (draft !== undefined && base !== undefined
+          && String(base).toLowerCase() !== String(currentValue).toLowerCase()) {
+          setHexDraft(Object.assign({}, hexDraft, { [field]: undefined }))
+          setHexError(Object.assign({}, hexError, { [field]: false }))
+          setHexStale(Object.assign({}, hexStale, { [field]: true }))
+          return
+        }
+        const raw = String(draft !== undefined ? draft : currentValue).trim()
         if (HEX_RE.test(raw)) {
           props.setCustomColor(field, raw)
           setHexDraft(Object.assign({}, hexDraft, { [field]: undefined }))
           setHexError(Object.assign({}, hexError, { [field]: false }))
+          setHexStale(Object.assign({}, hexStale, { [field]: false }))
         } else {
           setHexError(Object.assign({}, hexError, { [field]: true }))
         }
@@ -2039,7 +2684,9 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             const colorId = rowId('color-' + field)
             const hexId = rowId('hex-' + field)
             const errId = rowId('hexerr-' + field)
+            const staleId = rowId('hexstale-' + field)
             const invalid = hexError[field] === true
+            const stale = hexStale[field] === true
             return h('div', {
               key: field,
               className: 'dsh-tp-swatch',
@@ -2064,11 +2711,16 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
               value: hexDraft[field] !== undefined ? hexDraft[field] : customColors[field],
               spellCheck: false,
               'aria-invalid': invalid ? 'true' : undefined,
-              'aria-describedby': invalid ? errId : undefined,
+              'aria-describedby': invalid ? errId : (stale ? staleId : undefined),
               'aria-label': name + ' HEX',
               onChange: (e) => {
+                // 第一次输入时记下草稿起点：之后若外部值变了，就知道这个草稿已经过期。
+                if (hexDraft[field] === undefined) {
+                  setHexBase(Object.assign({}, hexBase, { [field]: customColors[field] }))
+                }
                 setHexDraft(Object.assign({}, hexDraft, { [field]: e.target.value }))
                 if (invalid) setHexError(Object.assign({}, hexError, { [field]: false }))
+                if (stale) setHexStale(Object.assign({}, hexStale, { [field]: false }))
               },
               onBlur: () => commitHex(field),
               onKeyDown: (e) => {
@@ -2076,11 +2728,14 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
                 if (e.key === 'Escape') {
                   setHexDraft(Object.assign({}, hexDraft, { [field]: undefined }))
                   setHexError(Object.assign({}, hexError, { [field]: false }))
+                  setHexStale(Object.assign({}, hexStale, { [field]: false }))
+                  setHexBase(Object.assign({}, hexBase, { [field]: undefined }))
                   e.currentTarget.blur()
                 }
               },
             }),
-            invalid && h('span', { id: errId, className: 'dsh-tp-hexerror', role: 'alert' }, txt.badHex))
+            invalid && h('span', { id: errId, className: 'dsh-tp-hexerror', role: 'alert' }, txt.badHex),
+            stale && h('span', { id: staleId, className: 'dsh-tp-hexnote', role: 'status' }, txt.hexStale))
           })),
         h('p', { className: 'dsh-tp-custom-hint' }, txt.customHint),
         explain && (explain.accentClamped || explain.linkShifted) && h(
@@ -2122,27 +2777,73 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             diagState === 'copied' ? txt.copied : txt.copyFail)),
         matrixOpen && (() => {
           const report = props.getContrastReport()
+          const summary = report.summary
+          if (!report.applicable) {
+            return h('p', { id: 'dsh-tp-matrix-body', className: 'dsh-tp-matrix-sub' }, txt.matrixNa)
+          }
           return h(
-            'table',
-            { id: 'dsh-tp-matrix-body' },
-            h('thead', null, h('tr', null,
-              h('th', { scope: 'col' }, ''),
-              CONTRAST_SURFACES.map((sf) => h('th', { key: sf.id, scope: 'col' }, (sf.label || sf.id) + (sf.scope === false ? '※' : ''))))),
-            h('tbody', null, report.rows.map((row) => h('tr', { key: row.role },
-              h('th', { scope: 'row' }, roleLabel[row.role] || row.role),
-              row.cells.map((cell) => {
-                const cls = cell.scope === false ? 'is-limited' : (cell.ok ? 'is-ok' : 'is-bad')
-                const mark = cell.scope === false ? ' ※' : (cell.limited ? ' △' : '')
-                const text = cell.limited ? cell.ratio.toFixed(2) + ' ≤ ' + cell.claim : cell.ratio.toFixed(2)
-                return h('td', {
-                  key: cell.mode + cell.surface,
-                  className: cls,
-                  'data-role': row.role,
-                  'data-surface': cell.surface,
-                  'data-mode': cell.mode,
-                  title: cell.limited ? txt.cLimited + ' ≤ ' + cell.claim : txt.contrast + ' ' + text,
-                }, text + mark)
-              })))))
+            'div',
+            {
+              // 窄栏 / 移动端 / 200% 缩放时矩阵会横向溢出：给它一个有名、可聚焦的滚动区，
+              // 键盘用户才能滚动到右侧的承载面。
+              className: 'dsh-tp-matrix-scroll',
+              role: 'region',
+              'aria-label': txt.matrixLabel,
+              tabIndex: 0,
+            },
+            h(
+              'table',
+              { id: 'dsh-tp-matrix-body' },
+              h('thead', null, h('tr', null,
+                h('th', { scope: 'col' }, ''),
+                CONTRAST_SURFACES.map((sf) => h('th', { key: sf.id, scope: 'col' }, (sf.label || sf.id) + (sf.scope === false ? '※' : ''))))),
+              h('tbody', null, report.rows.map((row) => h('tr', { key: row.role },
+                h('th', { scope: 'row' }, roleLabel[row.role] || row.role),
+                row.cells.map((cell) => {
+                  if (cell.unmeasured) {
+                    return h('td', {
+                      key: cell.mode + cell.surface,
+                      className: 'is-na',
+                      'data-role': row.role,
+                      'data-surface': cell.surface,
+                      'data-mode': cell.mode,
+                      title: txt.cUnmeasured,
+                    }, '—')
+                  }
+                  // 政策外（※）：单列统计 —— 既不计入达标，也不算失败
+                  const exempt = !cell.policyApplicable
+                  const cls = exempt ? 'is-exempt' : (cell.pass ? (cell.limitedByPhysics ? 'is-limited' : 'is-ok') : 'is-bad')
+                  const mark = exempt ? ' ※' : (cell.limitedByPhysics ? ' △' : '')
+                  // 政策外不写「≤ 目标」：那一栏的承诺不适用于它，写了反而像"没达标"
+                  const text = cell.limitedByPhysics && !exempt
+                    ? cell.measured.toFixed(2) + ' ≤ ' + cell.declaredTarget
+                    : cell.measured.toFixed(2)
+                  // APCA 只作参考：1.9.9 起每格附带 Lc，但门仍然只有 WCAG 底线与深色 Lc 底线。
+                  const lcText = cell.apca === null || cell.apca === undefined
+                    ? ''
+                    : ' · APCA Lc ' + Math.abs(cell.apca).toFixed(0)
+                  const title = exempt
+                    ? txt.cExempt + ' · ' + txt.contrast + ' ' + cell.measured.toFixed(2)
+                      + ' · ' + txt.cFloor + (cell.meetsFloor ? ' ✓' : ' ✗') + lcText
+                    : (cell.limitedByPhysics
+                      ? txt.cLimited + ' · ' + txt.cCeiling + ' ' + cell.physicalCeiling.toFixed(2)
+                        + ' · ' + txt.cTarget + ' ' + cell.declaredTarget + lcText
+                      : txt.contrast + ' ' + text + ' · ' + txt.cTarget + ' ' + cell.declaredTarget + lcText)
+                  return h('td', {
+                    key: cell.mode + cell.surface,
+                    className: cls,
+                    'data-role': row.role,
+                    'data-surface': cell.surface,
+                    'data-mode': cell.mode,
+                    title,
+                  }, text + mark)
+                }))))
+            ),
+            h('p', { className: 'dsh-tp-matrix-sub' },
+              txt.cLegend + '：' + summary.passed + ' · ' + summary.failed + ' · ' + summary.exempt
+              + (summary.physicallyLimited > 0 ? ' · ' + txt.cLimitedCount + ' ' + summary.physicallyLimited : '')
+              + (summary.floorViolations > 0 ? ' · ' + txt.cFloorViolations + ' ' + summary.floorViolations : '')),
+          )
         })(),
       )
 
@@ -2191,7 +2892,12 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         row('sidebar', txt.sidebar, txt.sidebarSub, seg(SIDEBAR_MODES, sidebarMode, props.setSidebarMode, lb.sidebar, rowId('sidebar'))),
         row('rightbar', txt.rightbar, txt.rightbarSub, seg(RIGHTBAR_MODES, rightbarMode, props.setRightbarMode, lb.rightbar, rowId('rightbar'))),
         health && !health.ok && h('p', { className: 'dsh-tp-status is-bad' }, txt.bad),
-        health && health.ok && health.reapplies > 0 && h(
+        health && health.applied === false && h(
+          'p',
+          { className: 'dsh-tp-status is-bad', role: 'status' },
+          txt.applyFailed + (health.applyError ? '：' + health.applyError : ''),
+        ),
+        health && health.ok && health.applied !== false && health.reapplies > 0 && h(
           'p',
           { className: 'dsh-tp-status' },
           txt.healed + health.reapplies + txt.healedSuffix,
@@ -2334,9 +3040,30 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
       } catch (err) { return false }
     })()
 
+    /**
+     * 报表入口：palette-dev 报表与 check-audit 断言都走这里，
+     * 拿到的就是**设置页那一份**模型（同一套承诺目标、同一套物理上限、同一套政策豁免）。
+     */
+    function devContrastReport(schemeId, options) {
+      const opt = options || {}
+      const scheme = SCHEMES.find((s) => s.id === schemeId) || SCHEMES[0]
+      const hc = opt.hc === true
+      const tokens = buildTokens(
+        scheme,
+        opt.sidebar || DEFAULT_SIDEBAR,
+        opt.text || DEFAULT_TEXT,
+        opt.rightbar || DEFAULT_RIGHTBAR,
+        opt.scroll || DEFAULT_SCROLL,
+        opt.control || DEFAULT_CONTROL,
+        opt.md || DEFAULT_MD,
+        hc,
+      )
+      return buildContrastReport(tokens, hc, { mono: !scheme.tinted })
+    }
+
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, settingsCss: SETTINGS_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, RIGHTBAR_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, LAYER_MARK, settingsCss: SETTINGS_CSS, cardColors })
     }
 
     return {
@@ -2450,6 +3177,9 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         let lastAppliedAt = 0
         let lastReason = 'init'
         let reapplyCount = 0
+        // 「配置已保存」与「主题已应用」是两件事：选择已经写进 localStorage，
+        // 但覆盖层写失败时屏幕上仍是旧配色。分开报，别让用户以为换成功了。
+        let applyError = null
 
         const applyAll = (reason) => {
           const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
@@ -2459,7 +3189,9 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
             try {
               next = theme.overrideTokens(OVERRIDE_SOURCE, tokens)
             } catch (err) {
-              console.warn('[dsh-theme-palette] 应用配色失败：', err)
+              applyError = String((err && err.message) || err)
+              console.error('[dsh-theme-palette] 应用配色失败（配置已保存，主题未应用）：', err)
+              publishHealth(null)
               return
             }
           }
@@ -2470,6 +3202,7 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           if (reason !== undefined) lastReason = reason
           lastTokens = tokens
           lastAppliedAt = Date.now()
+          applyError = null
           scheduleProbe(tokens)
         }
         /**
@@ -2486,34 +3219,49 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         let lastHealAt = 0
         let healDisabled = false
 
+        /**
+         * 覆盖层还在不在（1.9.8：不再看「属性非空」）。
+         *
+         * 旧判据是「关键 token 的计算值是否为空」——覆盖层被宿主撤销后，宿主的基础 token
+         * 仍然有值，判据永远说「健康」，配色却已经跳回默认（假健康）。
+         * 现在用两件事判断：
+         *   1) 标记属性 --dshtp-layer：只由本插件的覆盖层写入，层没了它就没了；
+         *   2) 颜色比对：关键 token 的计算值必须等于本层期望值（明暗两色任一相符即可）。
+         * 判据不成立 → 层已丢失或被改名 → 重放（退避与停用逻辑不变）。
+         */
+        const layerState = () => {
+          try {
+            const style = getComputedStyle(document.body)
+            if (style.getPropertyValue(LAYER_MARK).trim() === '') return { ok: false, reason: 'marker-missing' }
+          } catch (err) {
+            return { ok: false, reason: 'probe-error' }
+          }
+          const probe = probeApplied(lastTokens)
+          // 没有 getComputedStyle（或一个 token 都探测不到）时判不出丢失，不要误伤
+          if (probe === null) return { ok: true, reason: 'no-probe' }
+          if (!probe.ok) return { ok: false, reason: 'color-mismatch', mismatched: probe.mismatched }
+          return { ok: true, reason: 'ok' }
+        }
+
         const ensureApplied = (reason) => {
           if (lastTokens === null || healDisabled) return
           if (Date.now() - lastAppliedAt < 900) return
           const wait = HEAL_BACKOFF[Math.min(healFails, HEAL_BACKOFF.length - 1)]
           if (healFails > 0 && Date.now() - lastHealAt < wait) return
           lastHealAt = Date.now()
-          let missing = false
-          try {
-            const style = getComputedStyle(document.body)
-            for (const name of TOKEN_PROBE) {
-              if (!(name in lastTokens)) continue
-              if (style.getPropertyValue(name).trim() === '') { missing = true; break }
-            }
-          } catch (err) {
-            missing = true
-          }
-          if (!missing) {
+          const state = layerState()
+          if (state.ok) {
             healFails = 0
             return
           }
           if (healFails >= HEAL_BACKOFF.length) {
             healDisabled = true
-            console.error('[dsh-theme-palette] 配色层反复失效（' + reapplyCount + ' 次），已停止自动重放；请检查宿主 token 是否改名')
+            console.error('[dsh-theme-palette] 配色层反复失效（' + reapplyCount + ' 次，已停用自动重放）：请检查宿主 token 是否改名')
             return
           }
           healFails += 1
           reapplyCount += 1
-          console.info('[dsh-theme-palette] 配色层不见了（' + reason + '），已重放第 ' + reapplyCount + ' 次')
+          console.info('[dsh-theme-palette] 配色层不见了（' + reason + '｜' + state.reason + '），已重放第 ' + reapplyCount + ' 次')
           applyAll('self-heal:' + reason)
         }
 
@@ -2525,18 +3273,41 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
           return () => { healthListeners.delete(fn) }
         }
         const emitHealth = () => { for (const fn of healthListeners) { try { fn() } catch (err) { /* 同理 */ } } }
+        /**
+         * 健康快照 = 探测结果 + 应用状态 + 重放次数。
+         * 判重必须带上 reapplies：同色重放之后「已恢复 N 次」要跟着涨，
+         * 否则界面上的恢复次数会停在旧值（1.9.7 修）。
+         */
+        const buildHealth = (probe) => {
+          const base = probe || (health
+            ? { ok: health.ok, checked: health.checked, mismatched: health.mismatched }
+            : { ok: true, checked: 0, mismatched: [] })
+          return {
+            ...base,
+            reapplies: reapplyCount,
+            applied: applyError === null,
+            applyError,
+            lastAppliedAt,
+          }
+        }
+        const sameHealth = (a, b) => a !== null && b !== null
+          && a.ok === b.ok
+          && a.checked === b.checked
+          && String(a.mismatched) === String(b.mismatched)
+          && a.reapplies === b.reapplies
+          && a.applied === b.applied
+          && a.applyError === b.applyError
+        const publishHealth = (probe) => {
+          const next = buildHealth(probe)
+          if (sameHealth(health, next)) return
+          health = next
+          if (probe && !probe.ok) console.warn('[dsh-theme-palette] 有 token 没写进 body，宿主可能改名了')
+          emitHealth()
+        }
         /** 下一帧再读（presenter 把 token 写到 body 需要一个提交周期）。 */
         const scheduleProbe = (tokens) => {
           if (tokens === undefined) return
-          const run = () => {
-            const next = probeApplied(tokens)
-            if (next === null) return
-            if (health !== null && health.ok === next.ok && health.checked === next.checked
-              && String(health.mismatched) === String(next.mismatched)) return
-            health = { ...next, reapplies: reapplyCount }
-            if (!next.ok) console.warn('[dsh-theme-palette] 有 token 没写进 body，宿主可能改名了')
-            emitHealth()
-          }
+          const run = () => { publishHealth(probeApplied(tokens)) }
           try { requestAnimationFrame(run) } catch (err) { setTimeout(run, 16) }
         }
 
@@ -2656,38 +3427,14 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
         /**
          * 对比度矩阵（R1）：把"前景 × 承载面"的真实读数露出来。
          *
-         * 覆盖当前选中的配色（含全部预设，不只自定义）；每个格子给出
-         * 实测 ratio、声明目标 claim、以及是否"表面受限"（claim 高于该面物理上限）。
-         * 口径与 palette-dev 完全一致：同一个 CONTRAST_SURFACES、同一套 floors。
+         * 口径只有一处：buildContrastReport。设置页 UI、palette-dev 报表、check-audit
+         * 断言共用同一份模型 —— 同一套承诺目标、同一套物理上限、同一套政策豁免。
          */
         const getContrastReport = () => {
           const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
           const hc = hcMode === 'on'
-          const F = floors(hc)
           const t = buildTokens(scheme, sidebarMode, textMode, rightbarMode, scrollMode, controlMode, mdMode, hc)
-          const round2 = (v) => Math.round(v * 100) / 100
-          const rows = CONTRAST_ROLES.map((role) => ({
-            role: role.id,
-            cells: CONTRAST_SURFACES.map((sf) => {
-              const fgHex = role.id === 'link'
-                ? t['--dsw-alias-link'][sf.mode]
-                : t['--dsw-static-neutral-bluish-' + role.step[sf.mode]][sf.mode]
-              const bg = sf.token
-                ? flatten(t[sf.token][sf.mode], t['--dsw-static-neutral-bluish-' + (sf.mode === 'light' ? '00' : '950')][sf.mode])
-                : t['--dsw-static-neutral-bluish-' + sf.id][sf.mode]
-              const ratio = contrast(fgHex, bg)
-              const claim = sf.mode === 'light' ? F[role.id] : (role.id === 'link' ? F.linkDark : F[role.id])
-              const ceiling = contrast(sf.mode === 'light' ? '#000000' : '#ffffff', bg)
-              const limited = ceiling < claim / 0.93
-              const feasible = limited ? ceiling * 0.93 : claim
-              return {
-                surface: sf.id, mode: sf.mode, scope: sf.scope,
-                ratio: round2(ratio), claim, limited,
-                ok: sf.scope !== false && ratio >= feasible - 0.02,
-              }
-            }),
-          }))
-          return { hc, mono: !scheme.tinted, rows }
+          return buildContrastReport(t, hc, { mono: !scheme.tinted })
         }
         /**
          * 「试试示例」用的演示短码：现场用生产 encodeConfig 生成，schema 演进时自动跟随，

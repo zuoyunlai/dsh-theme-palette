@@ -73,7 +73,21 @@ else {
   for (const name of tokens) check(text.includes(name), 'ui-theme 仍有 ' + name)
 }
 if (!layout) { console.log('  ✗ 找不到 ui-layout/lib/client.js'); failed++ }
-else check(read(layout).includes('data-rightbar-col'), 'ui-layout 仍有 data-rightbar-col')
+else {
+  const layoutText = read(layout)
+  check(layoutText.includes('data-rightbar-col'), 'ui-layout 仍有 data-rightbar-col')
+  // 1.9.8 的自愈判据（标记 token --dshtp-layer）依赖宿主 presenter 的两个行为：
+  //   a) 快照里的每个 token 都写到 body —— 标记 token 才会出现在 body 上；
+  //   b) 重写前先摘掉上一批 token —— 覆盖层被撤销时标记才会随之消失。
+  check(
+    /for \(const \[name, value\] of Object\.entries\(snapshot\.active\.tokens\)\)[\s\S]{0,160}setProperty\(name, value\)/.test(layoutText),
+    'presenter 把快照里的每个 token 都写到 body',
+  )
+  check(
+    /appliedTokens[\s\S]{0,160}removeProperty\(name\)/.test(layoutText),
+    'presenter 重写前先摘掉上一批 token',
+  )
+}
 if (!css) { console.log('  ✗ 找不到前端构建 CSS'); failed++ }
 else {
   const text = read(css)

@@ -46,7 +46,7 @@ const bodies = {
         '**A white accent produced a white link** (1.13:1). The contrast solver only ever walked away from the background in one direction, so an accent brighter than the background kept moving toward white.',
         '**Picking a colour changed the page but not the panel.** The component subscribed to the palette id, which never changes when a colour does — React compared the snapshots, saw no difference, and skipped the re-render.',
         '**Sharing a configuration did not share the colours.** The short code carried the modes but not the three custom colours, so importing on another machine reported success and silently kept the local values.',
-        '**Dark module surfaces have a hard ceiling.** Even pure white reaches only about 10.99:1 on the deepest panel surface, so the 12:1 (high-contrast 15:1) target is physically unreachable there. We clamp to what the surface allows and label it "surface-limited" instead of quietly missing.',
+        '**Dark module surfaces are out of policy, not out of reach.** On the deepest module surface pure white still reaches about 10.22:1, and on the next one about 15.27:1 — both above the 10:1 body target. Nothing is physically impossible there; we simply do not promise body text on those surfaces, and the report lists them as "out of policy" instead of "surface-limited".',
         '**A selector we thought was dead was alive.** The audit initially reported the `_markdown_` hooks as broken; the contract test against the shipped CSS proved otherwise. The finding was wrong, not the code.',
       ]) +
     sharing(
@@ -64,7 +64,7 @@ const bodies = {
         '**No glass or wallpaper.** That race is won on screenshots; we would rather compete on proof.',
         '**No theme market, no AI colour generation.** Both introduce colours we cannot guarantee — the contrast solver is the asset, and feeding it unpredictable input spends it.',
         '**No more palettes.** Four presets plus a three-colour generator beats ten hand-picked ones; volume is not the moat.',
-        '**No eye-care claims.** We report measured ratios on the surfaces text actually lands on, and say "surface-limited" when that is all there is. No medical claims.',
+        '**No eye-care claims.** We report measured ratios on the surfaces text actually lands on, and label the surfaces we do not promise as "out of policy". No medical claims.',
       ]),
 
   'README-zh.md':
@@ -74,7 +74,7 @@ const bodies = {
         '**纯白强调色会生成纯白链接**（1.13:1）。对比度求解器原本只朝"远离背景"的单一方向走，强调色比背景还亮时只会一路推向白色。',
         '**取了色，整页变了，面板没变。** 组件订阅的是配色 id，而取色不会改变它——React 比较快照发现没变，直接跳过重渲染。',
         '**分享了配置，没分享颜色。** 短码带了各项模式，但没带自定义三色，换台机器导入提示成功，用的仍是本机旧值。',
-        '**深色模块面有硬上限。** 即使纯白，在最深的模块面上也只有约 10.99:1，12:1（高对比 15:1）物理上不可达。现在按该面可达上限钳位并标注"表面受限"，而不是默默不达标。',
+        '**深色模块面是「不承诺」，不是「做不到」。** 最深的模块面上纯白也有约 10.22:1，次一级约 15.27:1，都高于 10:1 的正文目标——从来没有什么物理不可达；只是这些面不在承诺范围内。现在报表把它们单列为「政策外」，而不是「表面受限」。',
         '**一个我们以为失效的选择器其实活着。** 审计最初判定 `_markdown_` 相关选择器已失效；契约测试对着实际构建 CSS 证明它还在——错的是结论，不是代码。',
       ]) +
     sharing(
@@ -92,7 +92,7 @@ const bodies = {
         '**不做玻璃与壁纸。** 那条赛道靠截图竞争，我们更愿意靠证据竞争。',
         '**不做主题市场，也不做 AI 生色。** 两者都会引入我们无法保证的颜色；对比度求解器是资产，往里喂不可预测的输入等于自毁。',
         '**不再堆配色。** 4 套预设 + 三色生成，强过手挑十套；数量不是护城河。',
-        '**不做护眼宣称。** 我们只报文字真实落在的承载面上的实测对比度，到顶就写"表面受限"，不做医学声明。',
+        '**不做护眼宣称。** 我们只报文字真实落在的承载面上的实测对比度，不承诺的面标为「政策外」，不做医学声明。',
       ]),
 
   'README-es.md':
@@ -102,7 +102,7 @@ const bodies = {
         '**Un acento blanco generaba un enlace blanco** (1.13:1). El solucionador de contraste solo avanzaba en una dirección, alejándose del fondo, así que un acento más claro que el fondo seguía yendo hacia el blanco.',
         '**Elegir un color cambiaba la página pero no el panel.** El componente se suscribía al id de paleta, que no cambia al cambiar un color; React comparó los snapshots, no vio diferencia y saltó el re-render.',
         '**Compartir una configuración no compartía los colores.** El código corto llevaba los modos pero no los tres colores personalizados, así que importar en otra máquina informaba éxito y conservaba los valores locales.',
-        '**Las superficies modulares oscuras tienen un techo.** Aun el blanco puro llega solo a ~10.99:1 en la superficie más profunda, de modo que el objetivo 12:1 (15:1 en alto contraste) es físicamente inalcanzable ahí. Ajustamos al máximo alcanzable y lo etiquetamos.',
+        '**Las superficies modulares oscuras quedan fuera de la política, no fuera de alcance.** En la superficie modular más profunda el blanco puro llega a ~10.22:1, y en la siguiente a ~15.27:1: ambos por encima del objetivo 10:1 del cuerpo de texto. Ahí no es físicamente imposible; simplemente no prometemos texto principal en esas superficies y las reportamos como "fuera de la política".',
         '**Un selector que creíamos muerto estaba vivo.** La auditoría inicialmente lo reportó como roto; la prueba de contrato contra el CSS publicado demostró lo contrario. El hallazgo estaba equivocado, no el código.',
       ]) +
     sharing(
@@ -120,7 +120,7 @@ const bodies = {
         '**Sin cristal ni fondos.** Esa carrera se gana con capturas; preferimos competir con pruebas.',
         '**Sin mercado de temas ni generación de color con IA.** Ambos introducen colores que no podemos garantizar; el solucionador de contraste es el activo.',
         '**Sin más paletas.** Cuatro preajustes más un generador de tres colores supera a diez elegidas a mano; el volumen no es la ventaja.',
-        '**Sin promesas de "protección ocular".** Reportamos ratios medidos en las superficies donde el texto realmente cae y decimos "limitado por la superficie" cuando es todo lo que hay.',
+        '**Sin promesas de "protección ocular".** Reportamos ratios medidos en las superficies donde el texto realmente cae y etiquetamos como "fuera de la política" las superficies que no prometemos.',
       ]),
 
   'README-pt.md':
@@ -130,7 +130,7 @@ const bodies = {
         '**Um acento branco gerava um link branco** (1.13:1). O solucionador de contraste andava só numa direção, afastando-se do fundo, então um acento mais claro que o fundo continuava indo para o branco.',
         '**Escolher uma cor mudava a página mas não o painel.** O componente inscrevia-se no id da paleta, que não muda quando a cor muda; o React comparou os snapshots, viu que não havia diferença e pulou o re-render.',
         '**Compartilhar uma configuração não compartilhava as cores.** O código curto carregava os modos mas não as três cores personalizadas, então importar em outra máquina informava sucesso e mantinha os valores locais.',
-        '**Superfícies modulares escuras têm um teto.** Mesmo o branco puro chega a apenas ~10.99:1 na superfície mais profunda, então a meta de 12:1 (15:1 em alto contraste) é fisicamente inalcançável ali. Ajustamos ao máximo alcançável e rotulamos.',
+        '**Superfícies modulares escuras ficam fora da política, não fora do alcance.** Na superfície modular mais profunda o branco puro chega a ~10.22:1, e na seguinte a ~15.27:1 — ambos acima da meta de 10:1 do corpo de texto. Nada é fisicamente impossível ali; simplesmente não prometemos texto principal nessas superfícies e as reportamos como "fora da política".',
         '**Um seletor que achávamos morto estava vivo.** A auditoria inicialmente o reportou como quebrado; o teste de contrato contra o CSS publicado provou o contrário. O achado estava errado, não o código.',
       ]) +
     sharing(
@@ -148,7 +148,7 @@ const bodies = {
         '**Sem vidro nem papel de parede.** Essa corrida se ganha com capturas; preferimos competir com provas.',
         '**Sem mercado de temas nem geração de cor por IA.** Ambos introduzem cores que não podemos garantir; o solucionador de contraste é o ativo.',
         '**Sem mais paletas.** Quatro predefinições mais um gerador de três cores supera dez escolhidas à mão; volume não é a vantagem.',
-        '**Sem promessas de "proteção ocular".** Reportamos razões medidas nas superfícies onde o texto realmente cai e dizemos "limitado pela superfície" quando é tudo o que existe.',
+        '**Sem promessas de "proteção ocular".** Reportamos razões medidas nas superfícies onde o texto realmente cai e rotulamos como "fora da política" as superfícies que não prometemos.',
       ]),
 
   'README-hi.md':
@@ -158,7 +158,7 @@ const bodies = {
         '**सफ़ेद एक्सेंट से सफ़ेद लिंक बनता था** (1.13:1)। कॉन्ट्रास्ट सॉल्वर केवल एक ही दिशा में चलता था — बैकग्राउंड से दूर — इसलिए बैकग्राउंड से हल्का एक्सेंट सफ़ेद की ओर ही बढ़ता गया।',
         '**रंग बदलने पर पेज बदला, पैनल नहीं।** कंपोनेंट पैलेट id पर सब्सक्राइब था, जो रंग बदलने पर नहीं बदलता; React ने स्नैपशॉट की तुलना की, अंतर न मिला, और री-रेंडर छोड़ दिया।',
         '**कॉन्फ़िगरेशन साझा हुआ, रंग नहीं।** शॉर्ट कोड में मोड्स तो थे पर तीन कस्टम रंग नहीं, इसलिए दूसरी मशीन पर इम्पोर्ट सफल बताता और स्थानीय मान रख लेता था।',
-        '**गहरे मॉड्यूल सतहों की एक सीमा है।** सबसे गहरी सतह पर शुद्ध सफ़ेद भी केवल ~10.99:1 तक पहुँचता है, इसलिए 12:1 (उच्च-कंट्रास्ट 15:1) वहाँ भौतिक रूप से असंभव है। अब हम उस सतह की अधिकतम प्राप्य सीमा तक समायोजित करके "सतह-सीमित" चिह्नित करते हैं।',
+        '**गहरे मॉड्यूल सतहें नीति से बाहर हैं, पहुँच से बाहर नहीं।** सबसे गहरी मॉड्यूल सतह पर शुद्ध सफ़ेद भी ~10.22:1 तक और उससे अगली पर ~15.27:1 तक पहुँचता है — दोनों 10:1 मुख्य-पाठ लक्ष्य से ऊपर। वहाँ कुछ भी भौतिक रूप से असंभव नहीं; हम उन सतहों पर मुख्य पाठ का वादा नहीं करते और उन्हें "सतह-सीमित" के बजाय "नीति से बाहर" रिपोर्ट करते हैं।',
         '**एक चयनकर्ता जिसे हम मृत समझते थे, वह जीवित था।** ऑडिट ने शुरू में उसे टूटा बताया; शिप की गई CSS के विरुद्ध कॉन्ट्रैक्ट टेस्ट ने विपरीत साबित किया। गलती निष्कर्ष में थी, कोड में नहीं।',
       ]) +
     sharing(
@@ -176,7 +176,7 @@ const bodies = {
         '**न ग्लास, न वॉलपेपर।** वे स्क्रीनशॉट से जीतते हैं; हम प्रमाण से जीतना चाहते हैं।',
         '**न थीम मार्केट, न AI रंग सृजन।** दोनों ऐसे रंग लाते हैं जिन्हें हम गारंटी नहीं दे सकते; कॉन्ट्रास्ट सॉल्वर ही संपत्ति है।',
         '**और पैलेट नहीं।** चार प्रीसेट + तीन-रंग जनरेटर, हाथ से चुने दस से बेहतर है; मात्रा बढ़ाना फ़ायदा नहीं।',
-        '**न आँखों की सुरक्षा के वादे।** हम उसी सतह पर मापे अनुपात बताते हैं जहाँ टेक्स्ट वास्तव में बैठता है, और जहाँ यही ऊपरी सीमा हो वहाँ "सतह-सीमित" कहते हैं।',
+        '**न आँखों की सुरक्षा के वादे।** हम उसी सतह पर मापे अनुपात बताते हैं जहाँ टेक्स्ट वास्तव में बैठता है, और जिन सतहों का वादा नहीं करते उन्हें "नीति से बाहर" कहते हैं।',
       ]),
 }
 

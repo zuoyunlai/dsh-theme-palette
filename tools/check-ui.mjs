@@ -53,9 +53,30 @@ try {
   check(roleRows >= 4, `矩阵含 ≥4 个角色行（实得 ${roleRows}）`)
   const surfaceCells = new Set((matrixHtml.match(/data-surface="(\d+)"/g) || []).map((s) => s.replace(/\D/g, '')))
   check(surfaceCells.size >= 4, `矩阵含 ≥4 个承载面（实得 ${surfaceCells.size}：${[...surfaceCells].join('/')}）`)
-  check(matrixHtml.includes('表面受限'), '不可达的格子标注「表面受限」')
   check(matrixHtml.includes('data-surface="menuL"') && matrixHtml.includes('data-surface="menuD"'), '矩阵含菜单面（半透明·按画布合成）')
   check(matrixHtml.includes('复制诊断') || matrixHtml.includes('Copy diagnostics'), '矩阵含诊断导出入口')
+
+  // 政策外（深色 800/850 正文）必须标「政策外」+ ※，不能挂「表面受限」——
+  // 那是物理不可达才用的标签；850 的物理上限远高于目标，挂上去就是误标。
+  const cellTitle = (html, role, surface) => {
+    const m = html.match(new RegExp(`data-role="${role}"[^>]*data-surface="${surface}"[^>]*title="([^"]*)"`))
+    return m ? m[1] : ''
+  }
+  const t800 = cellTitle(matrixHtml, 'main', '800')
+  const t850 = cellTitle(matrixHtml, 'main', '850')
+  check(t800.includes('政策外') && !t800.includes('表面受限'), `800 正文标「政策外」而非「表面受限」（${t800}）`)
+  check(t850.includes('政策外') && !t850.includes('表面受限'), `850 正文标「政策外」而非「表面受限」（${t850}）`)
+  const t950 = cellTitle(matrixHtml, 'main', '950')
+  check(t950 !== '' && !t950.includes('政策外'), `950 正文在承诺面内（${t950}）`)
+  // 政策外的格子只能带 ※，不能带 △
+  const markOf = (html, role, surface) => {
+    const m = html.match(new RegExp(`data-role="${role}"[^>]*data-surface="${surface}"[^>]*>([^<]*)`))
+    return m ? m[1] : ''
+  }
+  check(markOf(matrixHtml, 'main', '800').includes('※') && !markOf(matrixHtml, 'main', '800').includes('△'), '800 正文只标 ※ 不标 △')
+  check(markOf(matrixHtml, 'main', '850').includes('※') && !markOf(matrixHtml, 'main', '850').includes('△'), '850 正文只标 ※ 不标 △')
+  // 统计行必须把「政策外」单列
+  check(matrixHtml.includes('统计（达标 / 未达标 / 政策外）'), '矩阵统计行区分达标/未达标/政策外')
 
   // 高对比开关必须改变深模块 800 的正文读数（防止永远显示"达标"）
   const pick = (html) => {

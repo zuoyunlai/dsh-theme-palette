@@ -145,7 +145,7 @@ try { run(process.execPath, ['--check', 'client.js']); ok('client.js 语法') } 
 
 // 1e. 回归与宿主契约：配色数值、自定义回归、宿主 token/DOM 钩子
 //     契约脚本在拿不到 asar 时会 SKIP（退出 0），不阻断其它机器发版。
-for (const script of ['tools/check-audit.mjs', 'tools/check-custom.mjs', 'tools/check-ui.mjs', 'tools/check-host-contract.mjs']) {
+for (const script of ['tools/check-audit.mjs', 'tools/check-custom.mjs', 'tools/check-ui.mjs', 'tools/check-host-contract.mjs', 'tools/check-selfheal.mjs']) {
   try {
     run(process.execPath, [script])
     ok(script + ' 通过')

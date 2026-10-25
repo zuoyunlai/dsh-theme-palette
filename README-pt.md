@@ -17,8 +17,10 @@ Paleta de tema para o DeepSeek Harness (web e desktop): **4 paletas × claro/esc
 | Superfície | Estado |
 |---|---|
 | Cliente DSH desktop / web | 0.2.x |
-| Node.js | ≥ 20 |
+| Node.js | 22.19.0+ (na linha 22.x) ou 24.0.0+ |
 | Alterações no código do host | nenhuma |
+
+O campo `engines` do pacote é `^22.19.0 || >=24.0.0` — a linha acima é o mesmo requisito por extenso.
 
 O plugin apenas empilha tokens de cor via `ctx.theme.overrideTokens`; não registra um tema, não altera o host e não toca na preferência de aparência.
 
@@ -29,6 +31,8 @@ O plugin apenas empilha tokens de cor via `ctx.theme.overrideTokens`; não regis
 - mais de 27.000 referências de token: texto, secundário, terciário, legendas, links, barras laterais, cartões, balão do usuário, botão primário, barras de rolagem, interruptores, títulos/negrito de Markdown, blocos de código;
 - ajustável: intensidade do texto (3), profundidade da barra lateral (3), painel direito (2), ênfase de Markdown, barras de rolagem, cor dos interruptores;
 - **autorrecuperação**: se o host descartar a camada de override, a paleta é reaplicada;
+- **promessas de contraste**: o corpo tem a promessa de 12:1 no claro e 10:1 no escuro (15:1 em alto contraste), o secundário ≥ 6.2 no claro e 8.0 no escuro, e o terciário e os links ≥ 4.62 no claro e 6.4 no escuro (os links ainda passam por um portão APCA Lc ≥ 60 no escuro / 75 em HC), medidos nas superfícies onde o texto realmente cai (o lado escuro precisa de mais: uma razão WCAG superestima a legibilidade sobre fundo escuro);
+- as superfícies prometidas são 00/60 no claro e 950/875 no escuro; as escuras 800 (superfície de módulo) e 850 (sub-superfície) **não** sustentam o texto do corpo: o relatório as conta à parte como «fora de política» (nem contam como aprovado nem como falha);
 - interface em 简体中文 / 繁體中文 / English / 日本語 (segue o idioma do host e pode ser fixada).
 
 ## Install
@@ -37,16 +41,10 @@ O plugin apenas empilha tokens de cor via `ctx.theme.overrideTokens`; não regis
 # via npm
 cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
-
-# ou uma versão específica
-pnpm add dsh-theme-palette@1.4.3
 ```
 
-A partir do tarball do release do GitHub:
-
-```bash
-pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.3/dsh-theme-palette-1.4.3.tgz"
-```
+Para fixar uma versão, use `pnpm add dsh-theme-palette@<version>` — a versão atual está no [CHANGELOG.md](CHANGELOG.md).
+A partir do tarball de um release do GitHub: escolha o asset na [página de releases](https://github.com/zuoyunlai/dsh-theme-palette/releases) e instale com `pnpm add <caminho-do-tgz>`.
 
 Depois **reinicie a interface**: um processo em execução mantém o módulo antigo. Abra em avatar → Configurações → **Color theme**.
 
@@ -71,8 +69,10 @@ OKLCH(L, C, matiz) ──► limite de gamut (busca binária em C) ──► hex
 
 - os aliases semânticos mantêm cadeias `var(--dsw-static-neutral-bluish-NN)`, então tudo que segue um token segue a paleta;
 - superfícies claras usam os passos 00–300, as escuras 800–950;
-- os pisos de texto são exigidos na construção: corpo ≥ 12, secundário ≥ 6.1, terciário/link ≥ 4.6, texto na barra lateral ≥ 7, texto no balão ≥ 7;
-- `node palette-dev.mjs` verifica 432 combinações.
+- os pisos de texto são exigidos na construção: corpo ≥ 12:1 no claro e ≥ 10:1 no escuro (alto contraste: 15:1), secundário ≥ 6.2 claro / 8.0 escuro (HC 9 / 9.6), terciário/link ≥ 4.62 claro / 6.4 escuro (HC 7 / 7.6), link com APCA Lc ≥ 60 escuro (HC 75), texto na barra lateral ≥ 7, texto no balão ≥ 7;
+- as superfícies prometidas são 00/60 no claro e 950/875 no escuro; as escuras 800 (superfície de módulo) e 850 (sub-superfície) **não** sustentam o texto do corpo: o relatório as conta à parte como «fora de política» (nem contam como aprovado nem como falha), e toda superfície ainda precisa passar pelo piso AA de 4.5;
+- o relatório separa três coisas: a meta declarada, o teto físico (o que o branco ou o preto alcançam nessa superfície) e a isenção de política; 0.93 é apenas margem do solucionador, usada para decidir se uma meta fica acima do teto;
+- `node palette-dev.mjs` verifica 2160 combinações (5 paletas × 216 ajustes × os dois níveis de contraste).
 
 Notas de design, critério por componente e tabelas de contraste em [docs/DESIGN.md](docs/DESIGN.md). Histórico: [CHANGELOG.md](CHANGELOG.md).
 
@@ -98,7 +98,7 @@ As cinco mais surpreendentes da auditoria da 1.7.0 — cada uma foi encontrada p
 - **Um acento branco gerava um link branco** (1.13:1). O solucionador de contraste andava só numa direção, afastando-se do fundo, então um acento mais claro que o fundo continuava indo para o branco.
 - **Escolher uma cor mudava a página mas não o painel.** O componente inscrevia-se no id da paleta, que não muda quando a cor muda; o React comparou os snapshots, viu que não havia diferença e pulou o re-render.
 - **Compartilhar uma configuração não compartilhava as cores.** O código curto carregava os modos mas não as três cores personalizadas, então importar em outra máquina informava sucesso e mantinha os valores locais.
-- **Superfícies modulares escuras têm um teto.** Mesmo o branco puro chega a apenas ~10.99:1 na superfície mais profunda, então a meta de 10:1 (15:1 em alto contraste) é fisicamente inalcançável ali. Ajustamos ao máximo alcançável e rotulamos.
+- **«Não prometido» não é «impossível».** O relatório antigo rotulava as superfícies modulares escuras como «limitado pela superfície», porque comparava a meta do corpo com a mais profunda (800). Mas 800 chega a cerca de 10.22:1 e 850 a cerca de 15.27:1 com um primeiro plano branco, acima da meta de 10:1: nunca foi inalcançável; aquelas superfícies simplesmente não eram prometidas. Agora o relatório separa a meta declarada, o teto físico e a isenção de política, e conta 800/850 como «fora de política» em vez de «fisicamente inalcançável».
 - **Um seletor que achávamos morto estava vivo.** A auditoria inicialmente o reportou como quebrado; o teste de contrato contra o CSS publicado provou o contrário. O achado estava errado, não o código.
 
 ## Sharing
@@ -124,7 +124,7 @@ Outros plugins de tema aqui entregam vidro, papéis de parede e animação. Deci
 - **Sem vidro nem papel de parede.** Essa corrida se ganha com capturas; preferimos competir com provas.
 - **Sem mercado de temas nem geração de cor por IA.** Ambos introduzem cores que não podemos garantir; o solucionador de contraste é o ativo.
 - **Sem mais paletas.** Quatro predefinições mais um gerador de três cores supera dez escolhidas à mão; volume não é a vantagem.
-- **Sem promessas de "proteção ocular".** Reportamos razões medidas nas superfícies onde o texto realmente cai e dizemos "limitado pela superfície" quando é tudo o que existe.
+- **Sem promessas de "proteção ocular".** Reportamos razões medidas nas superfícies onde o texto realmente cai e dizemos «fora de política» quando essa superfície não é uma das prometidas: é uma medição, não uma desculpa.
 
 
 ## License

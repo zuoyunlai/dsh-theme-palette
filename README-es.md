@@ -17,8 +17,10 @@ Paleta de tema para DeepSeek Harness (web y escritorio): **4 paletas × claro/os
 | Superficie | Estado |
 |---|---|
 | Cliente DSH de escritorio / web | 0.2.x |
-| Node.js | ≥ 20 |
+| Node.js | 22.19.0+ (en la línea 22.x) o 24.0.0+ |
 | Cambios en el código del host | ninguno |
+
+El campo `engines` del paquete es `^22.19.0 || >=24.0.0`: la fila anterior es ese mismo requisito por extenso.
 
 El plugin solo apila tokens de color mediante `ctx.theme.overrideTokens`; no registra un tema, no parchea el host y no toca la preferencia de apariencia.
 
@@ -29,6 +31,8 @@ El plugin solo apila tokens de color mediante `ctx.theme.overrideTokens`; no reg
 - más de 27.000 referencias de token: texto, secundario, terciario, notas, enlaces, barras laterales, tarjetas, burbuja del usuario, botón primario, barras de desplazamiento, interruptores, títulos/negritas de Markdown, bloques de código;
 - ajustable: intensidad del texto (3), profundidad de la barra lateral (3), panel derecho (2), énfasis de Markdown, barras de desplazamiento, color de interruptores;
 - **autorreparable**: si el host descarta la capa de override, la paleta se vuelve a aplicar;
+- **promesas de contraste**: el cuerpo tiene la promesa de 12:1 en claro y 10:1 en oscuro (15:1 en alto contraste), el secundario ≥ 6.2 en claro y 8.0 en oscuro, y el terciario y los enlaces ≥ 4.62 en claro y 6.4 en oscuro (los enlaces además pasan una puerta APCA Lc ≥ 60 en oscuro / 75 en HC), medidos sobre las superficies donde el texto realmente cae (el lado oscuro necesita más: un cociente WCAG sobreestima la legibilidad sobre fondo oscuro);
+- las superficies prometidas son 00/60 en claro y 950/875 en oscuro; las oscuras 800 (superficie de módulo) y 850 (sub-superficie) **no** respaldan el texto del cuerpo: el informe las cuenta aparte como «fuera de política» (ni cuentan como aprobado ni como fallo);
 - interfaz en 简体中文 / 繁體中文 / English / 日本語 (sigue el idioma del host y se puede fijar).
 
 ## Install
@@ -37,16 +41,10 @@ El plugin solo apila tokens de color mediante `ctx.theme.overrideTokens`; no reg
 # desde npm
 cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
-
-# o una versión concreta
-pnpm add dsh-theme-palette@1.4.3
 ```
 
-Desde el tarball del release de GitHub:
-
-```bash
-pnpm add "https://github.com/zuoyunlai/dsh-theme-palette/releases/download/v1.4.3/dsh-theme-palette-1.4.3.tgz"
-```
+Para fijar una versión, usa `pnpm add dsh-theme-palette@<version>` — la versión actual está en [CHANGELOG.md](CHANGELOG.md).
+Desde el tarball de un release de GitHub: elige el asset en la [página de releases](https://github.com/zuoyunlai/dsh-theme-palette/releases) e instálalo con `pnpm add <ruta-del-tgz>`.
 
 Después **reinicia la interfaz**: un proceso en marcha conserva el módulo antiguo. Se abre en avatar → Ajustes → **Color theme**.
 
@@ -71,8 +69,10 @@ OKLCH(L, C, tono) ──► ajuste al gamut (búsqueda binaria en C) ──► h
 
 - los alias semánticos mantienen cadenas `var(--dsw-static-neutral-bluish-NN)`, así que todo lo que sigue a un token sigue a la paleta;
 - superficies claras usan los pasos 00–300, las oscuras 800–950;
-- los mínimos de texto se exigen en tiempo de construcción: cuerpo ≥ 12, secundario ≥ 6.1, terciario/enlace ≥ 4.6, texto en barra lateral ≥ 7, texto en burbuja ≥ 7;
-- `node palette-dev.mjs` comprueba 432 combinaciones.
+- los mínimos de texto se exigen en tiempo de construcción: cuerpo ≥ 12:1 en claro y ≥ 10:1 en oscuro (alto contraste: 15:1), secundario ≥ 6.2 claro / 8.0 oscuro (HC 9 / 9.6), terciario/enlace ≥ 4.62 claro / 6.4 oscuro (HC 7 / 7.6), enlace con APCA Lc ≥ 60 oscuro (HC 75), texto en barra lateral ≥ 7, texto en burbuja ≥ 7;
+- las superficies prometidas son 00/60 en claro y 950/875 en oscuro; las oscuras 800 (superficie de módulo) y 850 (sub-superficie) **no** respaldan el texto del cuerpo: el informe las cuenta aparte como «fuera de política» (ni cuentan como aprobado ni como fallo), y toda superficie sigue teniendo que superar el suelo AA de 4.5;
+- el informe separa tres cosas: el objetivo declarado, el techo físico (lo que el blanco o el negro alcanzan en esa superficie) y la exención de política; 0.93 es solo margen del solucionador, para decidir si un objetivo queda por encima del techo;
+- `node palette-dev.mjs` comprueba 2160 combinaciones (5 paletas × 216 ajustes × los dos niveles de contraste).
 
 Las notas de diseño, el criterio por componente y las tablas de contraste están en [docs/DESIGN.md](docs/DESIGN.md). Historial: [CHANGELOG.md](CHANGELOG.md).
 
@@ -98,7 +98,7 @@ Las cinco más sorprendentes de la auditoría de 1.7.0 — cada una la encontró
 - **Un acento blanco generaba un enlace blanco** (1.13:1). El solucionador de contraste solo avanzaba en una dirección, alejándose del fondo, así que un acento más claro que el fondo seguía yendo hacia el blanco.
 - **Elegir un color cambiaba la página pero no el panel.** El componente se suscribía al id de paleta, que no cambia al cambiar un color; React comparó los snapshots, no vio diferencia y saltó el re-render.
 - **Compartir una configuración no compartía los colores.** El código corto llevaba los modos pero no los tres colores personalizados, así que importar en otra máquina informaba éxito y conservaba los valores locales.
-- **Las superficies modulares oscuras tienen un techo.** Aun el blanco puro llega solo a ~10.99:1 en la superficie más profunda, de modo que el objetivo 10:1 (15:1 en alto contraste) es físicamente inalcanzable ahí. Ajustamos al máximo alcanzable y lo etiquetamos.
+- **«No prometido» no es «imposible».** El informe antiguo etiquetaba las superficies modulares oscuras como «limitado por la superficie», porque comparaba el objetivo del cuerpo contra la más profunda (800). Pero 800 llega a unos 10.22:1 y 850 a unos 15.27:1 con un primer plano blanco, por encima del objetivo 10:1: nunca fue inalcanzable; sencillamente esas superficies no estaban prometidas. Ahora el informe separa el objetivo declarado, el techo físico y la exención de política, y cuenta 800/850 como «fuera de política» en lugar de «físicamente inalcanzable».
 - **Un selector que creíamos muerto estaba vivo.** La auditoría inicialmente lo reportó como roto; la prueba de contrato contra el CSS publicado demostró lo contrario. El hallazgo estaba equivocado, no el código.
 
 ## Sharing
@@ -124,7 +124,7 @@ Otros plugins de tema aquí ofrecen cristal, fondos y animación. Decidimos no h
 - **Sin cristal ni fondos.** Esa carrera se gana con capturas; preferimos competir con pruebas.
 - **Sin mercado de temas ni generación de color con IA.** Ambos introducen colores que no podemos garantizar; el solucionador de contraste es el activo.
 - **Sin más paletas.** Cuatro preajustes más un generador de tres colores supera a diez elegidas a mano; el volumen no es la ventaja.
-- **Sin promesas de "protección ocular".** Reportamos ratios medidos en las superficies donde el texto realmente cae y decimos "limitado por la superficie" cuando es todo lo que hay.
+- **Sin promesas de "protección ocular".** Reportamos ratios medidos en las superficies donde el texto realmente cae y decimos «fuera de política» cuando esa superficie no es una de las prometidas: es una medición, no una excusa.
 
 
 ## License

@@ -33,12 +33,18 @@ const OUT_BASE = oi >= 0 ? argv[oi + 1] : ''
 const source = fs.readFileSync(path.join(root, 'client.js'), 'utf8')
 
 let engine = null
+// 自定义三色：预览要跟 props.getCustomColors() 给的一致（自定义配色下 buildTokens 会读它）
+const CUSTOM_COLORS = { bg: '#f5efe6', text: '#1d1a17', accent: process.env.PREVIEW_ACCENT || '#a9683e' }
+const store = new Map([['dsh-theme-palette.custom.v1', JSON.stringify(CUSTOM_COLORS)]])
 const sandbox = {
   window: {
     __ModuleLoader__: { load: (d) => { sandbox.def = d } },
     __DSH_THEME_PALETTE_DEV__: (api) => { engine = api },
   },
-  localStorage: { getItem: () => null, setItem: () => {} },
+  localStorage: {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => { store.set(k, v) },
+  },
   document: { head: { appendChild() {} }, createElement: () => ({ dataset: {}, remove() {} }), querySelector: () => null, documentElement: { lang: LANG === 'auto' ? 'zh-CN' : LANG } },
   navigator: { language: 'zh' },
   location: { search: '?dshThemeDev=1' },
@@ -141,26 +147,14 @@ const props = {
   getHcMode: () => (HC ? 'on' : 'off'), subscribeHc: () => () => {}, setHcMode: () => {},
   getConfigCode: () => 'dshs1.eyJ2IjoxLCJwIjoid2FybSIsInMiOiJkZWVwIiwidCI6InRpbnRlZCIsInIiOiJzaWRlYmFyIiwiYyI6InRpbnRlZCIsImsiOiJhY2NlbnQiLCJtIjoib24iLCJoIjoib2ZmIiwibCI6ImF1dG8ifQ',
   applyConfigCode: () => true,
-  getCustomColors: () => ({ bg: '#f5efe6', text: '#1d1a17', accent: process.env.PREVIEW_ACCENT || '#a9683e' }),
+  getCustomColors: () => CUSTOM_COLORS,
   subscribeCustom: () => () => {},
-  // 静态预览用一份固定的对比度矩阵（真实值由 check-ui 的 --hc 对比断言覆盖）
+  // 静态预览用**真实**对比度模型（与设置页、palette-dev 报表、check-audit 同源）：
+  // 1.9.8 起不再造假读数 —— 预览里的数字就是线上会显示的数字。
   getContrastReport: () => {
-    const surfaces = engine.CONTRAST_SURFACES
-    const rows = engine.CONTRAST_ROLES.map((role) => ({
-      role: role.id,
-      cells: surfaces.map((sf, i) => {
-        // 高对比应当读数更高（更严的目标），不要造出"开了高对比反而更低"的假数据
-        const ratio = HC ? 10.9 - i * 0.5 : 9.8 - i * 0.4
-        const claim = HC ? 15 : 12
-        const limited = sf.id === '800' || sf.id === '850' || sf.token !== undefined
-        return {
-          surface: sf.id, mode: sf.mode, scope: sf.scope,
-          ratio: Math.round(ratio * 100) / 100, claim, limited,
-          ok: true,
-        }
-      }),
-    }))
-    return { hc: HC, mono: false, rows }
+    const scheme = engine.SCHEMES.find((s) => s.id === PALETTE) || engine.SCHEMES[0]
+    const t = engine.buildTokens(scheme, 'deep', 'tinted', 'sidebar', 'tinted', 'accent', 'on', HC)
+    return engine.buildContrastReport(t, HC, { mono: !scheme.tinted })
   },
   getCustomExplain: () => ({
     accentClamped: false, accentFrom: 0.58, accentTo: 0.58,
