@@ -1,0 +1,81 @@
+{
+  "generatedAt": "2026-10-26T12:23:27.208Z",
+  "pluginVersion": "1.9.10",
+  "chrome": "Chrome/156.0.8078.48",
+  "width": 620,
+  "scale": 1,
+  "images": [
+    {
+      "file": "assets/screenshot-settings-light.png",
+      "html": "tools/preview-light.html",
+      "preview": [
+        "--palette",
+        "warm",
+        "--adv",
+        "0"
+      ],
+      "htmlSha256": "3b66b888816cc875e3a6b82a4b1c132f5a355971707cf8017f98d5160b7b2155",
+      "cssWidth": 620,
+      "cssHeight": 872,
+      "width": 620,
+      "height": 872,
+      "bytes": 44070,
+      "sha256": "2804444f56f8006827e70c30ffbd5093ce318e59effcfb54473fc6625e3cdd81"
+    },
+    {
+      "file": "assets/screenshot-settings-dark.png",
+      "html": "tools/preview-dark.html",
+      "preview": [
+        "--palette",
+        "warm",
+        "--adv",
+        "0"
+      ],
+      "htmlSha256": "ad90e277ef722a057d233cf921551e7ce1dfe2213a044f17c4253f5311531287",
+      "cssWidth": 620,
+      "cssHeight": 872,
+      "width": 620,
+      "height": 872,
+      "bytes": 44296,
+      "sha256": "9229caf19c7b5b5a08a7f2eb77c5dfced8f1a40966e2f9dfc9aa0b8c9ab531c1"
+    },
+    {
+      "file": "assets/screenshot-settings-custom.png",
+      "html": "tools/preview-light-customadv.html",
+      "preview": [
+        "--palette",
+        "custom",
+        "--adv",
+        "1",
+        "--out",
+        "customadv"
+      ],
+      "htmlSha256": "c73c7f353e984bf934fb16fd1d49fb5c7c125e446f79cb66b43f2a46438afbee",
+      "cssWidth": 620,
+      "cssHeight": 1679,
+      "width": 620,
+      "height": 1679,
+      "bytes": 106217,
+      "sha256": "b8884d18e45a3490d3e8184835d0d84f641fa214c096af9e8c24cd60fcbd56b8"
+    },
+    {
+      "file": "assets/screenshot-settings-hc.png",
+      "html": "tools/preview-light-hcadv.html",
+      "preview": [
+        "--hc",
+        "1",
+        "--adv",
+        "1",
+        "--out",
+        "hcadv"
+      ],
+      "htmlSha256": "0f3947f89520a06faec3a7ac6199930bcda77a50b15620069a18f8090e8dfe62",
+      "cssWidth": 620,
+      "cssHeight": 1447,
+      "width": 620,
+      "height": 1447,
+      "bytes": 91356,
+      "sha256": "5d0de34f62c8b5e67ebfeccc241d177222750c07a75feb2f72ae3fd630a71c47"
+    }
+  ]
+}

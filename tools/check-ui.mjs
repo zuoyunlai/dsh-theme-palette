@@ -5,12 +5,14 @@
  *   1. 高对比必须在默认展开区（不能又回到「更多选项」里）
  *   2. 自定义面板必须渲染解释性校正
  *   3. 升级提示可渲染（由 PREVIEW_NOTICE=1 驱动）
+ *   4. README 截图资产与 screenshots.json / screenshots.meta.json 三重对齐（忘了重拍就红）
  *
  * 这是结构断言，不是视觉验收；真实交互仍需在 GUI 里跑。
  *
  * 用法：node tools/check-ui.mjs
  */
 import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -147,6 +149,28 @@ try {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'screenshots.json'), 'utf8'))
   check(manifest.length === 4, 'screenshots.json 为 4 条')
   for (const rel of manifest) check(fs.existsSync(path.join(root, rel)), `资产存在：${rel}`)
+
+  // 4) 截图元数据：清单 ↔ 磁盘 ↔ 当前设置页三重对齐。
+  //    目的：改了设置页结构或配色却忘了重拍，这里会红 —— 而不是让列表卡片继续展示已经不存在的控件。
+  const meta = JSON.parse(fs.readFileSync(path.join(root, 'assets', 'screenshots.meta.json'), 'utf8'))
+  const pluginVersion = (fs.readFileSync(path.join(root, 'client.js'), 'utf8')
+    .match(/PLUGIN_VERSION\s*=\s*['"]([^'"]+)['"]/) || [])[1]
+  const images = Array.isArray(meta.images) ? meta.images : []
+  check(images.length === 4, 'screenshots.meta.json 为 4 条')
+  check(meta.pluginVersion === pluginVersion, `截图记录的版本与插件一致（${meta.pluginVersion} / ${pluginVersion}）`)
+  check(images.map((e) => e.file).join() === manifest.join(), 'meta 与 screenshots.json 的文件清单顺序一致')
+  for (const e of images) {
+    const abs = path.join(root, e.file)
+    if (!fs.existsSync(abs)) { check(false, `资产存在：${e.file}`); continue }
+    const buf = fs.readFileSync(abs)
+    const sha = createHash('sha256').update(buf).digest('hex')
+    check(sha === e.sha256 && buf.length === e.bytes, `${path.basename(e.file)} 与清单逐字节一致（${e.width}×${e.height}）`)
+    // 用同一组参数重出预览 HTML：设置页结构/配色一变这里就对不上，提示该重拍照了
+    preview(e.preview || [])
+    const htmlBytes = fs.readFileSync(path.join(root, e.html))
+    check(createHash('sha256').update(htmlBytes).digest('hex') === e.htmlSha256,
+      `${path.basename(e.file)} 的源预览页未变（变了就重跑 node tools/shoot-settings.mjs）`)
+  }
 } catch (err) {
   console.log('  ✗ README/资产检查失败：' + (err && err.message ? err.message : err))
   failed++
