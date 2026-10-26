@@ -32,7 +32,7 @@ The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does
 - adjustable: text tint (3), sidebar depth (3), Markdown emphasis, scrollbars, switch colour;
 - **custom palette** (pick surface / text / accent — the engine keeps its contrast guarantees), **config export/import** via a `dshs1.` code, **high-contrast** mode, and 4 UI languages;
 - **self-healing**: if the host drops the override layer, the palette is re-applied;
-- **contrast promises**: body text is promised 12:1 in light and 10:1 in dark (15:1 in high contrast), secondary ≥ 6.2 in light / 8.0 in dark, tertiary and links ≥ 4.62 in light / 6.4 in dark (links also clear an APCA Lc ≥ 60 gate in dark / 75 in HC) — measured on the surfaces the text actually lands on (the dark side needs more, because a WCAG ratio overstates readability on a dark background);
+- **contrast promises**: body text is promised 12:1 in light and 10:1 in dark (15:1 in high contrast), secondary ≥ 6.2 in light / 8.0 in dark, tertiary ≥ 4.85 and links ≥ 4.95 in light / 6.4 in dark (the light floors carry a colour-vision headroom; links also clear an APCA Lc ≥ 60 gate in dark / 75 in HC) — measured on the surfaces the text actually lands on (the dark side needs more, because a WCAG ratio overstates readability on a dark background);
 - the promised surfaces are light 00/60 and dark 950/875; dark 800 (module surface) and 850 (sub-surface) do **not** back body text — the report counts them apart as "out of policy" (neither pass nor fail);
 - UI in 简体中文 / 繁體中文 / English / 日本語 (follows the host language, can be pinned).
 
@@ -70,7 +70,7 @@ OKLCH(L, C, hue) ──► gamut clamp (binary search on C) ──► sRGB hex
 
 - semantic aliases keep `var(--dsw-static-neutral-bluish-NN)` chains, so anything following a token follows the palette;
 - light surfaces use steps 00–300, dark surfaces 800–950;
-- text floors are enforced at build time: body ≥ 12:1 in light and ≥ 10:1 in dark (high contrast: 15:1), secondary ≥ 6.2 in light / 8.0 in dark (HC 9 / 9.6), tertiary/link ≥ 4.62 in light / 6.4 in dark (HC 7 / 7.6), link APCA Lc ≥ 60 in dark (HC 75), sidebar text ≥ 7, bubble text ≥ 7;
+- text floors are enforced at build time: body ≥ 12:1 in light and ≥ 10:1 in dark (high contrast: 15:1), secondary ≥ 6.2 in light / 8.0 in dark (HC 9 / 9.6), tertiary/link ≥ 4.85 / 4.95 in light / 6.4 in dark (HC 7 / 7.6), link APCA Lc ≥ 60 in dark (HC 75), sidebar text ≥ 7, bubble text ≥ 7;
 - the promised surfaces are light 00/60 and dark 950/875; dark 800 (module surface) and 850 (sub-surface) do **not** back body text — the report counts them apart as "out of policy" (neither pass nor fail), and every surface still has to clear the AA floor of 4.5;
 - the report separates three things: the declared target, the physical ceiling (what black or white can reach on that surface) and the policy exemption; 0.93 is only a solver margin, used to decide whether a target sits above the ceiling;
 - 2160 configuration combos (5 palettes × 216 settings × both contrast tiers) are checked by `node palette-dev.mjs`.

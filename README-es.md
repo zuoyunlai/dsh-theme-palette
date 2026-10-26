@@ -31,7 +31,7 @@ El plugin solo apila tokens de color mediante `ctx.theme.overrideTokens`; no reg
 - más de 27.000 referencias de token: texto, secundario, terciario, notas, enlaces, barras laterales, tarjetas, burbuja del usuario, botón primario, barras de desplazamiento, interruptores, títulos/negritas de Markdown, bloques de código;
 - ajustable: intensidad del texto (3), profundidad de la barra lateral (3), énfasis de Markdown, barras de desplazamiento, color de interruptores;
 - **autorreparable**: si el host descarta la capa de override, la paleta se vuelve a aplicar;
-- **promesas de contraste**: el cuerpo tiene la promesa de 12:1 en claro y 10:1 en oscuro (15:1 en alto contraste), el secundario ≥ 6.2 en claro y 8.0 en oscuro, y el terciario y los enlaces ≥ 4.62 en claro y 6.4 en oscuro (los enlaces además pasan una puerta APCA Lc ≥ 60 en oscuro / 75 en HC), medidos sobre las superficies donde el texto realmente cae (el lado oscuro necesita más: un cociente WCAG sobreestima la legibilidad sobre fondo oscuro);
+- **promesas de contraste**: el cuerpo tiene la promesa de 12:1 en claro y 10:1 en oscuro (15:1 en alto contraste), el secundario ≥ 6.2 en claro y 8.0 en oscuro, y el terciario ≥ 4.85 y los enlaces ≥ 4.95 en claro, y 6.4 en oscuro (los mínimos claros llevan un margen para déficits de visión cromática; los enlaces además pasan una puerta APCA Lc ≥ 60 en oscuro / 75 en HC), medidos sobre las superficies donde el texto realmente cae (el lado oscuro necesita más: un cociente WCAG sobreestima la legibilidad sobre fondo oscuro);
 - las superficies prometidas son 00/60 en claro y 950/875 en oscuro; las oscuras 800 (superficie de módulo) y 850 (sub-superficie) **no** respaldan el texto del cuerpo: el informe las cuenta aparte como «fuera de política» (ni cuentan como aprobado ni como fallo);
 - interfaz en 简体中文 / 繁體中文 / English / 日本語 (sigue el idioma del host y se puede fijar).
 
@@ -69,7 +69,7 @@ OKLCH(L, C, tono) ──► ajuste al gamut (búsqueda binaria en C) ──► h
 
 - los alias semánticos mantienen cadenas `var(--dsw-static-neutral-bluish-NN)`, así que todo lo que sigue a un token sigue a la paleta;
 - superficies claras usan los pasos 00–300, las oscuras 800–950;
-- los mínimos de texto se exigen en tiempo de construcción: cuerpo ≥ 12:1 en claro y ≥ 10:1 en oscuro (alto contraste: 15:1), secundario ≥ 6.2 claro / 8.0 oscuro (HC 9 / 9.6), terciario/enlace ≥ 4.62 claro / 6.4 oscuro (HC 7 / 7.6), enlace con APCA Lc ≥ 60 oscuro (HC 75), texto en barra lateral ≥ 7, texto en burbuja ≥ 7;
+- los mínimos de texto se exigen en tiempo de construcción: cuerpo ≥ 12:1 en claro y ≥ 10:1 en oscuro (alto contraste: 15:1), secundario ≥ 6.2 claro / 8.0 oscuro (HC 9 / 9.6), terciario/enlace ≥ 4.85 / 4.95 claro / 6.4 oscuro (HC 7 / 7.6), enlace con APCA Lc ≥ 60 oscuro (HC 75), texto en barra lateral ≥ 7, texto en burbuja ≥ 7;
 - las superficies prometidas son 00/60 en claro y 950/875 en oscuro; las oscuras 800 (superficie de módulo) y 850 (sub-superficie) **no** respaldan el texto del cuerpo: el informe las cuenta aparte como «fuera de política» (ni cuentan como aprobado ni como fallo), y toda superficie sigue teniendo que superar el suelo AA de 4.5;
 - el informe separa tres cosas: el objetivo declarado, el techo físico (lo que el blanco o el negro alcanzan en esa superficie) y la exención de política; 0.93 es solo margen del solucionador, para decidir si un objetivo queda por encima del techo;
 - `node palette-dev.mjs` comprueba 2160 combinaciones (5 paletas × 216 ajustes × los dos niveles de contraste).

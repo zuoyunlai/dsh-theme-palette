@@ -514,5 +514,86 @@ console.log('\n18) 右栏完全不接管（1.9.10 撤除该设置，技术债一
   check(decodeConfig(fresh).palette === 'moss', '新分享码可原样解回')
 }
 
+console.log('\n20) 色觉缺陷（CVD）下文字对比度不塌')
+{
+  // 文字与承载面的对比度由**明度差**决定，配色只改色度/色相 —— 所以 CVD 理论上不该影响读数。
+  // 这条断言就是把这个「理论上」变成实测：模拟 deutan/protan/tritan，
+  // 如果哪天有人把文字亮度建立在色相差异上，这里会立刻掉下来。
+  const CVD = {
+    deutan: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
+    protan: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+    tritan: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]],
+  }
+  const hex2rgb = (h0) => { let h = String(h0).replace('#', ''); if (h.length === 8) h = h.slice(0, 6); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) }
+  const s2l = (c) => { const v = c / 255; return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4 }
+  const l2s = (v) => { const c = v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055; return Math.max(0, Math.min(255, Math.round(c * 255))) }
+  const rgb2hex = (r) => '#' + r.map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join('')
+  const reflect = (hex, kind) => {
+    if (!kind) return hex
+    const m = CVD[kind]
+    const lin = hex2rgb(hex).map(s2l)
+    return rgb2hex(m.map((r) => r[0] * lin[0] + r[1] * lin[1] + r[2] * lin[2]).map((v) => l2s(Math.max(0, Math.min(1, v)))))
+  }
+  const lum = (hex) => { const [r, g, b] = hex2rgb(hex).map(s2l); return 0.2126 * r + 0.7152 * g + 0.0722 * b }
+  const ratio = (a, b, kind) => { const la = lum(reflect(a, kind)), lb = lum(reflect(b, kind)); const hi = Math.max(la, lb), lo = Math.min(la, lb); return (hi + 0.05) / (lo + 0.05) }
+  const kinds = ['deutan', 'protan', 'tritan']
+  // 自定义配色是前面几组写进 localStorage 的状态（极端强调色都试过），这里固定成一组
+  // 确定的三色，避免断言结果随组序变化。
+  writeCustom({ bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' })
+  let worst = { v: Infinity }
+  for (const scheme of SCHEMES.filter((s) => s.tinted)) {
+    const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    const r = rampsFor(scheme, 'tinted')
+    const roles = [
+      ['正文', r.bluish['1000']],
+      ['次级', t['--dsw-alias-label-secondary'].light],
+      ['三级', t['--dsw-alias-label-tertiary'].light],
+      ['链接', t['--dsw-alias-link'].light],
+    ]
+    const surfaces = [r.bluish['00'], r.bluish['60'], r.bluish['150']]
+    for (const [name, fg] of roles) {
+      for (const bg of surfaces) {
+        for (const kind of kinds) {
+          const v = ratio(fg, bg, kind)
+          if (v < worst.v) worst = { v, scheme: scheme.id, name, bg, kind }
+        }
+      }
+    }
+  }
+  check(worst.v >= 4.5,
+    `浅色：正文/次级/三级/链接 × 三个承载面 × 三种色觉，最低 ${worst.v.toFixed(2)} ≥ 4.5（${worst.scheme}/${worst.name}/${worst.kind} @ ${worst.bg}）`)
+  let worstDark = { v: Infinity }
+  for (const scheme of SCHEMES.filter((s) => s.tinted)) {
+    const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    const r = rampsFor(scheme, 'tinted')
+    const roles = [
+      ['正文', r.bluish['50']],
+      ['次级', t['--dsw-alias-label-secondary'].dark],
+      ['三级', t['--dsw-alias-label-tertiary'].dark],
+      ['链接', t['--dsw-alias-link'].dark],
+    ]
+    const surfaces = [r.bluish['950'], r.bluish['800'], r.bluish['875']]
+    for (const [name, fg] of roles) {
+      for (const bg of surfaces) {
+        for (const kind of kinds) {
+          const v = ratio(fg, bg, kind)
+          if (v < worstDark.v) worstDark = { v, scheme: scheme.id, name, bg, kind }
+        }
+      }
+    }
+  }
+  check(worstDark.v >= 4.5,
+    `深色：正文/次级/三级/链接 × 950/800/875 × 三种色觉，最低 ${worstDark.v.toFixed(2)} ≥ 4.5（${worstDark.scheme}/${worstDark.name}/${worstDark.kind} @ ${worstDark.bg}）`)
+  // 强调色与画布去色后仍要能分开（有色按钮/链接的边界不能只靠色相）
+  for (const scheme of SCHEMES.filter((s) => s.tinted)) {
+    const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    const accent = t['--dsw-static-deepseek-500'].light
+    const canvas = rampsFor(scheme, 'tinted').bluish['00']
+    const rs = kinds.map((k) => ratio(accent, canvas, k))
+    check(Math.min(...rs) >= 3.0,
+      `${scheme.id} 强调色 vs 画布 去色后最低 ${Math.min(...rs).toFixed(2)} ≥ 3.0（${rs.map((v) => v.toFixed(2)).join('/')}）`)
+  }
+}
+
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)
 process.exit(failed === 0 ? 0 : 1)

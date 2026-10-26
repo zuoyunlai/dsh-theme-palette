@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.9.10'
+    const PLUGIN_VERSION = '1.10.0'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -238,10 +238,36 @@ window.__ModuleLoader__.load({
       }
     }
 
+    /**
+     * 只给一个主色时派生整套自定义配色（1.10.0，审计建议 4）。
+     *
+     * 用户往往只有一个「想要的品牌色」，让他自己配底色/文字色既难又容易把对比度配坏。
+     * 这里按主色的色相与色度推出一对「纸面 + 墨色」：
+     *   · 色相 = 主色色相；色度取主色的 15%–22% 并夹住上限 —— 纸面只该有一点点色，不该是整片主色；
+     *   · 明度由明暗模式决定（亮底纸面 0.968 / 墨 0.235；暗底 0.165 / 0.935），这是引擎已验证的区间；
+     *   · 主色原样保留，交给 customScheme 去钳位与求解（它会给链接/强调色兜对比度）。
+     * 主色无彩（C < 0.004）时退化为中性纸面，避免「黑底 + 白字 + 黄强调派生出一套淡粉」那类老问题。
+     */
+    function deriveCustomFromAccent(accentHex, pref) {
+      if (typeof accentHex !== 'string' || !HEX_RE.test(accentHex)) return null
+      const [L, C, h] = toOklch(accentHex)
+      const neutral = C < 0.004
+      const dark = pref === 'dark'
+      const tint = (scale, lo, hi) => (neutral ? 0 : Math.min(hi, Math.max(lo, C * scale)))
+      const bg = fromOklch(dark ? 0.165 : 0.968, tint(0.22, 0.006, 0.014), h)
+      const text = fromOklch(dark ? 0.935 : 0.235, tint(0.18, 0.004, 0.012), h)
+      return { bg, text, accent: String(accentHex).toLowerCase(), accentL: L }
+    }
+
     const MIN_MAIN = 12
     const MIN_SECONDARY = 6.2
-    const MIN_TERTIARY = 4.62
-    const MIN_LINK = 4.62
+    /* 三级/链接的浅色下限从 4.62 抬到 4.85 / 4.95（1.10.0）：4.62 是「刚好过 AA」，
+     * 一点余量都不留 —— 而色觉缺陷模拟（Machado 2009，deutan/protan）会让同一对
+     * 前景/背景的比值上下浮动 5–9%，实测链接在 4.62 时就跌到 4.22–4.34（低于 AA）。
+     * 抬到 4.95 后三种色觉模拟下的最低值仍有 4.5+（tools/check-audit.mjs 第 19 组守着）。
+     * 代价：浅色链接与三级文字比 1.9.x 略深一档，肉眼几乎无差别。 */
+    const MIN_TERTIARY = 4.85
+    const MIN_LINK = 4.95
     /* 深色链接不再用 WCAG 比值兜底（1.9.9 补）：深色面上同一比值换到的 Lc 差得远，
        4.62 在自定义配色的 875 面上只有 Lc 52.7，低于本插件给文字定的 Lc 60 下限。
        tuneRamps 里改为沿亮度把 Lc 顶到 60（高对比 75），这里只保留浅色侧的下限。 */
@@ -500,12 +526,16 @@ window.__ModuleLoader__.load({
       { id: 'off', label: '同正文' },
     ]
     const DEFAULT_MD = 'on'
-    /** 高对比开关（反哺 A-4）：不改配色，把文字下限抬到 AAA。 */
+    /** 高对比开关（反哺 A-4）：不改配色，把文字下限抬到 AAA。
+     *  auto（1.10.0，审计 3.11）：跟随系统 prefers-contrast: more ——
+     *  系统开了「提高对比度」就自动用高对比档，没开就用标准档。
+     *  已存过 off/on 的老用户不受影响（读回自己的选择）。 */
     const HC_MODES = [
+      { id: 'auto', label: '跟随系统' },
       { id: 'off', label: '关' },
       { id: 'on', label: '开' },
     ]
-    const DEFAULT_HC = 'off'
+    const DEFAULT_HC = 'auto'
     const MD_KEY = 'dsh-theme-palette.md.v1'
 
     /**
@@ -719,6 +749,40 @@ window.__ModuleLoader__.load({
       const a = parseInt(hex.slice(7, 9), 16) / 255
       return rgbToHex(fg.map((v, i) => v * a + bg[i] * (1 - a)))
     }
+
+    /* ---------- 色觉缺陷模拟（Machado 2009，严重度 1.0）----------
+     * 只用于「告诉用户这个配色对色觉缺陷者是否还分得开」，不参与任何求解：
+     * 求解按明度走就已经对色觉友好，这里是把结论显示出来。
+     * 矩阵作用在线性 sRGB 上，和公开实现一致。
+     */
+    const CVD_MATRICES = {
+      deutan: [[0.367322, 0.860646, -0.227968], [0.280085, 0.672501, 0.047413], [-0.011820, 0.042940, 0.968881]],
+      protan: [[0.152286, 1.052583, -0.204868], [0.114503, 0.786281, 0.099216], [-0.003882, -0.048116, 1.051998]],
+      tritan: [[1.255528, -0.076749, -0.178779], [-0.078411, 0.930809, 0.147602], [0.004733, 0.691367, 0.303900]],
+    }
+    function simulateCvd(hex, kind) {
+      const m = CVD_MATRICES[kind]
+      if (!m || typeof hex !== 'string') return hex
+      const lin = hexToRgb(hex).map((v) => {
+        const s = v / 255
+        return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
+      })
+      const out = m.map((row) => row[0] * lin[0] + row[1] * lin[1] + row[2] * lin[2])
+      return rgbToHex(out.map((v) => {
+        const c = v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055
+        return clamp(c * 255, 0, 255)
+      }))
+    }
+    /** 两个颜色在给定色觉模拟下的 OKLab 距离（×100，与设计软件的 ΔE 同量级）。 */
+    function deltaE(a, b, kind) {
+      const x = toOklch(simulateCvd(a, kind))
+      const y = toOklch(simulateCvd(b, kind))
+      const toLab = ([L, C, h]) => [L, C * Math.cos((h * Math.PI) / 180), C * Math.sin((h * Math.PI) / 180)]
+      const p = toLab(x)
+      const q = toLab(y)
+      return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) * 100
+    }
+
 
     /**
      * 语义色温度调和：保留色相为主（绿仍是绿、红仍是红），只把色相往配色的暖/冷方向
@@ -1862,6 +1926,8 @@ body[data-ds-dark-theme] .dsh-tp-check{background:var(--t-accent-d);color:var(--
 .dsh-tp-hexerror{font-size:11.5px;line-height:16px;color:var(--dsw-alias-state-error-primary)}
 .dsh-tp-hexnote{font-size:11.5px;line-height:16px;color:var(--dsw-alias-label-secondary)}
 .dsh-tp-custom-hint{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
+/* 「由主色派生」的副作用说明：左侧一道细边，读起来是提示而不是正文（1.10.0） */
+.dsh-tp-custom-note{margin:0;padding:6px 0 6px 8px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary);border-left:2px solid var(--dsw-alias-border-l3)}
 .dsh-tp-note{font-size:11.5px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status{margin:0;font-size:11.5px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-status.is-bad{color:var(--dsw-alias-state-error-primary)}
@@ -2084,7 +2150,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     function readHcStored() {
       try {
         const raw = localStorage.getItem(HC_KEY)
-        if (raw === 'on' || raw === 'off') return raw
+        if (raw === 'on' || raw === 'off' || raw === 'auto') return raw
       } catch (err) { /* 退回默认 */ }
       return DEFAULT_HC
     }
@@ -2222,10 +2288,14 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         hc: '高对比',
         custom: '自定义配色',
         customHint: '取三个色的色相与色度；过亮/过暗的强调色会归一化以保证可读，明度由引擎按模式计算。',
-        notice: '1.9.9 按独立审计逐条修订：深色文字下限单独提高（次级 8 / 三级 6.4）、文字着色三档对预置配色真正生效、色阶不再出现「编号越大反而越亮」、高对比档的边框与滚动条也真提高了；报表新增 APCA 列。',
+        derive: '由主色派生',
+        deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
+        deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
+        notice: '1.10.0：高对比档新增「跟随系统」（系统开提高对比度就自动切高对比）；自定义配色可「由主色派生」底色与文字；三级与链接的浅色下限抬高，色觉缺陷模拟下也守 AA；诊断信息新增覆盖报告。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
+        explainCvd: '色觉缺陷提示：{kind} 视觉下强调色与底色/文字几乎同色（ΔE {dE}）。文字仍可读，但按钮与色块会分不开；换一个更亮或更暗的强调色即可。',
         preview: '预览',
         sample: '试试示例',
         copyDiag: '复制诊断',
@@ -2261,7 +2331,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         importBad: '短码无效，已忽略',
         badHex: 'HEX 需为 #RRGGBB',
         hexStale: '这个值刚被别处改过，已保留最新值',
-        hcSub: '尽量把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三级 ≥7）；深色 800/850 不为正文兜底（政策外），但仍守 AA 底线。',
+        hcSub: '把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三级 ≥7）；「跟随系统」= 系统「提高对比度」开启时自动切高对比档；深色 800/850 不为正文兜底（政策外），但仍守 AA 底线。',
       },
       'zh-TW': {
         nav: '主題色',
@@ -2286,10 +2356,14 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         hc: '高對比',
         custom: '自訂配色',
         customHint: '取三個色的色相與色度；過亮/過暗的強調色會正規化以確保可讀性，明度由引擎依模式計算。',
-        notice: '1.9.9 依獨立稽核逐條修訂：深色文字下限另行提高（次要 8 / 三級 6.4）、文字著色三檔對預設配色真正生效、色階不再出現「編號越大反而越亮」、高對比檔的邊框與捲軸也真提高了；報表新增 APCA 欄。',
+        derive: '由主色派生',
+        deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
+        deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
+        notice: '1.10.0：高對比檔新增「跟隨系統」（系統開提高對比度就自動切高對比）；自訂配色可「由主色派生」底色與文字；三級與連結的淺色下限抬高，色覺缺陷模擬下也守 AA；診斷資訊新增覆蓋報告。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
+        explainCvd: '色覺缺陷提示：{kind} 視覺下強調色與底色/文字幾乎同色（ΔE {dE}）。文字仍可讀，但按鈕與色塊會分不開；換一個更亮或更暗的強調色即可。',
         preview: '預覽',
         sample: '試試示例',
         copyDiag: '複製診斷',
@@ -2325,7 +2399,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         importBad: '短碼無效，已忽略',
         badHex: 'HEX 需為 #RRGGBB',
         hexStale: '這個值剛被別處改過，已保留最新值',
-        hcSub: '盡量把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三級 ≥7）；深色 800/850 不為正文兜底（政策外），但仍守 AA 底線。',
+        hcSub: '把文字下限抬到 AAA（正文 ≥15、次文 ≥9、三級 ≥7）；「跟隨系統」= 系統「提高對比度」開啟時自動切高對比檔；深色 800/850 不為正文兜底（政策外），但仍守 AA 底線。',
       },
       en: {
         nav: 'Color theme',
@@ -2350,10 +2424,14 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         hc: 'High contrast',
         custom: 'Custom palette',
         customHint: 'Takes hue and chroma from three colours; extreme accents are normalised for readability; lightness comes from the engine per mode.',
-        notice: '1.9.9 fixes the issues from an independent audit: dark text gets its own higher floors (secondary 8 / tertiary 6.4), the text-tint tiers now really work on presets, ramps no longer go "higher step, lighter colour", and high-contrast borders and scrollbars are genuinely raised; the report gains an APCA column.',
+        derive: 'Derive from accent',
+        deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
+        deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
+        notice: '1.10.0: high contrast gains "follow the system" (switches automatically when the OS increases contrast); custom palettes can "derive from accent" to fill in background and text; lighter-tier floors for tertiary text and links are raised so the AA floor also holds under colour-vision simulation; diagnostics now include a coverage report.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
+        explainCvd: 'Colour-vision note: with {kind} vision the accent is nearly the same colour as the background/text (ΔE {dE}). Text stays readable, but buttons and swatches blur together — pick a lighter or darker accent.',
         preview: 'Preview',
         sample: 'Try a sample',
         copyDiag: 'Copy diagnostics',
@@ -2389,7 +2467,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         importBad: 'Invalid code, ignored',
         badHex: 'HEX must be #RRGGBB',
         hexStale: 'This value was changed elsewhere; the latest value was kept',
-        hcSub: 'Raises text floors toward AAA (body ≥15, secondary ≥9, tertiary ≥7); dark 800/850 no longer back the body text (out of policy) but still hold the AA floor.',
+        hcSub: 'Raises text floors toward AAA (body ≥15, secondary ≥9, tertiary ≥7); "System" = automatically switches to the high-contrast tier when the OS "increase contrast" setting is on; dark 800/850 no longer back the body text (out of policy) but still hold the AA floor.',
       },
       ja: {
         nav: 'カラーテーマ',
@@ -2414,10 +2492,14 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         hc: 'ハイコントラスト',
         custom: 'カスタム配色',
         customHint: '3 色の色相と彩度を使用。極端なアクセント色は可読性のため正規化され、明度はモードごとにエンジンが決めます。',
-        notice: '1.9.9 は独立監査の指摘を順に修正しました：ダークの文字下限を個別に引き上げ（二次 8 / 三次 6.4）、テキストの色味 3 段階がプリセットでも実際に効くようになり、色階が「番号が大きいほど明るい」現象も解消、ハイコントラストの枠線とスクロールバーも実際に強まりました。レポートに APCA 列を追加。',
+        derive: 'メイン色から生成',
+        deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
+        deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
+        notice: '1.10.0：ハイコントラストに「システムに従う」を追加（OS のコントラスト強化に自動追従）。カスタム配色は「メイン色から生成」で背景色と文字色を導出できます。三次テキストとリンクの明るい側の下限を引き上げ、色覚シミュレーション下でも AA を維持。診断情報にカバレッジレポートを追加。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
+        explainCvd: '色覚のヒント：{kind} ではアクセント色が背景・文字とほぼ同色になります（ΔE {dE}）。文字は読めますが、ボタンと色面は見分けにくくなります。もっと明るい／暗いアクセント色に変えてください。',
         preview: 'プレビュー',
         sample: 'サンプルを試す',
         copyDiag: '診断をコピー',
@@ -2453,7 +2535,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         importBad: '無効なコードです',
         badHex: 'HEX は #RRGGBB 形式で入力してください',
         hexStale: 'この値は別の場所で変更されました。最新の値を保持しています',
-        hcSub: '本文の下限を AAA に近づけます（本文 ≥15、副次 ≥9、三次 ≥7）。暗い 800/850 は本文を受け皿にしません（対象外）ですが、AA 下限は守ります。',
+        hcSub: '本文の下限を AAA に近づけます（本文 ≥15、副次 ≥9、三次 ≥7）。「システム」= OS の「コントラストを上げる」が有効なとき自動的にハイコントラストになります。暗い 800/850 は本文を受け皿にしません（対象外）ですが、AA 下限は守ります。',
       },
     }
 
@@ -2468,7 +2550,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         control: { accent: '主题色', mono: '黑白' },
         md: { on: '着色', off: '同正文' },
         lang: { auto: '自动' },
-        hc: { off: '关', on: '开' },
+        hc: { auto: '跟随系统', off: '关', on: '开' },
         custom: { bg: '底色', text: '文字', accent: '强调' },
       },
       'zh-TW': {
@@ -2480,7 +2562,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         control: { accent: '主題色', mono: '黑白' },
         md: { on: '著色', off: '同本文' },
         lang: { auto: '自動' },
-        hc: { off: '關', on: '開' },
+        hc: { auto: '跟隨系統', off: '關', on: '開' },
         custom: { bg: '底色', text: '文字', accent: '強調' },
       },
       en: {
@@ -2492,7 +2574,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         control: { accent: 'Accent', mono: 'Mono' },
         md: { on: 'Tinted', off: 'Body colour' },
         lang: { auto: 'Auto' },
-        hc: { off: 'Off', on: 'On' },
+        hc: { auto: 'System', off: 'Off', on: 'On' },
         custom: { bg: 'Surface', text: 'Text', accent: 'Accent' },
       },
       ja: {
@@ -2504,7 +2586,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         control: { accent: 'アクセント', mono: 'モノクロ' },
         md: { on: '色づけ', off: '本文と同じ' },
         lang: { auto: '自動' },
-        hc: { off: 'オフ', on: 'オン' },
+        hc: { auto: 'システム', off: 'オフ', on: 'オン' },
         custom: { bg: '背景', text: '本文', accent: 'アクセント' },
       },
     }
@@ -2644,6 +2726,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           h('button', {
             type: 'button',
             className: 'dsh-tp-mini',
+            title: txt.deriveHint,
+            onClick: () => props.deriveFromAccent(),
+          }, txt.derive),
+          h('button', {
+            type: 'button',
+            className: 'dsh-tp-mini',
             onClick: () => props.resetCustom(),
           }, txt.reset)),
         h('div', { className: 'dsh-tp-swatches' },
@@ -2705,14 +2793,17 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
             invalid && h('span', { id: errId, className: 'dsh-tp-hexerror', role: 'alert' }, txt.badHex),
             stale && h('span', { id: staleId, className: 'dsh-tp-hexnote', role: 'status' }, txt.hexStale))
           })),
+        h('p', { className: 'dsh-tp-custom-note' }, txt.deriveNote),
         h('p', { className: 'dsh-tp-custom-hint' }, txt.customHint),
-        explain && (explain.accentClamped || explain.linkShifted) && h(
+        explain && (explain.accentClamped || explain.linkShifted || explain.cvdRisk) && h(
           'div',
           { className: 'dsh-tp-explain', role: 'status' },
           explain.accentClamped && h('span', null,
             fmt(txt.explainClamp, { from: explain.accentFrom, to: explain.accentTo })),
           explain.linkShifted && h('span', null,
             fmt(txt.explainLink, { ratio: explain.linkRatio.toFixed(2), target: explain.linkTarget })),
+          explain.cvdRisk && h('span', null,
+            fmt(txt.explainCvd, { kind: explain.cvdKind, dE: explain.cvdDeltaE })),
         ),
       )
 
@@ -3031,7 +3122,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
 
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, rampsFor, floors, encodeConfig, decodeConfig, customScheme, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
     }
 
     return {
@@ -3141,9 +3232,17 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         // 但覆盖层写失败时屏幕上仍是旧配色。分开报，别让用户以为换成功了。
         let applyError = null
 
+        // 系统对比度偏好（审计 3.11）：auto 档监听 prefers-contrast: more。
+        // 测试沙箱里没有 matchMedia —— 判空退回「系统没要求」，auto 等于标准档。
+        const contrastMq = typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+          ? window.matchMedia('(prefers-contrast: more)')
+          : null
+        const systemWantsHc = () => !!(contrastMq && contrastMq.matches)
+        const effectiveHc = () => hcMode === 'on' || (hcMode === 'auto' && systemWantsHc())
+
         const applyAll = (reason) => {
           const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
-          const tokens = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hcMode === 'on')
+          const tokens = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, effectiveHc())
           let next = () => {}
           if (tokens !== undefined) {
             try {
@@ -3347,7 +3446,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const getCustomExplain = () => {
           const colors = readCustom()
           const scheme = customScheme(colors)
-          const hc = hcMode === 'on'
+          const hc = effectiveHc()
           const t = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hc)
           const link = t['--dsw-alias-link'].light
           const base = t['--dsw-static-deepseek-500'].light
@@ -3355,6 +3454,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           const ratio = Math.min(...surfaces.map((bg) => contrast(link, bg)))
           const acL = toOklch(colors.accent)[0]
           const accentTo = Math.min(0.64, Math.max(0.30, acL))
+          // 色觉缺陷下的可分辨度：强调色 vs 底色 / 文字，三种模拟取最差的那种。
+          // 只提示不拦：用户的配色归用户，插件只负责把风险说出来。
+          const cvd = ['deutan', 'protan', 'tritan']
+            .map((kind) => ({ kind, dE: Math.min(deltaE(colors.accent, colors.bg, kind), deltaE(colors.accent, colors.text, kind)) }))
+            .sort((a, b) => a.dE - b.dE)[0]
           return {
             accentClamped: Math.abs(acL - accentTo) > 0.005,
             accentFrom: Math.round(acL * 100) / 100,
@@ -3362,6 +3466,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
             linkShifted: link.toLowerCase() !== base.toLowerCase(),
             linkRatio: Math.round(ratio * 100) / 100,
             linkTarget: floors(hc).link,
+            cvdRisk: cvd.dE < 12,
+            cvdKind: cvd.kind,
+            cvdDeltaE: Math.round(cvd.dE * 10) / 10,
           }
         }
         /** 诊断导出：把当前配色与对比度矩阵打成可粘贴的 JSON（提 issue 用）。 */
@@ -3370,7 +3477,57 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           version: PLUGIN_VERSION,
           settings: { palette: current, sidebar: sidebarMode, text: textMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref },
           report: getContrastReport(),
+          coverage: getCoverageReport(),
         })
+        /**
+         * 运行时覆盖报告（审计建议 5）：枚举宿主样式表里的 --dsw-* 自定义属性，按四类分：
+         *   ours    —— 本插件覆盖层接管（lastTokens 里）；
+         *   derived —— 值是 var(--dsw-…) 引用（宿主别名，跟着基础 token 走，无需接管）；
+         *   literal-chromatic —— 字面色值且带色彩（宿主语义色等，有意不染）；
+         *   literal-gray —— 字面灰值（跟配色的候选：接管后体验更一致）。
+         * 只读、尽力而为：沙箱/跨域拿不到 styleSheets 时返回 { ok:false }，不影响其它诊断。
+         */
+        const getCoverageReport = () => {
+          const found = new Map()
+          try {
+            const sheets = typeof document !== 'undefined' && document.styleSheets ? Array.from(document.styleSheets) : []
+            const walk = (rules) => {
+              for (const rule of rules) {
+                if (!rule) continue
+                if (rule.cssRules) { try { walk(rule.cssRules) } catch (err) { /* 跨域子表 */ } continue }
+                const style = rule.style
+                if (!style || typeof style.length !== 'number') continue
+                for (let i = 0; i < style.length; i++) {
+                  const prop = style[i]
+                  if (typeof prop === 'string' && prop.indexOf('--dsw-') === 0) {
+                    found.set(prop, style.getPropertyValue(prop).trim())
+                  }
+                }
+              }
+            }
+            for (const sheet of sheets) { try { walk(sheet.cssRules) } catch (err) { /* 跨域表跳过 */ } }
+          } catch (err) {
+            return { ok: false, reason: String((err && err.message) || err) }
+          }
+          const ours = new Set(lastTokens ? Object.keys(lastTokens) : [])
+          const HEX_LIT = /^\s*#[0-9a-f]{3,8}\s*$/i
+          const out = { ok: true, total: found.size, ours: [], derived: [], literalChromatic: [], literalGray: [] }
+          for (const [name, value] of found) {
+            if (ours.has(name)) { out.ours.push(name); continue }
+            if (value.indexOf('var(') !== -1) { out.derived.push(name); continue }
+            if (HEX_LIT.test(value)) {
+              const hex = value.trim().slice(1)
+              const full = hex.length === 3 ? hex.split('').map((c) => c + c).join('') : hex
+              const r = parseInt(full.slice(0, 2), 16), g = parseInt(full.slice(2, 4), 16), b = parseInt(full.slice(4, 6), 16)
+              if (Math.abs(r - g) <= 2 && Math.abs(g - b) <= 2 && Math.abs(r - b) <= 2) out.literalGray.push(name)
+              else out.literalChromatic.push(name)
+              continue
+            }
+            out.derived.push(name) // rgb()/oklch() 等非 var 引用：归「其它声明」，暂不细分
+          }
+          out.counts = { total: out.total, ours: out.ours.length, derived: out.derived.length, literalChromatic: out.literalChromatic.length, literalGray: out.literalGray.length }
+          return out
+        }
         const previewConfigCode = (code) => {
           const cfg = decodeConfig(code)
           return cfg ? { ok: true, config: cfg } : { ok: false }
@@ -3383,7 +3540,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
          */
         const getContrastReport = () => {
           const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
-          const hc = hcMode === 'on'
+          const hc = effectiveHc()
           const t = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, hc)
           return buildContrastReport(t, hc, { mono: !scheme.tinted })
         }
@@ -3407,6 +3564,22 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           const next = Object.assign({}, readCustom(), { [field]: hex.toLowerCase() })
           writeCustom(next)
           applyAll('custom:' + field)
+          emitCustom()
+          return true
+        }
+        /** 以当前主色为唯一输入，重算底色与文字色（1.10.0，审计建议 4）。 */
+        const deriveFromAccent = () => {
+          const pref = (() => {
+            try {
+              const p = theme.getTheme().preference
+              if (p === 'dark' || p === 'light') return p
+            } catch (err) { /* 读不到偏好就按页面实际明暗判断 */ }
+            try { return document.body.hasAttribute('data-ds-dark-theme') ? 'dark' : 'light' } catch (err) { return 'light' }
+          })()
+          const next = deriveCustomFromAccent(readCustom().accent, pref)
+          if (!next) return false
+          writeCustom({ bg: next.bg, text: next.text, accent: next.accent })
+          applyAll('custom:derive')
           emitCustom()
           return true
         }
@@ -3477,6 +3650,14 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           window.addEventListener('pageshow', healOnShow)
         } catch (err) { /* 无 DOM 时跳过 */ }
         try { ctx.on('theme/change', healOnTheme) } catch (err) { /* 事件名变了就只靠定时器 */ }
+        // auto 档：系统对比度偏好一变就重算（开 → 高对比档，关 → 回标准档）。
+        // 老浏览器没有 addEventListener 就退化为「下次任意重算时跟进」。
+        try {
+          if (contrastMq && typeof contrastMq.addEventListener === 'function') {
+            const onContrastChange = () => { applyAll('prefers-contrast'); emitHc() }
+            contrastMq.addEventListener('change', onContrastChange)
+          }
+        } catch (err) { /* 无 matchMedia 环境跳过 */ }
         try {
           healTimer = setInterval(() => {
             // 页面不可见时不做样式回读：容器里长时间后台驻留时，4 秒一次 getComputedStyle 是纯浪费
@@ -3549,6 +3730,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
                 dismissNotice,
                 subscribeCustom,
                 setCustomColor,
+                deriveFromAccent,
                 resetCustom,
                 getLangPref,
                 getLocale,
