@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.10.0'
+    const PLUGIN_VERSION = '1.11.0'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -2317,7 +2317,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.10.0：高对比档新增「跟随系统」（系统开提高对比度就自动切高对比）；自定义配色可「由主色派生」底色与文字；三级与链接的浅色下限抬高，色觉缺陷模拟下也守 AA；诊断信息新增覆盖报告。',
+        notice: '1.11.0：深色模式下注释与时间戳更清晰（按感知对比度 Lc 加了一道闸）；宿主语言不是中/英/日时界面改为回落英文；取色拖动按帧合并更流畅。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2385,7 +2385,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.10.0：高對比檔新增「跟隨系統」（系統開提高對比度就自動切高對比）；自訂配色可「由主色派生」底色與文字；三級與連結的淺色下限抬高，色覺缺陷模擬下也守 AA；診斷資訊新增覆蓋報告。',
+        notice: '1.11.0：深色模式下註釋與時間戳更清晰（按感知對比度 Lc 加了一道閘）；宿主語言不是中/英/日時介面改為回落英文；取色拖動按幀合併更流暢。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2453,7 +2453,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.10.0: high contrast gains "follow the system" (switches automatically when the OS increases contrast); custom palettes can "derive from accent" to fill in background and text; lighter-tier floors for tertiary text and links are raised so the AA floor also holds under colour-vision simulation; diagnostics now include a coverage report.',
+        notice: '1.11.0: captions and timestamps are clearer in dark mode (a perceptual-contrast Lc gate was added); the UI now falls back to English when the host language is not Chinese, English or Japanese; colour-picker drags are smoother (frame-coalesced).',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2521,7 +2521,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.10.0：ハイコントラストに「システムに従う」を追加（OS のコントラスト強化に自動追従）。カスタム配色は「メイン色から生成」で背景色と文字色を導出できます。三次テキストとリンクの明るい側の下限を引き上げ、色覚シミュレーション下でも AA を維持。診断情報にカバレッジレポートを追加。',
+        notice: '1.11.0：ダークモードのキャプション・タイムスタンプがより明瞭になりました（知覚コントラスト Lc のゲートを追加）。ホスト言語が中／英／日以外のとき UI は英語にフォールバックします。カラーピッカーのドラッグがフレーム統合でより滑らかになりました。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
