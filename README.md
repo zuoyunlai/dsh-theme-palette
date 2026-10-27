@@ -73,7 +73,7 @@ OKLCH(L, C, hue) ──► gamut clamp (binary search on C) ──► sRGB hex
 - text floors are enforced at build time: body ≥ 12:1 in light and ≥ 10:1 in dark (high contrast: 15:1), secondary ≥ 6.2 in light / 8.0 in dark (HC 9 / 9.6), tertiary/link ≥ 4.85 / 4.95 in light / 6.4 in dark (HC 7 / 7.6), link APCA Lc ≥ 60 in dark (HC 75), sidebar text ≥ 7, bubble text ≥ 7;
 - the promised surfaces are light 00/60 and dark 950/875; dark 800 (module surface) and 850 (sub-surface) do **not** back body text — the report counts them apart as "out of policy" (neither pass nor fail), and every surface still has to clear the AA floor of 4.5;
 - the report separates three things: the declared target, the physical ceiling (what black or white can reach on that surface) and the policy exemption; 0.93 is only a solver margin, used to decide whether a target sits above the ceiling;
-- 2160 configuration combos (5 palettes × 216 settings × both contrast tiers) are checked by `node palette-dev.mjs`.
+- 1080 configuration combos (5 palettes × 216 settings, both contrast tiers included) are checked by `node palette-dev.mjs`.
 
 Design notes, per-component rationale and the contrast tables live in [docs/DESIGN.md](docs/DESIGN.md). Release history: [CHANGELOG.md](CHANGELOG.md).
 

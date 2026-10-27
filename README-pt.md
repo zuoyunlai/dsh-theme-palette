@@ -72,7 +72,7 @@ OKLCH(L, C, matiz) ──► limite de gamut (busca binária em C) ──► hex
 - os pisos de texto são exigidos na construção: corpo ≥ 12:1 no claro e ≥ 10:1 no escuro (alto contraste: 15:1), secundário ≥ 6.2 claro / 8.0 escuro (HC 9 / 9.6), terciário/link ≥ 4.85 / 4.95 claro / 6.4 escuro (HC 7 / 7.6), link com APCA Lc ≥ 60 escuro (HC 75), texto na barra lateral ≥ 7, texto no balão ≥ 7;
 - as superfícies prometidas são 00/60 no claro e 950/875 no escuro; as escuras 800 (superfície de módulo) e 850 (sub-superfície) **não** sustentam o texto do corpo: o relatório as conta à parte como «fora de política» (nem contam como aprovado nem como falha), e toda superfície ainda precisa passar pelo piso AA de 4.5;
 - o relatório separa três coisas: a meta declarada, o teto físico (o que o branco ou o preto alcançam nessa superfície) e a isenção de política; 0.93 é apenas margem do solucionador, usada para decidir se uma meta fica acima do teto;
-- `node palette-dev.mjs` verifica 2160 combinações (5 paletas × 216 ajustes × os dois níveis de contraste).
+- `node palette-dev.mjs` verifica 1080 combinações (5 paletas × 216 ajustes, ambos os níveis de contraste incluídos).
 
 Notas de design, critério por componente e tabelas de contraste em [docs/DESIGN.md](docs/DESIGN.md). Histórico: [CHANGELOG.md](CHANGELOG.md).
 

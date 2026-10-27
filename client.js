@@ -146,6 +146,19 @@ window.__ModuleLoader__.load({
       moss: { '00': '#f9fbf8', '60': '#f5f7f2', '150': '#e0e7dd', '950': '#131b16', '875': '#1a241d', '850': '#1d2a22', '800': '#2f3f34' },
     }
 
+    /* ---- 参考实现的 ink / link 精确对齐（1.9.0）----
+     * 参考的 ink 比求解结果更浅、更中性；这里直接取参考值，
+     * 但仍过一遍对比度下限：达不到的目标文字沿远离背景方向微调（只动明度，不动色相）。
+     * 三级文字在控件面上若参考本身不达 AA，会略微变深 —— 这是唯一允许偏离参考的地方。
+     * （审计 2026-10-27 P3-8：从 buildTokensRaw 体内上提 —— 它是不变的常量表，
+     *  放在函数里每次未命中缓存都要重新分配，且与 SURFACE_TARGETS 的组织不一致。）
+     */
+    const TEXT_TARGETS = {
+      warm: { light: { 1000: '#2b2622', 700: '#6b625a', 600: '#8c8177', link: '#8a5233' }, dark: { 50: '#f5efe8', 300: '#c4b8ac', 400: '#9a8d80', link: '#e6c4a0' } },
+      indigo: { light: { 1000: '#1a2330', 700: '#516074', 600: '#74839a', link: '#345286' }, dark: { 50: '#eef3fa', 300: '#b7c5d8', 400: '#8a9bb2', link: '#a6bfe3' } },
+      moss: { light: { 1000: '#1f2a22', 700: '#55645a', 600: '#7a8a7e', link: '#406236' }, dark: { 50: '#eef5ef', 300: '#b8c8bc', 400: '#8ba091', link: '#aed0a2' } },
+    }
+
     /* 对比度下限：主文本 16 / 次文本 6 / 三级文本 4.6（AA）/ 链接 4.6 */
     /* 对比度下限：按**真实承载面**定（卡层/模块层比画布更难达标），不是按画布定。
        正文 15.5 / 次级 6.2 / 三级 4.62（AA）/ 链接 4.62（AA） */
@@ -1257,12 +1270,23 @@ window.__ModuleLoader__.load({
           // 注释/时间戳：既要跟随主题（色度由 midC 给），也要在画布/卡层上可读。
           // 直接拿 400 号色在浅色下只有约 2.4:1，所以这里对 00/60 求解到 AA。
           light: solveForeground(r.bluish, '400', [r.bluish['00'], r.bluish['60']], floors(hc).tertiary, 0.62),
-          dark: solveForeground(
-            r.bluish,
-            '500',
+          /* 深色（审计 2026-10-27 P2-3）：原先只按浅色下限（4.85）对 800/850 求解，
+           * 实测 Lc 只有 48–52 —— 本插件给文字定的可读线是 Lc 60，三级文字同面有 62–66。
+           * 深色侧的「WCAG 过线 ≠ 看得清」论证（见 MIN_SECONDARY_DARK）同样适用于注释。
+           * 这里在 WCAG 求解之后再过一道 Lc 闸：
+           *   标准档 60（与链接同线）；HC 档 70 而不是照抄链接的 75 ——
+           *   HC 三级文字 Lc 落在 72–77，注释套 75 会反超三级（靛蓝 75 > 72），
+           *   破坏「注释弱于三级」的层级。抬完后标准档注释 WCAG ≈ 5.6–6.0，仍低于三级的 6.4。 */
+          dark: raiseToLc(
+            solveForeground(
+              r.bluish,
+              '500',
+              [r.bluish['800'], r.bluish['850']],
+              Math.min(floors(hc).tertiary, contrast('#ffffff', r.bluish['800']) * 0.995),
+              0.30,
+            ),
             [r.bluish['800'], r.bluish['850']],
-            Math.min(floors(hc).tertiary, contrast('#ffffff', r.bluish['800']) * 0.995),
-            0.30,
+            hc ? 70 : 60,
           ),
         },
         // 主人气泡（`--dsw-specific-bubble`）宿主指向 deepseek-50：那是「品牌色的极浅底」，
@@ -1684,16 +1708,8 @@ window.__ModuleLoader__.load({
       if (!params.tinted && sidebarMode === 'light') {
         pairs['--dsw-static-neutral-bluish-00'] = { light: '#fafafa', dark: BASE.bluish['00'] }
       }
-      /* ---- 参考实现的 ink / link 精确对齐（1.9.0）----
-       * 参考的 ink 比我们求解结果更浅、更中性；这里直接取参考值，
-       * 但仍过一遍对比度下限：达不到的目标文字沿远离背景方向微调（只动明度，不动色相）。
-       * 三级文字在控件面上若参考本身不达 AA，会略微变深 —— 这是唯一允许偏离参考的地方。
-       */
-      const TEXT_TARGETS = {
-        warm: { light: { 1000: '#2b2622', 700: '#6b625a', 600: '#8c8177', link: '#8a5233' }, dark: { 50: '#f5efe8', 300: '#c4b8ac', 400: '#9a8d80', link: '#e6c4a0' } },
-        indigo: { light: { 1000: '#1a2330', 700: '#516074', 600: '#74839a', link: '#345286' }, dark: { 50: '#eef3fa', 300: '#b7c5d8', 400: '#8a9bb2', link: '#a6bfe3' } },
-        moss: { light: { 1000: '#1f2a22', 700: '#55645a', 600: '#7a8a7e', link: '#406236' }, dark: { 50: '#eef5ef', 300: '#b8c8bc', 400: '#8ba091', link: '#aed0a2' } },
-      }
+      // 参考墨色表在模块级（TEXT_TARGETS，紧随 SURFACE_TARGETS）；自定义没有参考表，
+      // 走下面的通用求解路径。
       const TT = TEXT_TARGETS[scheme.id]
       // 三套预置走参考目标；自定义没有参考表，但同样要拿到跟随主题的注释/文字
       if (scheme.tinted) {
@@ -2184,7 +2200,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         x: { bg: custom.bg, text: custom.text, accent: custom.accent },
       }
       try {
-        const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(raw))))
+        // TextEncoder 产出与旧版 escape/encodeURIComponent 链逐字节相同的 UTF-8（审计 2026-10-27 P3-7）：
+        // 新旧版本的短码可以互相解码，check-audit 第 2 组的旧码断言守着这一点。
+        const bytes = new TextEncoder().encode(JSON.stringify(raw))
+        let binary = ''
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+        const b64 = btoa(binary)
         return CONFIG_PREFIX + b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
       } catch (err) { return '' }
     }
@@ -2198,7 +2219,10 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       try {
         let b64 = text.slice(CONFIG_PREFIX.length).replace(/-/g, '+').replace(/_/g, '/')
         while (b64.length % 4 !== 0) b64 += '='
-        const raw = JSON.parse(decodeURIComponent(escape(atob(b64))))
+        const bin = atob(b64)
+        const bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+        const raw = JSON.parse(new TextDecoder().decode(bytes))
         if (!raw || raw.v !== 1) return null
         const next = {
           palette: SCHEMES.some((sc) => sc.id === raw.p) ? raw.p : null,
@@ -2261,7 +2285,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
 
     function pickLocale(pref) {
       if (pref !== 'auto') return pref
-      return hostLocale() || 'zh-CN'
+      // 兜底必须是 en 而不是 zh-CN（审计 2026-10-27 P1-2）：宿主语言不在
+      // zh/ja/en 里（fr/de/es/pt/…）时给整页中文，对国际用户是最差的选择。
+      return hostLocale() || 'en'
     }
 
     const TEXT = {
@@ -3122,7 +3148,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
 
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
     }
 
     return {
@@ -3143,8 +3169,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         let controlMode = readControlStored()
         let mdMode = readMdStored()
         let hcMode = readHcStored()
-        const getConfigCode = () => encodeConfig({ palette: current, sidebar: sidebarMode, text: textMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref })
+        // langPref 必须先于引用它的闭包声明（审计 2026-10-27 P3-9：原顺序运行时无害，但极易误读成 TDZ）
         let langPref = readLangPref()
+        const getConfigCode = () => encodeConfig({ palette: current, sidebar: sidebarMode, text: textMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref })
         const localeListeners = new Set()
         const currentLocale = () => pickLocale(langPref)
         const emitLocale = () => { for (const fn of localeListeners) { try { fn() } catch (err) { /* 忽略 */ } } }
@@ -3558,13 +3585,28 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           applyAll('custom:reset')
           emitCustom()
         }
+        /* 取色拖动的帧合并（审计 2026-10-27 P2-4）：取色器 input 事件在拖动中每帧来多次，
+         * 每次都重放覆盖层会让宿主连续做全页样式重写（约 200 个 token）+ 样式回读。
+         * 同帧多次取色合并到下一帧只应用一次；离散动作（重置/派生/导入）不走这里，保持同步。 */
+        let customFrameQueued = false
+        const scheduleCustomApply = (reason) => {
+          if (customFrameQueued) return
+          customFrameQueued = true
+          const run = () => {
+            customFrameQueued = false
+            applyAll(reason)
+            emitCustom()
+          }
+          try { requestAnimationFrame(run) } catch (err) {
+            try { setTimeout(run, 0) } catch (err2) { run() }
+          }
+        }
         const setCustomColor = (field, hex) => {
           if (CUSTOM_FIELDS.indexOf(field) === -1) return false
           if (typeof hex !== 'string' || !HEX_RE.test(hex)) return false
           const next = Object.assign({}, readCustom(), { [field]: hex.toLowerCase() })
           writeCustom(next)
-          applyAll('custom:' + field)
-          emitCustom()
+          scheduleCustomApply('custom:' + field)
           return true
         }
         /** 以当前主色为唯一输入，重算底色与文字色（1.10.0，审计建议 4）。 */

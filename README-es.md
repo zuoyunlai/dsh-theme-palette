@@ -72,7 +72,7 @@ OKLCH(L, C, tono) ──► ajuste al gamut (búsqueda binaria en C) ──► h
 - los mínimos de texto se exigen en tiempo de construcción: cuerpo ≥ 12:1 en claro y ≥ 10:1 en oscuro (alto contraste: 15:1), secundario ≥ 6.2 claro / 8.0 oscuro (HC 9 / 9.6), terciario/enlace ≥ 4.85 / 4.95 claro / 6.4 oscuro (HC 7 / 7.6), enlace con APCA Lc ≥ 60 oscuro (HC 75), texto en barra lateral ≥ 7, texto en burbuja ≥ 7;
 - las superficies prometidas son 00/60 en claro y 950/875 en oscuro; las oscuras 800 (superficie de módulo) y 850 (sub-superficie) **no** respaldan el texto del cuerpo: el informe las cuenta aparte como «fuera de política» (ni cuentan como aprobado ni como fallo), y toda superficie sigue teniendo que superar el suelo AA de 4.5;
 - el informe separa tres cosas: el objetivo declarado, el techo físico (lo que el blanco o el negro alcanzan en esa superficie) y la exención de política; 0.93 es solo margen del solucionador, para decidir si un objetivo queda por encima del techo;
-- `node palette-dev.mjs` comprueba 2160 combinaciones (5 paletas × 216 ajustes × los dos niveles de contraste).
+- `node palette-dev.mjs` comprueba 1080 combinaciones (5 paletas × 216 ajustes, ambos niveles de contraste incluidos).
 
 Las notas de diseño, el criterio por componente y las tablas de contraste están en [docs/DESIGN.md](docs/DESIGN.md). Historial: [CHANGELOG.md](CHANGELOG.md).
 

@@ -145,6 +145,16 @@ try {
     else check(headings === headingsBase, `${f} 的 ## 标题与 README.md 一致`)
   }
 
+  // 升级提示与版本同步（审计 2026-10-27 P3-11）：每版要手改 4 个语种的 notice，
+  // 之前只断言「可渲染」—— 文案里忘改版本号不会红。这里钉住：恰好 4 条，且都含当前版本号。
+  {
+    const versionNow = (src.match(/PLUGIN_VERSION\s*=\s*['"]([^'"]+)['"]/) || [])[1]
+    const notices = src.match(/notice: '[^']*'/g) || []
+    check(notices.length === 4, `四语种都有 notice 文案（实得 ${notices.length}）`)
+    check(notices.length === 4 && notices.every((s) => s.includes(versionNow)),
+      `每条 notice 都含当前版本号 ${versionNow}（升级时四处文案要一起改）`)
+  }
+
   // 3) screenshots.json 与资产文件一致
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'screenshots.json'), 'utf8'))
   check(manifest.length === 4, 'screenshots.json 为 4 条')

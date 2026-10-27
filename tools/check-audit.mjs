@@ -41,7 +41,7 @@ globalThis.__def.factory(() => ({
 
 const {
   buildTokens, SCHEMES, contrast, floors, encodeConfig, decodeConfig, writeCustom, toOklch, flatten,
-  devContrastReport, markdownCss, rampsFor,
+  devContrastReport, markdownCss, rampsFor, apcaContrast, pickLocale,
 } = globalThis.__api
 const custom = SCHEMES.find((s) => s.id === 'custom')
 const F = floors(false)
@@ -101,15 +101,29 @@ console.log('\n3) 文字色相真的参与派生')
   check(blue[darkKey].dark !== red[darkKey].dark, `深色正文同样跟随文字色相（${blue[darkKey].dark} vs ${red[darkKey].dark}）`)
 }
 
-console.log('\n4) caption 在深色承载面求解')
+console.log('\n4) caption 在深色承载面求解（1.11.0：WCAG 下限 + Lc 闸 60/70 + 不反超三级）')
 for (const id of ['warm', 'indigo', 'moss']) {
   const scheme = SCHEMES.find((s) => s.id === id)
-  const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
-  const cap = t['--dsw-alias-label-caption'].dark
-  const on800 = contrast(cap, t['--dsw-static-neutral-bluish-800'].dark)
-  const on850 = contrast(cap, t['--dsw-static-neutral-bluish-850'].dark)
-  check(on800 >= F.tertiary - 0.02 && on850 >= F.tertiary - 0.02,
-    `${id} caption ${cap} 对 800 ${on800.toFixed(2)} / 850 ${on850.toFixed(2)}（目标 ${F.tertiary}）`)
+  for (const hc of [false, true]) {
+    const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', hc)
+    const cap = t['--dsw-alias-label-caption'].dark
+    const b800 = t['--dsw-static-neutral-bluish-800'].dark
+    const b850 = t['--dsw-static-neutral-bluish-850'].dark
+    const on800 = contrast(cap, b800)
+    const on850 = contrast(cap, b850)
+    check(on800 >= F.tertiary - 0.02 && on850 >= F.tertiary - 0.02,
+      `${id}${hc ? ' HC' : ''} caption ${cap} WCAG 对 800 ${on800.toFixed(2)} / 850 ${on850.toFixed(2)}（≥ ${F.tertiary}）`)
+    // 1.11.0（审计 2026-10-27 P2-3）：深色注释原先只按浅色下限求解，Lc 实测 48–52，
+    // 低于本插件给文字定的 Lc 60 线。HC 闸定 70 而不是链接的 75：HC 三级在 72–77，套 75 会反超。
+    const lcGate = hc ? 70 : 60
+    const lc800 = Math.abs(apcaContrast(cap, b800)) * 100
+    const lc850 = Math.abs(apcaContrast(cap, b850)) * 100
+    check(lc800 >= lcGate - 0.5 && lc850 >= lcGate - 0.5,
+      `${id}${hc ? ' HC' : ''} caption Lc 对 800 ${lc800.toFixed(1)} / 850 ${lc850.toFixed(1)}（≥ ${lcGate}）`)
+    const ter = t['--dsw-alias-label-tertiary'].dark
+    check(on800 <= contrast(ter, b800) + 0.02,
+      `${id}${hc ? ' HC' : ''} caption 不反超三级（${on800.toFixed(2)} ≤ ${contrast(ter, b800).toFixed(2)}）`)
+  }
 }
 
 console.log('\n5) 深色正文按策略 A 定标（950/875/850 → 10:1，800 不兜底）')
@@ -593,6 +607,26 @@ console.log('\n20) 色觉缺陷（CVD）下文字对比度不塌')
     check(Math.min(...rs) >= 3.0,
       `${scheme.id} 强调色 vs 画布 去色后最低 ${Math.min(...rs).toFixed(2)} ≥ 3.0（${rs.map((v) => v.toFixed(2)).join('/')}）`)
   }
+}
+
+console.log('\n21) 界面语言回退（1.11.0，审计 2026-10-27 P1-2）：非 zh/ja/en 宿主回落 en，不再整页中文')
+{
+  check(pickLocale('en') === 'en' && pickLocale('ja') === 'ja' && pickLocale('zh-TW') === 'zh-TW',
+    '手选语言原样返回（en / ja / zh-TW）')
+  check(pickLocale('auto') === 'zh-CN', `宿主 zh → zh-CN（实得 ${pickLocale('auto')}）`)
+  // 宿主语言识别不了的场景（fr/de/…）用第二个实例验证：hostLocale 读的是实例自己的 document
+  let api2 = null
+  let def2 = null
+  const win2 = {
+    __ModuleLoader__: { load: (d) => { def2 = d } },
+    __DSH_THEME_PALETTE_DEV__:(a) => { api2 = a },
+    __DSH_THEME_PALETTE_DEV_REQUEST__: true,
+  }
+  new Function('window', 'localStorage', 'document', 'navigator', src)(
+    win2, { getItem: () => null, setItem: () => {} }, { documentElement: { lang: 'fr' } }, { language: 'fr-FR' },
+  )
+  def2.factory(() => ({ createElement: () => null, useState: (v) => [v, () => {}], useSyncExternalStore: () => 'mono' }))
+  check(api2 && api2.pickLocale('auto') === 'en', `宿主 fr → 回退 en（实得 ${api2 && api2.pickLocale('auto')}）`)
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)

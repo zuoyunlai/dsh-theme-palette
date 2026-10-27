@@ -13,7 +13,8 @@
  *   3. 退避：连续失败不会密集重放
  *   4. 反复失效：达到上限后停用自动重放（只报一次错）
  *   5. 无层累积：重放前先撤旧层
- *   6. 卸载：插件卸载后不再重放
+ *   6. 取色拖动（1.11.0）：同一帧内多次改色只重放一次，且以最后一次为准
+ *   7. 卸载：插件卸载后不再重放
  *
  * 用法：node tools/check-selfheal.mjs
  */
@@ -79,17 +80,27 @@ let now = 1_700_000_000_000
 const realNow = Date.now
 Date.now = () => now
 const advance = (ms) => { now += ms }
+const rafQueue = []
+const flushRaf = () => { const q = rafQueue.splice(0, rafQueue.length); for (const fn of q) fn() }
 
 // ---- 沙箱加载 client.js ----
+// localStorage 用 Map 实现（而不是恒返 null 的桩）：场景 6 要验证「帧内取最后一次生效」，
+// 恒 null 会让 readCustom 每次都回落默认三色，取色永远不生效 —— 与真实宿主行为不符。
+const store = new Map()
 const sandbox = {
   window: { __ModuleLoader__: { load: (d) => { sandbox.def = d } } },
-  localStorage: { getItem: () => null, setItem: () => {} },
+  localStorage: {
+    getItem: (k) => (store.has(k) ? store.get(k) : null),
+    setItem: (k, v) => store.set(k, String(v)),
+  },
   document,
   navigator: { language: 'zh-CN' },
   location: { search: '' },
   getComputedStyle,
   MutationObserver: class { observe() {} disconnect() {} },
-  requestAnimationFrame: (fn) => { fn(); return 1 },
+  // rAF 批处理（而不是立即执行）：场景 7 要证明「同帧多次取色只重放一次」，
+  // 立即执行的 rAF 会把每次排队都当场消费掉，测不出合并。
+  requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length },
   setInterval: () => 0,   // 定时器不跑：场景由测试显式触发
   clearInterval: () => {},
   console: {
@@ -103,8 +114,9 @@ const names = ['window', 'localStorage', 'document', 'navigator', 'location', 'g
 new Function(...names, source)(...names.map((n) => sandbox[n]))
 if (!sandbox.def) throw new Error('拿不到插件定义')
 
-// ---- 假 ctx：抓住 effect 的清理函数与 theme/change 订阅 ----
+// ---- 假 ctx：抓住 effect 的清理函数、theme/change 订阅与设置页注入的 setter ----
 let effectCleanup = null
+let settingsInject = null
 const handlers = new Map()
 const ctx = {
   get: (n) => (n === 'theme' ? theme : undefined),
@@ -115,7 +127,10 @@ const ctx = {
   },
   on: (name, fn) => { handlers.set(name, fn); return () => handlers.delete(name) },
   inject: () => {},
-  slots: { inject: (n, fn) => fn(), register: () => () => {} },
+  slots: {
+    inject: (n, fn) => fn(),
+    register: (def) => { settingsInject = def.inject(); return () => {} },
+  },
 }
 const plugin = sandbox.def.factory(() => ({
   createElement: (type, props, ...kids) => ({ type, props: props || {}, kids }),
@@ -167,7 +182,26 @@ try {
   fireThemeChange()
   check(overrideCalls === before, '停用后不再重放')
 
-  // 5. 卸载后不再重放
+  // 6. 取色拖动（1.11.0，审计 2026-10-27 P2-4）：同帧多次 setCustomColor 只重放一次，最后一次生效
+  if (settingsInject) {
+    settingsInject.setPalette('custom')
+    settingsInject.setCustomColor('accent', '#112233')
+    flushRaf()
+    const first = bodyProps.get('--dsw-static-deepseek-500')
+    const beforeDrag = overrideCalls
+    settingsInject.setCustomColor('accent', '#445566')
+    settingsInject.setCustomColor('accent', '#778899')
+    check(overrideCalls === beforeDrag, `帧内 2 次取色不触发重放（实得 +${overrideCalls - beforeDrag}）`)
+    flushRaf()
+    check(overrideCalls === beforeDrag + 1, `帧合并后只重放一次（实得 +${overrideCalls - beforeDrag}）`)
+    const last = bodyProps.get('--dsw-static-deepseek-500')
+    check(first !== undefined && last !== undefined && first !== last,
+      `帧内取最后一次生效（--dsw-static-deepseek-500：${first} → ${last}）`)
+  } else {
+    check(false, '未捕获设置页 inject（无法验证帧合并）')
+  }
+
+  // 7. 卸载后不再重放
   if (effectCleanup) effectCleanup()
   const afterUnload = overrideCalls
   advance(700000)

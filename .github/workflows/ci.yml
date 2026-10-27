@@ -1,0 +1,27 @@
+# 全量质量门（审计 2026-10-27 P2-5）：此前六件套与报表只在本地/发版时跑，
+# 换机器或外部贡献时可能被整批跳过。这里在 push/PR 上跑同一组命令。
+# check 脚本只依赖 node 内建模块（semver 仅发版脚本用），无需 install；
+# 宿主契约脚本在拿不到 asar 的 CI 上自动 SKIP，不阻断。
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: 六件套（结构 / 契约 / 自愈 / 审计回归 / 自定义 / 色彩数学）
+        run: npm run check
+      - name: 对比度报表（标准档 + 高对比档，硬失败退出码 1）
+        run: npm run report

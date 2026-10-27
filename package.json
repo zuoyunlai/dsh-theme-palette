@@ -17,6 +17,7 @@
   "files": [
     "index.js",
     "client.js",
+    "assets",
     "cordis.patch.yml",
     "icon.svg",
     "README.md",
