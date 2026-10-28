@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.11.0'
+    const PLUGIN_VERSION = '1.12.0'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -2331,7 +2331,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.11.0：深色模式下注释与时间戳更清晰（按感知对比度 Lc 加了一道闸）；宿主语言不是中/英/日时界面改为回落英文；取色拖动按帧合并更流畅。',
+        notice: '1.12.0：修复「切换配色后颜色跳回默认」——自愈曾把自己刚装上的层撤掉；自动恢复停用时会在设置页给出提示并可一键重新启用；宿主改掉 token 名时现在能被发现（此前会静默失效）。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2402,7 +2402,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.11.0：深色模式下註釋與時間戳更清晰（按感知對比度 Lc 加了一道閘）；宿主語言不是中/英/日時介面改為回落英文；取色拖動按幀合併更流暢。',
+        notice: '1.12.0：修復「切換配色後顏色跳回預設」——自癒曾把自己剛裝上的層撤掉；自動恢復停用時會在設定頁給出提示並可一鍵重新啟用；宿主改掉 token 名時現在能被發現（此前會靜默失效）。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2473,7 +2473,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.11.0: captions and timestamps are clearer in dark mode (a perceptual-contrast Lc gate was added); the UI now falls back to English when the host language is not Chinese, English or Japanese; colour-picker drags are smoother (frame-coalesced).',
+        notice: '1.12.0: fixes "the colour jumps back to default after switching palettes" — self-healing used to remove the very layer it had just installed; when auto-restore gives up the settings page now says so and offers a one-click re-enable; a host that renames its tokens is now detected instead of failing silently.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2544,7 +2544,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.11.0：ダークモードのキャプション・タイムスタンプがより明瞭になりました（知覚コントラスト Lc のゲートを追加）。ホスト言語が中／英／日以外のとき UI は英語にフォールバックします。カラーピッカーのドラッグがフレーム統合でより滑らかになりました。',
+        notice: '1.12.0：「パレットを切り替えると色が既定に戻る」問題を修正しました（自動修復が、インストール直後のレイヤーを自分で取り除いてしまうことがありました）。自動修復が停止したときは設定ページに通知し、ワンクリックで再開できます。ホストが token 名を変更した場合も検出できるようになり、以前は静かに無効化されるだけでした。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',

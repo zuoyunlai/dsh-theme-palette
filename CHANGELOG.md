@@ -4,7 +4,7 @@
 
 ## 版本一览
 
-### 1.12.0（未发布）
+### 1.12.0
 2026-10-28 一次外部审计（20 条问题，逐条核实后修订 14 条）。核心是**修好一个一直在发生的真 bug**：切换配色后颜色会跳回默认 —— 原因是自愈机制把自己刚装上的覆盖层撤掉了。此外把「失效不可见」「承诺与实现对不上」「发版门漏检」三类问题一并收口。
 
 - **修复：切换配色后颜色跳回默认（P0，真 bug）**：宿主 `overrideTokens` 会**同步** emit `theme/change`（`dsh-client-ui-theme/lib/client.js:1835-1847`；cordis `emit` 同步执行，`cordis/lib/index.js:283-285`），监听器按注册序触发（`:338-348`）；宿主 presenter（核心插件，boot 期注册）先收到事件并把新 token 同步写进 `body`（`dsh-client-ui-layout/lib/client.js:700-710`、`:548-569`），插件的自愈监听器（动态包，后注册）随后拿到**上一次**的 `lastTokens` 去比 body 上的**新**值 → 必然 `color-mismatch` → 重入 `applyAll` → 重入装上的新层被外层 `prev()` 撤掉（`client.js:3276` 的取值时机在 `overrideTokens` 之后）。复现：换一次配色 `overrideTokens` 被调 3 次（期望 2）、`--dshtp-layer` 消失、9 个探针 token 全部回落宿主基色。**修法**：`applyAll` 期间置 `applying` 标志，`ensureApplied` 期间一律不判定「层丢了」；并把 `prev = disposeLayer` 的取值提到 `overrideTokens` **之前**（即使将来有别的重入路径，撤的也只是本次调用之前那一层）。
