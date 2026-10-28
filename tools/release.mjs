@@ -144,13 +144,42 @@ try { run(process.execPath, ['--check', 'client.js']); ok('client.js 语法') } 
 }
 
 // 1e. 回归与宿主契约：配色数值、自定义回归、宿主 token/DOM 钩子、README 截图新鲜度（check-ui 内）
-//     契约脚本在拿不到 asar 时会 SKIP（退出 0），不阻断其它机器发版。
-for (const script of ['tools/check-audit.mjs', 'tools/check-custom.mjs', 'tools/check-ui.mjs', 'tools/check-host-contract.mjs', 'tools/check-selfheal.mjs', 'tools/check-colormath.mjs']) {
+//     契约脚本在拿不到 asar 时会 SKIP（退出 78），不阻断其它机器发版 —— 但**不能**当成「通过」打印。
+for (const script of ['tools/check-audit.mjs', 'tools/check-custom.mjs', 'tools/check-ui.mjs', 'tools/check-selfheal.mjs', 'tools/check-colormath.mjs']) {
   try {
     run(process.execPath, [script])
     ok(script + ' 通过')
   } catch (err) {
     die(script + ' 失败：' + String((err && (err.stdout || err.stderr)) || (err && err.message) || err).trim())
+  }
+}
+// 宿主契约单独跑：拿不到 asar 时它退出 78（SKIP），这时必须说「没验」，不能写「通过」
+// （2026-10-28 P3-O：原先 SKIP 与真通过都打「✓ 通过」，CI 上这一层其实是 0 条断言）。
+try {
+  const contractOut = run(process.execPath, ['tools/check-host-contract.mjs'])
+  if (/SKIP/.test(contractOut)) {
+    warn('宿主契约检查未执行（找不到 asar）：本次发版未验证宿主 token 名与 DOM 钩子'
+      + '（可用 DSH_ASAR=<路径> 指定；CI/发版机建议加 --strict 让它变红）')
+  } else {
+    ok('tools/check-host-contract.mjs 通过')
+  }
+} catch (err) {
+  const out = String((err && (err.stdout || err.stderr)) || (err && err.message) || err)
+  if (/SKIP/.test(out)) {
+    warn('宿主契约检查未执行（找不到 asar）：本次发版未验证宿主 token 名与 DOM 钩子')
+  } else {
+    die('tools/check-host-contract.mjs 失败：' + out.trim())
+  }
+}
+
+// 1f. 全组合扫描（2026-10-28 P3-P）：六件套只验默认组合，非默认轴掉线也能带硬失败发版。
+//     palette-dev.mjs 扫 1080 组设置 × 承诺面，标准档与高对比档各跑一遍。
+for (const args of [[], ['--hc']]) {
+  try {
+    run(process.execPath, ['palette-dev.mjs', ...args])
+    ok('palette-dev.mjs ' + (args.length ? args.join(' ') : '(标准档)') + ' 通过：1080 组全扫描无硬失败')
+  } catch (err) {
+    die('palette-dev.mjs ' + args.join(' ') + ' 失败：' + String((err && (err.stdout || err.stderr)) || (err && err.message) || err).trim())
   }
 }
 
@@ -162,7 +191,25 @@ const packed = npm(['pack', '--dry-run', '--json'])
 try {
   const info = JSON.parse(packed.slice(packed.indexOf('[')))[0]
   ok(`打包 ${info.entryCount} 个文件 / ${(info.size / 1024).toFixed(1)} KB`)
-} catch { die('读不出 npm pack --dry-run 的结果') }
+  // 包内容守卫（2026-10-28 P3-P）：只数文件个数会漏掉「某类文件没进包」。
+  //     1.11.0 刚修过「README 截图 404（assets 没进包）」，但当时没有回归守卫：
+  //     把 package.json 的 "assets" 删掉，六件套与本门全绿。
+  const files = (info.files || []).map((f) => f.path)
+  const required = [
+    'package.json', 'index.js', 'client.js', 'cordis.patch.yml', 'icon.svg',
+    'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md',
+    'CHANGELOG.md', 'LICENSE', 'docs/DESIGN.md',
+    'assets/screenshot-settings-light.png', 'assets/screenshot-settings-dark.png',
+    'assets/screenshot-settings-custom.png', 'assets/screenshot-settings-hc.png',
+    'assets/screenshots.meta.json',
+    'locale/en.json', 'locale/zh.json', 'locale/ja.json', 'locale/zh-TW.json',
+  ]
+  const missing = required.filter((p) => !files.includes(p))
+  if (missing.length) die('npm 包里少了这些文件：\n  ' + missing.join('\n  '))
+  ok(`包内容齐备（${required.length} 个必需文件都在）`)
+} catch {
+  die('读不出 npm pack --dry-run 的结果')
+}
 
 // 2. 版本是否已在 registry（只读）
 let remoteList = []

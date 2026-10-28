@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Theme palette",
-    "description": "Four palettes (Mono, Warm sand, Indigo, Moss) across light and dark, computed in OKLCH on top of the DSH theme tokens."
+    "description": "Four preset palettes (Mono, Warm sand, Indigo, Moss) plus a custom palette across light and dark, computed in OKLCH on top of the DSH theme tokens."
   }
 }

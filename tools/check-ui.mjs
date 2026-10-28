@@ -125,7 +125,7 @@ try {
     { language: 'zh' },
   )
   globalThis.__def.factory(() => ({ createElement: () => null, useState: (v) => [v, () => {}], useSyncExternalStore: () => 'mono' }))
-  const { decodeConfig } = globalThis.__api
+  const { decodeConfig, encodeConfig } = globalThis.__api
 
   const readmeFiles = ['README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md']
   const codeRe = /dshs1\.[A-Za-z0-9_-]{20,}/g
@@ -138,11 +138,25 @@ try {
     if (code) {
       const decoded = decodeConfig(code)
       check(!!decoded && !!decoded.custom && decoded.custom.accent === '#3f66a3', `${f} 示例码解码三色一致`)
+      // 往返自等（2026-10-28 P1-f）：README 里的示例码曾经还带着 1.9.10 已撤除的 "r":"sidebar"，
+      // decode 仍能读、三色也对，所以上面的断言查不出来；只有「再编码一次等于自己」才能发现它过期。
+      const round = decoded ? encodeConfig(decoded) : ''
+      check(round === code, `${f} 示例码由生产编码器往返自等（过期码会红）`)
     }
-    // 标题一致性
-    const headings = text.split('\n').filter((l) => l.startsWith('## ')).sort().join('\n')
+    // 标题一致性（比较前剥掉 \r：工作区里各文件的行尾可能不同，标题集合不该被行尾影响）
+    const headings = text.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.startsWith('## ')).sort().join('\n')
     if (headingsBase === null) headingsBase = headings
     else check(headings === headingsBase, `${f} 的 ## 标题与 README.md 一致`)
+  }
+
+  // 2b) 文档口径对账门（2026-10-28 P1-a/d）：README 里最容易被手改漂移的两处数字。
+  //     · 「深色链接 6.4」是错的：代码真源 MIN_LINK_DARK = 4.62，深色链接另过 APCA Lc ≥ 60。
+  //     · 「27,000+ 处 token 引用」不可复现：今天可复现的量是 122 个 token × 1080 组设置。
+  for (const f of readmeFiles) {
+    const text = fs.readFileSync(path.join(root, f), 'utf8')
+    check(!/27[,.](000|000)\+/.test(text), `${f} 不再出现不可复现的「27,000+ 处 token 引用」`)
+    const linkClaim = text.match(/链接[^；;]{0,60}?6\.4/) || text.match(/link[^;]{0,60}?6\.4/) || null
+    check(linkClaim === null, `${f} 不再把深色链接承诺写成 6.4（真源 4.62 + APCA Lc 60）`)
   }
 
   // 升级提示与版本同步（审计 2026-10-27 P3-11）：每版要手改 4 个语种的 notice，

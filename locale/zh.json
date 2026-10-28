@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "主题配色",
-    "description": "四套配色（黑白 / 暖砂 / 靛蓝 / 苔绿）× 明暗两模式，在 DSH 主题 token 之上用 OKLCH 重算整条色阶。"
+    "description": "四套预设配色（黑白 / 暖砂 / 靛蓝 / 苔绿）+ 自定义配色 × 明暗两模式，在 DSH 主题 token 之上用 OKLCH 重算整条色阶。"
   }
 }

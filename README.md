@@ -2,7 +2,7 @@
 
 [English](README.md) · [中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
-Theme palette for DeepSeek Harness (web & desktop): **4 palettes × light/dark**, two independent axes.
+Theme palette for DeepSeek Harness (web & desktop): **4 preset palettes + custom × light/dark**, two independent axes.
 
 ![Settings page: five palettes, strength and panel surfaces](assets/screenshot-settings-light.png)
 
@@ -26,13 +26,13 @@ The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does
 
 ## What it does
 
-- **4 palettes** — Mono, Warm sand, Indigo, Moss — each adapting to light *and* dark independently;
+- **4 presets + custom** — Mono, Warm sand, Indigo, Moss (each adapting to light *and* dark independently), plus a custom palette derived from three colours;
 - the whole ramp is **recomputed**, not swapped: OKLCH rebuild → role-based chroma → **sRGB gamut clamp** → contrast solved on real surfaces;
-- 27,000+ token references covered: body, secondary, tertiary, captions, links, sidebars, cards, user bubble, primary button, scrollbars, switches, Markdown headings/bold, code blocks;
+- every host colour token is covered (122 tokens for tinted palettes, 17 for mono; 1080 setting combinations fully scanned): body, secondary, tertiary, captions, links, sidebars, cards, user bubble, primary button, scrollbars, switches, Markdown headings/bold, code blocks;
 - adjustable: text tint (3), sidebar depth (3), Markdown emphasis, scrollbars, switch colour;
 - **custom palette** (pick surface / text / accent — the engine keeps its contrast guarantees), **config export/import** via a `dshs1.` code, **high-contrast** mode, and 4 UI languages;
-- **self-healing**: if the host drops the override layer, the palette is re-applied;
-- **contrast promises**: body text is promised 12:1 in light and 10:1 in dark (15:1 in high contrast), secondary ≥ 6.2 in light / 8.0 in dark, tertiary ≥ 4.85 and links ≥ 4.95 in light / 6.4 in dark (the light floors carry a colour-vision headroom; links also clear an APCA Lc ≥ 60 gate in dark / 75 in HC) — measured on the surfaces the text actually lands on (the dark side needs more, because a WCAG ratio overstates readability on a dark background);
+- **self-healing**: if the host drops the override layer, the palette is re-applied; after repeated failures auto-restore pauses and the settings page offers a re-enable button;
+- **contrast promises**: body text is promised 12:1 in light and 10:1 in dark (15:1 in high contrast), secondary ≥ 6.2 in light / 8.0 in dark (HC 9 / 9.6), tertiary ≥ 4.85 in light / 6.4 in dark (HC 7 / 7.6), links ≥ 4.95 in light / 4.62 in dark (HC 7; the light floors carry a colour-vision headroom; dark links also clear an APCA Lc ≥ 60 gate, 75 in HC) — measured on the surfaces the text actually lands on (the dark side needs more, because a WCAG ratio overstates readability on a dark background);
 - the promised surfaces are light 00/60 and dark 950/875; dark 800 (module surface) and 850 (sub-surface) do **not** back body text — the report counts them apart as "out of policy" (neither pass nor fail);
 - UI in 简体中文 / 繁體中文 / English / 日本語 (follows the host language, can be pinned).
 
@@ -70,7 +70,7 @@ OKLCH(L, C, hue) ──► gamut clamp (binary search on C) ──► sRGB hex
 
 - semantic aliases keep `var(--dsw-static-neutral-bluish-NN)` chains, so anything following a token follows the palette;
 - light surfaces use steps 00–300, dark surfaces 800–950;
-- text floors are enforced at build time: body ≥ 12:1 in light and ≥ 10:1 in dark (high contrast: 15:1), secondary ≥ 6.2 in light / 8.0 in dark (HC 9 / 9.6), tertiary/link ≥ 4.85 / 4.95 in light / 6.4 in dark (HC 7 / 7.6), link APCA Lc ≥ 60 in dark (HC 75), sidebar text ≥ 7, bubble text ≥ 7;
+- text floors are enforced at build time: body ≥ 12:1 in light and ≥ 10:1 in dark (high contrast: 15:1), secondary ≥ 6.2 in light / 8.0 in dark (HC 9 / 9.6), tertiary ≥ 4.85 in light / 6.4 in dark (HC 7 / 7.6), link ≥ 4.95 in light / 4.62 in dark (HC 7), link APCA Lc ≥ 60 in dark (HC 75); sidebar and bubble text follow the ramp and measure ≥ 7 (no separate contrast gate);
 - the promised surfaces are light 00/60 and dark 950/875; dark 800 (module surface) and 850 (sub-surface) do **not** back body text — the report counts them apart as "out of policy" (neither pass nor fail), and every surface still has to clear the AA floor of 4.5;
 - the report separates three things: the declared target, the physical ceiling (what black or white can reach on that surface) and the policy exemption; 0.93 is only a solver margin, used to decide whether a target sits above the ceiling;
 - 1080 configuration combos (5 palettes × 216 settings, both contrast tiers included) are checked by `node palette-dev.mjs`.
@@ -107,7 +107,7 @@ The five that surprised us most during the 1.7.0 audit — each one was found by
 Every setting — including the three custom colours — travels in one short code. Paste it into the import box and press Preview to see exactly what it will change before applying:
 
 ```text
-dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiciI6InNpZGViYXIiLCJjIjoidGludGVkIiwiayI6ImFjY2VudCIsIm0iOiJvbiIsImgiOiJvZmYiLCJsIjoiemgtQ04iLCJ4Ijp7ImJnIjoiI2Y1ZWZlNiIsInRleHQiOiIjMWQxYTE3IiwiYWNjZW50IjoiIzNmNjZhMyJ9fQ
+dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiYyI6InRpbnRlZCIsImsiOiJhY2NlbnQiLCJtIjoib24iLCJoIjoib2ZmIiwibCI6InpoLUNOIiwieCI6eyJiZyI6IiNmNWVmZTYiLCJ0ZXh0IjoiIzFkMWExNyIsImFjY2VudCI6IiMzZjY2YTMifX0
 ```
 
 This real example decodes to:

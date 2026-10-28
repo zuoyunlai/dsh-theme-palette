@@ -2,7 +2,7 @@
 
 [English](README.md) · [中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
-DeepSeek Harness（Web / 桌面）的主题配色插件：**4 套配色 × 明暗两模式**，两个轴互相独立。
+DeepSeek Harness（Web / 桌面）的主题配色插件：**4 套预设 + 自定义配色 × 明暗两模式**，两个轴互相独立。
 
 ![设置页：五套配色、强度与面板表面](assets/screenshot-settings-light.png)
 
@@ -26,13 +26,13 @@ package.json 的 `engines` 字段写的是 `^22.19.0 || >=24.0.0`——与上表
 
 ## What it does
 
-- **4 套配色** —— 黑白 / 暖砂 / 靛蓝 / 苔绿，各自独立适配明暗两侧；
+- **4 套预设 + 自定义** —— 黑白 / 暖砂 / 靛蓝 / 苔绿各自独立适配明暗两侧，另加由三色派生的自定义配色；
 - 色阶**整体重算**而不是替换：OKLCH 重建 → 角色化色度 → **sRGB 色域钳位** → 在真实承载面上求解对比度；
-- 覆盖 27,000+ 处 token 引用：正文、次级、三级、注释、链接、侧栏、卡片、主人气泡、主按钮、滚动条、开关、Markdown 标题/加粗、代码块；
+- 覆盖宿主全部颜色 token（自定义/染色档 122 个、黑白档 17 个；1080 组设置全扫描）：正文、次级、三级、注释、链接、侧栏、卡片、主人气泡、主按钮、滚动条、开关、Markdown 标题/加粗、代码块；
 - 可调：文字着色三档、侧栏三档、Markdown 强调、滚动条、开关配色；
 - **自定义配色**（给 底色/文字/强调 三色，文字色相也参与派生；过亮/过暗的强调色会归一化）、**配置导入导出**（`dshs1.` 短码含三色）、**高对比**档、4 种界面语言；
-- **自愈**：宿主丢弃 override 层时自动重放；
-- **对比度承诺**：正文浅色 12:1、深色 10:1（高对比 15:1），次级 ≥ 6.2（深色 8.0），三级 ≥ 4.85、链接 ≥ 4.95（深色 6.4；浅色留了色觉缺陷余量），链接另过 APCA Lc ≥ 60（高对比 75）—— 都在文字真实落到的承载面上实测（深色要高一些：WCAG 比值在暗底上会高估可读性）；
+- **自愈**：宿主丢弃 override 层时自动重放；自动重放连续失败后会停用，并在设置页给出「重新启用」入口；
+- **对比度承诺**：正文浅色 12:1、深色 10:1（高对比 15:1），次级 ≥ 6.2 浅 / 8.0 深，三级 ≥ 4.85 浅 / 6.4 深（高对比 7 / 7.6），链接 ≥ 4.95 浅 / 4.62 深（高对比 7；浅色留了色觉缺陷余量），链接深色另过 APCA Lc ≥ 60（高对比 75）—— 都在文字真实落到的承载面上实测（深色要高一些：WCAG 比值在暗底上会高估可读性）；
 - 承诺面是浅色 00/60 与深色 950/875；深色 800（模块面）与 850（次级深面）**不为正文兜底**，报表单列为「政策外」（既不算达标也不算失败）；
 - 界面支持 简体中文 / 繁體中文 / English / 日本語（跟随宿主，也可手选）。
 
@@ -70,7 +70,7 @@ OKLCH(L, C, hue) ──► 色域钳位（对 C 二分） ──► sRGB hex
 
 - 语义别名保留 `var(--dsw-static-neutral-bluish-NN)` 引用链，跟 token 的元素就跟着配色走；
 - 浅色面用色阶 00–300，深色面用 800–950；
-- 文字下限在构建期强制：正文浅色 ≥ 12:1、深色 ≥ 10:1（高对比 15:1），次级 ≥ 6.2 浅 / 8.0 深（HC 9 / 9.6），三级/链接 ≥ 4.85 / 4.95 浅 / 6.4 深（HC 7 / 7.6），链接另过 APCA Lc ≥ 60 深 / 75 HC，侧栏内 ≥ 7，气泡内 ≥ 7；
+- 文字下限在构建期强制：正文浅色 ≥ 12:1、深色 ≥ 10:1（高对比 15:1），次级 ≥ 6.2 浅 / 8.0 深（HC 9 / 9.6），三级 ≥ 4.85 浅 / 6.4 深（HC 7 / 7.6），链接 ≥ 4.95 浅 / 4.62 深（HC 7），链接另过 APCA Lc ≥ 60 深 / 75 HC；侧栏与气泡文字随色阶派生，实测均 ≥ 7（不设独立对比度门）；
 - 承诺面是浅色 00/60 与深色 950/875；深色 800（模块面）与 850（次级深面）**不为正文兜底**，报表单列为「政策外」（既不算达标也不算失败），且每一档承载面仍须过 AA 底线 4.5；
 - 报表把三件事分开：声明目标、物理上限（该承载面上黑或白前景能达到的对比度）、政策豁免；0.93 只是求解余量，仅用于判断目标是否高于上限；
 - `node palette-dev.mjs` 扫全部 1080 组配置（5 套配色 × 216 组设置，已含标准/高对比两档）并打印承载面报表，`--hc` 把主报表切到高对比档；硬失败时退出码 1。
@@ -107,7 +107,7 @@ node tools/release.mjs --tag          # 发 npm + 打 tag
 所有设置——包括自定义三色——都装进一条短码。粘到导入框点「预览」，先看到将覆盖什么，再确认应用：
 
 ```text
-dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiciI6InNpZGViYXIiLCJjIjoidGludGVkIiwiayI6ImFjY2VudCIsIm0iOiJvbiIsImgiOiJvZmYiLCJsIjoiemgtQ04iLCJ4Ijp7ImJnIjoiI2Y1ZWZlNiIsInRleHQiOiIjMWQxYTE3IiwiYWNjZW50IjoiIzNmNjZhMyJ9fQ
+dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiYyI6InRpbnRlZCIsImsiOiJhY2NlbnQiLCJtIjoib24iLCJoIjoib2ZmIiwibCI6InpoLUNOIiwieCI6eyJiZyI6IiNmNWVmZTYiLCJ0ZXh0IjoiIzFkMWExNyIsImFjY2VudCI6IiMzZjY2YTMifX0
 ```
 
 这条真实示例解码后是：

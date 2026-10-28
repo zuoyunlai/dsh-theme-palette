@@ -231,6 +231,7 @@ console.log(`硬门：${hardFailures} 处未达标（只有 pass===false 算失�
 const COMMITTED = new Set(['00', '60', '950', '875'])
 const sweepMin = new Map()    // `${scheme}|${surface}|${mode}|${档}` → { min, target }
 const sweepFloor = new Map()  // `${scheme}|${role}|${surface}|${mode}|${exempt}` → { n, min }
+let sweepFloorViolations = 0 // 低于 AA 底线的格子数（2026-10-28 P3-P：改为真门）
 let sweepCombos = 0
 let sweepHardFail = 0
 const sweepFailures = []
@@ -261,6 +262,7 @@ for (const scheme of SCHEMES) {
                     }
                   }
                   if (!cell.meetsFloor) {
+                    sweepFloorViolations++
                     const key = `${scheme.label}|${row.role}|${cell.surface}|${cell.mode}|${cell.exemptReason || '承诺面'}`
                     const prev = sweepFloor.get(key)
                     if (!prev) sweepFloor.set(key, { n: 1, min: cell.measured })
@@ -317,12 +319,18 @@ if (sweepFailures.length) {
   for (const f of sweepFailures) console.log('    ' + JSON.stringify(f))
 }
 if (sweepFloor.size) {
-  console.log(`  低于 AA ${CONTRAST_FLOOR} 底线的格子（不计硬门，仅作记录）：`)
+  console.log(`  低于 AA ${CONTRAST_FLOOR} 底线的格子（硬门，2026-10-28 起计入退出码）：`)
   for (const [key, v] of [...sweepFloor.entries()].sort((a, b) => b[1].n - a[1].n)) {
     console.log(`    ${key.padEnd(32)} ×${String(v.n).padStart(4)}  最低 ${num(v.min)}`)
   }
 }
 hardFailures += sweepHardFail
+// AA 底线是硬门（README 承诺「每一档承载面仍须过 AA 4.5」）：低于底线的格子直接算失败，
+// 不再只是「记录」。当前实测 0 处，所以这条门是零成本加上的。
+hardFailures += sweepFloorViolations
+if (sweepFloorViolations) {
+  console.log(`  AA 底线违规 ${sweepFloorViolations} 处 → 计入硬门`)
+}
 
 /* ---------- 以下是参考读数，不参与硬门 ---------- */
 

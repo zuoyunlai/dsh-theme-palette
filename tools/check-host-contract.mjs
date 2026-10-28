@@ -8,12 +8,23 @@
  * 用法：
  *   node tools/check-host-contract.mjs
  *   node tools/check-host-contract.mjs --asar "D:/Programs/DeepSeek Harness/resources/app.asar"
+ *   DSH_ASAR="D:/Programs/DeepSeek Harness/resources/app.asar" node tools/check-host-contract.mjs
+ *   node tools/check-host-contract.mjs --strict     # 拿不到 asar 时判失败（CI/发版用）
+ *
+ * 退出码：0 = 跑了且全过 / 78 = SKIP（没找到 asar，非 --strict）/ 1 = 有契约失效。
+ * 2026-10-28 修：原先 SKIP 走退出码 0，发版门把它当「✓ 通过」打印出来 ——
+ * CI 与别的机器上这一层其实 0 条断言，宿主 token 改名这类事故没有任何自动覆盖。
  */
 import fs from 'node:fs'
 
 const argv = process.argv.slice(2)
 const ai = argv.indexOf('--asar')
-const ASAR = pathResolve(ai >= 0 ? argv[ai + 1] : 'D:/Programs/DeepSeek Harness/resources/app.asar')
+const STRICT = argv.includes('--strict')
+const ASAR = pathResolve(
+  ai >= 0 ? argv[ai + 1]
+    : (process.env.DSH_ASAR && process.env.DSH_ASAR.trim()) ? process.env.DSH_ASAR.trim()
+      : 'D:/Programs/DeepSeek Harness/resources/app.asar',
+)
 
 function pathResolve(p) {
   return p.replace(/\\/g, '/')
@@ -21,7 +32,11 @@ function pathResolve(p) {
 
 if (!fs.existsSync(ASAR)) {
   console.log('SKIP: 找不到宿主 asar（' + ASAR + '），跳过契约检查')
-  process.exit(0)
+  if (STRICT) {
+    console.error('  ✗ --strict：拿不到宿主 asar，契约检查无法执行')
+    process.exit(1)
+  }
+  process.exit(78)
 }
 
 const fd = fs.openSync(ASAR, 'r')
@@ -71,6 +86,12 @@ else {
     '--dsw-alias-file-diff-added-bg',
   ]
   for (const name of tokens) check(text.includes(name), 'ui-theme 仍有 ' + name)
+  // 可见性探针（2026-10-28 P0-C）依赖这条链：body 的背景色走 --dsw-alias-bg-base，
+  // 而 alias-bg-base 指向色阶 00（浅）/ 950（深）—— 也就是说「body 实际背景色」一定经过我们覆盖的色阶。
+  // 宿主若改名或改画布来源，插件的可见性判据就会一直失配（假警报）。
+  check(/--dsw-alias-bg-base:\s*var\(--dsw-static-neutral-bluish-00\)/.test(text), '画布底色走 --dsw-static-neutral-bluish-00（浅色）')
+  check(/--dsw-alias-bg-base:\s*var\(--dsw-static-neutral-bluish-950\)/.test(text), '画布底色走 --dsw-static-neutral-bluish-950（深色）')
+  check(/background-color:\s*var\(--dsw-alias-bg-base\)/.test(text), 'body 背景色取自 --dsw-alias-bg-base')
 }
 if (!layout) { console.log('  ✗ 找不到 ui-layout/lib/client.js'); failed++ }
 else {

@@ -207,14 +207,16 @@ window.__ModuleLoader__.load({
       const serialized = JSON.stringify(clean)
       // 值没变就保持同一引用：useSyncExternalStore 的快照在数据未变时必须稳定
       const unchanged = customCache !== null && CUSTOM_FIELDS.every((k) => customCache[k] === clean[k])
+      let persisted = false
       try {
         localStorage.setItem(CUSTOM_KEY, serialized)
         customCacheRaw = serialized
+        persisted = true
       } catch (err) {
         customCacheRaw = undefined
       }
       if (!unchanged) customCache = Object.freeze(clean)
-      return customCache
+      return persisted
     }
 
     function customScheme(colors) {
@@ -1986,13 +1988,16 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     function installMarkdownStyle() {
       try {
         if (typeof document === 'undefined' || !document.head) return () => {}
-        if (document.querySelector('style[data-plugin-css="' + MARKDOWN_STYLE_ID + '"]')) return () => {}
-        const tag = document.createElement('style')
-        tag.dataset.plugin = 'dsh-theme-palette'
-        tag.dataset.pluginCss = MARKDOWN_STYLE_ID
+        let tag = document.querySelector('style[data-plugin-css="' + MARKDOWN_STYLE_ID + '"]')
+        if (!tag) {
+          tag = document.createElement('style')
+          tag.dataset.plugin = 'dsh-theme-palette'
+          tag.dataset.pluginCss = MARKDOWN_STYLE_ID
+          document.head.appendChild(tag)
+        }
+        // 内容总是覆盖写：热重载时旧实例留下的标签还在，只判存在就跳过会让改过的 CSS 永远看不到（审计 2026-10-28 P3-R）
         tag.textContent = MARKDOWN_CSS
-        document.head.appendChild(tag)
-        return () => { tag.remove() }
+        return () => { if (tag.parentNode) tag.remove() }
       } catch (err) {
         console.warn('[dsh-theme-palette] 右栏样式注入失败：', err)
         return () => {}
@@ -2002,13 +2007,16 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     function installSettingsStyle() {
       try {
         if (typeof document === 'undefined' || !document.head) return () => {}
-        if (document.querySelector('style[data-plugin-css="' + SETTINGS_STYLE_ID + '"]')) return () => {}
-        const tag = document.createElement('style')
-        tag.dataset.plugin = 'dsh-theme-palette'
-        tag.dataset.pluginCss = SETTINGS_STYLE_ID
+        let tag = document.querySelector('style[data-plugin-css="' + SETTINGS_STYLE_ID + '"]')
+        if (!tag) {
+          tag = document.createElement('style')
+          tag.dataset.plugin = 'dsh-theme-palette'
+          tag.dataset.pluginCss = SETTINGS_STYLE_ID
+          document.head.appendChild(tag)
+        }
+        // 同 installMarkdownStyle：热重载覆盖内容 + 卸载移除（审计 2026-10-28 P3-R）
         tag.textContent = SETTINGS_CSS
-        document.head.appendChild(tag)
-        return () => { tag.remove() }
+        return () => { if (tag.parentNode) tag.remove() }
       } catch (err) {
         console.warn('[dsh-theme-palette] 设置页样式注入失败：', err)
         return () => {}
@@ -2045,7 +2053,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       }
       const m = s.match(/^rgba?\(([^)]+)\)$/)
       if (m) {
-        const p = m[1].split(/[,\s/]+/).filter(Boolean).map((x) => (x.charAt(x.length - 1) === '%' ? parseFloat(x) * 2.55 : parseFloat(x)))
+        const parts = m[1].split(/[,\s/]+/).filter(Boolean)
+        const channel = (x) => (x.charAt(x.length - 1) === '%' ? parseFloat(x) * 2.55 : parseFloat(x))
+        const p = parts.map(channel)
+        // 第 4 个分量是 alpha：百分比要走 /100（0..1），不能和 RGB 一样 ×2.55（审计 2026-10-28 P3-Q）
+        if (p.length >= 4 && parts[3].charAt(parts[3].length - 1) === '%') p[3] = parseFloat(parts[3]) / 100
         return [p[0], p[1], p[2], p[3] === undefined ? 1 : p[3]]
       }
       return null
@@ -2098,7 +2110,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     function writeStored(id) {
-      try { localStorage.setItem(STORE_KEY, id) } catch (err) { /* 记不住不影响本次生效 */ }
+      try { localStorage.setItem(STORE_KEY, id); return true } catch (err) { /* 记不住不影响本次生效 */ return false }
     }
 
     function readSidebarStored() {
@@ -2110,7 +2122,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     function writeSidebarStored(id) {
-      try { localStorage.setItem(SIDEBAR_KEY, id) } catch (err) { /* 同理 */ }
+      try { localStorage.setItem(SIDEBAR_KEY, id); return true } catch (err) { /* 同理 */ return false }
     }
 
     function readTextStored() {
@@ -2122,7 +2134,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     function writeTextStored(id) {
-      try { localStorage.setItem(TEXT_KEY, id) } catch (err) { /* 同理 */ }
+      try { localStorage.setItem(TEXT_KEY, id); return true } catch (err) { /* 同理 */ return false }
     }
 
 
@@ -2136,7 +2148,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     function writeScrollStored(id) {
-      try { localStorage.setItem(SCROLL_KEY, id) } catch (err) { /* 同理 */ }
+      try { localStorage.setItem(SCROLL_KEY, id); return true } catch (err) { /* 同理 */ return false }
     }
 
     function readControlStored() {
@@ -2148,7 +2160,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     function writeControlStored(id) {
-      try { localStorage.setItem(CONTROL_KEY, id) } catch (err) { /* 同理 */ }
+      try { localStorage.setItem(CONTROL_KEY, id); return true } catch (err) { /* 同理 */ return false }
     }
 
     function readMdStored() {
@@ -2160,7 +2172,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     function writeMdStored(id) {
-      try { localStorage.setItem(MD_KEY, id) } catch (err) { /* 同理 */ }
+      try { localStorage.setItem(MD_KEY, id); return true } catch (err) { /* 同理 */ return false }
     }
 
     function readHcStored() {
@@ -2172,7 +2184,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     function writeHcStored(id) {
-      try { localStorage.setItem(HC_KEY, id) } catch (err) { /* 同理 */ }
+      try { localStorage.setItem(HC_KEY, id); return true } catch (err) { /* 同理 */ return false }
     }
 
     function readNoticeSeen() {
@@ -2269,7 +2281,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     function writeLangPref(id) {
-      try { localStorage.setItem(LOCALE_KEY, id) } catch (err) { /* 忽略 */ }
+      try { localStorage.setItem(LOCALE_KEY, id); return true } catch (err) { /* 忽略 */ return false }
     }
 
     function hostLocale() {
@@ -2293,7 +2305,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     const TEXT = {
       'zh-CN': {
         nav: '主题色',
-        hint: '配色与明暗模式独立；切换后立即生效并保存在 localStorage。',
+        hint: '配色与明暗模式独立；切换后立即生效并保存在本机。',
         md: 'Markdown 强调',
         control: '开关 / 勾选',
         scroll: '滚动条',
@@ -2308,6 +2320,8 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         bad: '⚠ 部分 token 未生效（宿主可能改名），请查看控制台',
         healed: '配色层被宿主丢过一次，已自动恢复 ',
         healedSuffix: ' 次',
+        healStopped: '⚠ 自动恢复已停用（连续失败 {n} 次），主题可能无法自动回到你的配色。',
+        healRetry: '重新启用自动恢复',
         text: '强度',
         sidebar: '左侧栏底色',
         lang: '语言',
@@ -2354,6 +2368,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         copyFail: '复制失败，请手选后 Ctrl+C',
         importOk: '已导入',
         importLegacy: '已导入（旧短码不含自定义三色）',
+        importNoPersist: '已导入，但未能保存（隐私模式或存储已满）：刷新后会回到旧配置',
         importBad: '短码无效，已忽略',
         badHex: 'HEX 需为 #RRGGBB',
         hexStale: '这个值刚被别处改过，已保留最新值',
@@ -2361,7 +2376,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       },
       'zh-TW': {
         nav: '主題色',
-        hint: '配色與明暗模式獨立；切換後立即生效並存在 localStorage。',
+        hint: '配色與明暗模式獨立；切換後立即生效並存在本機。',
         md: 'Markdown 強調',
         control: '開關 / 勾選',
         scroll: '捲軸',
@@ -2376,6 +2391,8 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         bad: '⚠ 部分 token 未生效（宿主可能改名），請看主控台',
         healed: '配色層被宿主丟棄過一次，已自動恢復 ',
         healedSuffix: ' 次',
+        healStopped: '⚠ 自動恢復已停用（連續失敗 {n} 次），主題可能無法自動回到你的配色。',
+        healRetry: '重新啟用自動恢復',
         text: '強度',
         sidebar: '左側欄底色',
         lang: '語言',
@@ -2422,6 +2439,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         copyFail: '複製失敗，請手選後 Ctrl+C',
         importOk: '已匯入',
         importLegacy: '已匯入（舊短碼不含自訂三色）',
+        importNoPersist: '已匯入，但未能儲存（隱私模式或儲存已滿）：重新整理後會回到舊設定',
         importBad: '短碼無效，已忽略',
         badHex: 'HEX 需為 #RRGGBB',
         hexStale: '這個值剛被別處改過，已保留最新值',
@@ -2429,7 +2447,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       },
       en: {
         nav: 'Color theme',
-        hint: 'Independent of light/dark mode. Applies immediately and is saved to localStorage.',
+        hint: 'Independent of light/dark mode. Applies immediately and is saved on this device.',
         md: 'Markdown emphasis',
         control: 'Switches / checks',
         scroll: 'Scrollbars',
@@ -2444,6 +2462,8 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         bad: '⚠ Some tokens did not apply (host may have renamed them); check the console',
         healed: 'Palette layer was dropped by the host; restored ',
         healedSuffix: 'x',
+        healStopped: '⚠ Auto-restore is disabled ({n} consecutive failures). Your palette may not come back on its own.',
+        healRetry: 'Re-enable auto-restore',
         text: 'Strength',
         sidebar: 'Sidebar surface',
         lang: 'Language',
@@ -2490,6 +2510,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         copyFail: 'Copy failed — select the code and press Ctrl+C',
         importOk: 'Imported',
         importLegacy: 'Imported (old code has no custom colours)',
+        importNoPersist: 'Imported, but could not be saved (private mode or storage full): it will revert after a refresh',
         importBad: 'Invalid code, ignored',
         badHex: 'HEX must be #RRGGBB',
         hexStale: 'This value was changed elsewhere; the latest value was kept',
@@ -2497,7 +2518,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       },
       ja: {
         nav: 'カラーテーマ',
-        hint: 'ライト/ダークとは独立です。変更は即時反映され、localStorage に保存されます。',
+        hint: 'ライト/ダークとは独立です。変更は即時反映され、この端末に保存されます。',
         md: 'Markdown の強調',
         control: 'スイッチ / チェック',
         scroll: 'スクロールバー',
@@ -2512,6 +2533,8 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         bad: '⚠ 一部の token が適用されていません（ホスト側で改名された可能性）。コンソールを確認してください',
         healed: '配色レイヤーがホストに破棄されたため、自動で復元しました（',
         healedSuffix: ' 回）',
+        healStopped: '⚠ 自動復元が停止しました（連続 {n} 回失敗）。配色が自動では戻らない可能性があります。',
+        healRetry: '自動復元を再開',
         text: '強さ',
         sidebar: '左サイドバーの背景',
         lang: '言語',
@@ -2558,6 +2581,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         copyFail: 'コピーできません。選択して Ctrl+C してください',
         importOk: '読み込みました',
         importLegacy: '読み込みました（旧コードにカスタム 3 色は含まれません）',
+        importNoPersist: '読み込みましたが保存できませんでした（プライベートモードまたは容量不足）：更新後は元に戻ります',
         importBad: '無効なコードです',
         badHex: 'HEX は #RRGGBB 形式で入力してください',
         hexStale: 'この値は別の場所で変更されました。最新の値を保持しています',
@@ -2988,6 +3012,16 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           { className: 'dsh-tp-status' },
           txt.healed + health.reapplies + txt.healedSuffix,
         ),
+        health && health.healDisabled && h(
+          'p',
+          { className: 'dsh-tp-status is-bad', role: 'status' },
+          fmt(txt.healStopped, { n: health.healFails }),
+          h('button', {
+            type: 'button',
+            className: 'dsh-tp-mini',
+            onClick: () => props.resetHeal(),
+          }, txt.healRetry),
+        ),
         matrix,
         h('button', {
           type: 'button',
@@ -3090,7 +3124,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
                   onClick: () => {
                     const result = props.applyConfigCode(importText)
                     setImportPreview(null)
-                    setImportState(result && result.ok ? (result.hasCustom ? 'ok' : 'legacy') : 'bad')
+                    setImportState(result && result.ok ? (result.persisted ? (result.hasCustom ? 'ok' : 'legacy') : 'nopersist') : 'bad')
                   },
                 }, txt.applyImport),
                 h('button', {
@@ -3099,7 +3133,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
                   onClick: () => { setImportPreview(null); setImportState(null) },
                 }, txt.cancel))),
             importState && importState !== 'bad' && h('span', { className: 'dsh-tp-note', role: 'status', 'aria-live': 'polite' },
-              importState === 'ok' ? txt.importOk : txt.importLegacy),
+              importState === 'ok' ? txt.importOk : importState === 'legacy' ? txt.importLegacy : txt.importNoPersist),
             h('p', { className: 'dsh-tp-custom-hint' }, txt.configHint),
           ),
           row('md', txt.md, txt.mdSub, seg(MD_MODES, mdMode, props.setMdMode, lb.md, rowId('md'))),
@@ -3258,6 +3292,10 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         // 「配置已保存」与「主题已应用」是两件事：选择已经写进 localStorage，
         // 但覆盖层写失败时屏幕上仍是旧配色。分开报，别让用户以为换成功了。
         let applyError = null
+        // 应用期间置位（审计 2026-10-28 P0-A）：宿主 overrideTokens 会**同步** emit theme/change，
+        // 自愈监听器 healOnTheme 会在这个调用栈里被触发；不挡住就会拿旧 lastTokens 误判「层丢了」
+        // 并重入 applyAll，重入装上的新层随后又被外层 prev() 撤掉。
+        let applying = false
 
         // 系统对比度偏好（审计 3.11）：auto 档监听 prefers-contrast: more。
         // 测试沙箱里没有 matchMedia —— 判空退回「系统没要求」，auto 等于标准档。
@@ -3268,28 +3306,36 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const effectiveHc = () => hcMode === 'on' || (hcMode === 'auto' && systemWantsHc())
 
         const applyAll = (reason) => {
-          const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
-          const tokens = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, effectiveHc())
-          let next = () => {}
-          if (tokens !== undefined) {
-            try {
-              next = theme.overrideTokens(OVERRIDE_SOURCE, tokens)
-            } catch (err) {
-              applyError = String((err && err.message) || err)
-              console.error('[dsh-theme-palette] 应用配色失败（配置已保存，主题未应用）：', err)
-              publishHealth(null)
-              return
+          if (applying) return
+          applying = true
+          try {
+            const scheme = SCHEMES.find((s) => s.id === current) || SCHEMES[0]
+            const tokens = buildTokens(scheme, sidebarMode, textMode, scrollMode, controlMode, mdMode, effectiveHc())
+            // 先取旧层的 disposer：即便 overrideTokens 内部同步触发了 theme/change，
+            // 这里拿的也是「本次调用之前」的那一层，prev() 撤的绝不会是新装上的层。
+            const prev = disposeLayer
+            let next = () => {}
+            if (tokens !== undefined) {
+              try {
+                next = theme.overrideTokens(OVERRIDE_SOURCE, tokens)
+              } catch (err) {
+                applyError = String((err && err.message) || err)
+                console.error('[dsh-theme-palette] 应用配色失败（配置已保存，主题未应用）：', err)
+                publishHealth(null)
+                return
+              }
             }
+            // 先叠新层再撤旧层，避免切换瞬间闪回默认色。
+            disposeLayer = next
+            prev()
+            if (reason !== undefined) lastReason = reason
+            lastTokens = tokens
+            lastAppliedAt = Date.now()
+            applyError = null
+            scheduleProbe(tokens)
+          } finally {
+            applying = false
           }
-          // 先叠新层再撤旧层，避免切换瞬间闪回默认色。
-          const prev = disposeLayer
-          disposeLayer = next
-          prev()
-          if (reason !== undefined) lastReason = reason
-          lastTokens = tokens
-          lastAppliedAt = Date.now()
-          applyError = null
-          scheduleProbe(tokens)
         }
         /**
          * 自愈。
@@ -3319,6 +3365,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           try {
             const style = getComputedStyle(document.body)
             if (style.getPropertyValue(LAYER_MARK).trim() === '') return { ok: false, reason: 'marker-missing' }
+            // 端到端可见性（审计 2026-10-28 P0-C）：宿主改 token 名后，我们的变量仍在 body 上、
+            // 值也正确，但页面里没有任何规则再引用它们 —— 上面的判据会假健康。这里再比对
+            // 「body 实际背景色」与本层画布色：宿主改名 / presenter 换写入目标时必然失配。
+            const visual = visualProbe(style)
+            if (visual !== null && !visual.ok) return { ok: false, reason: 'visual-mismatch' }
           } catch (err) {
             return { ok: false, reason: 'probe-error' }
           }
@@ -3328,8 +3379,31 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           if (!probe.ok) return { ok: false, reason: 'color-mismatch', mismatched: probe.mismatched }
           return { ok: true, reason: 'ok' }
         }
+        /**
+         * 可见性探针（P0-C）：读 body 实际背景色，与本层画布色比对。
+         * 画布色 = --dsw-static-neutral-bluish-00（浅）/ 950（深）的覆盖值；黑白档不覆盖这两步，
+         * 回落宿主原值（BASE.bluish）。系统强制配色（forced-colors）时颜色由 OS 接管，跳过比对。
+         * 返回 null = 不可判定（跳过，不误伤）；{ ok:false } = 页面没有真的用上本层颜色。
+         */
+        const visualProbe = (style) => {
+          try {
+            if (typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+              && window.matchMedia('(forced-colors: active)').matches) return null
+            const dark = document.body.hasAttribute('data-ds-dark-theme')
+            const step = dark ? '950' : '00'
+            const pair = lastTokens && lastTokens['--dsw-static-neutral-bluish-' + step]
+            const expected = pair ? pair[dark ? 'dark' : 'light'] : BASE.bluish[step]
+            if (typeof expected !== 'string') return null
+            const actual = style.backgroundColor
+            if (!actual) return null
+            return { ok: sameColor(actual, expected) }
+          } catch (err) {
+            return null
+          }
+        }
 
         const ensureApplied = (reason) => {
+          if (applying) return // 应用期间宿主同步 emit 的 theme/change 不是「层丢了」（P0-A）
           if (lastTokens === null || healDisabled) return
           if (Date.now() - lastAppliedAt < 900) return
           const wait = HEAL_BACKOFF[Math.min(healFails, HEAL_BACKOFF.length - 1)]
@@ -3349,6 +3423,13 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           reapplyCount += 1
           console.info('[dsh-theme-palette] 配色层不见了（' + reason + '｜' + state.reason + '），已重放第 ' + reapplyCount + ' 次')
           applyAll('self-heal:' + reason)
+        }
+        /** 手动重新启用自动恢复（审计 2026-10-28 P0-B）：清退避状态并立即做一次完整探测 + 重放。 */
+        const resetHeal = () => {
+          healDisabled = false
+          healFails = 0
+          lastHealAt = 0
+          ensureApplied('manual')
         }
 
         let health = null
@@ -3373,6 +3454,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
             reapplies: reapplyCount,
             applied: applyError === null,
             applyError,
+            // 自愈停用与退避计数（审计 2026-10-28 P0-B）：不进 health 的话界面永远不知道自愈放弃了
+            healDisabled,
+            healFails,
             lastAppliedAt,
           }
         }
@@ -3383,6 +3467,8 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           && a.reapplies === b.reapplies
           && a.applied === b.applied
           && a.applyError === b.applyError
+          && a.healDisabled === b.healDisabled
+          && a.healFails === b.healFails
         const publishHealth = (probe) => {
           const next = buildHealth(probe)
           if (sameHealth(health, next)) return
@@ -3442,7 +3528,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         /** 导入：整份校验通过才落地；返回结果供 UI 显示（旧码不含自定义三色时 hasCustom=false） */
         const applyConfigCode = (code) => {
           const cfg = decodeConfig(code)
-          if (!cfg) return { ok: false, hasCustom: false }
+          if (!cfg) return { ok: false, hasCustom: false, persisted: false }
           current = cfg.palette
           sidebarMode = cfg.sidebar
           textMode = cfg.text
@@ -3451,19 +3537,16 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           mdMode = cfg.md
           hcMode = cfg.hc
           langPref = cfg.lang
-          if (cfg.custom) writeCustom(cfg.custom)
-          writeStored(current)
-          writeSidebarStored(sidebarMode)
-          writeTextStored(textMode)
-          writeScrollStored(scrollMode)
-          writeControlStored(controlMode)
-          writeMdStored(mdMode)
-          writeHcStored(hcMode)
-          writeLangPref(langPref)
+          // 落盘结果要如实上报：隐私模式 / 存储满时写入静默失败，界面若报「导入成功」会在刷新后打脸。
+          const writes = [writeStored(current), writeSidebarStored(sidebarMode), writeTextStored(textMode),
+            writeScrollStored(scrollMode), writeControlStored(controlMode), writeMdStored(mdMode),
+            writeHcStored(hcMode), writeLangPref(langPref)]
+          if (cfg.custom) writes.push(writeCustom(cfg.custom))
+          const persisted = writes.every(Boolean)
           applyAll('import')
           emit(); emitSidebar(); emitText(); emitScroll(); emitControl(); emitMd(); emitHc(); emitLocale()
           if (cfg.custom) emitCustom()
-          return { ok: true, hasCustom: !!cfg.custom }
+          return { ok: true, hasCustom: !!cfg.custom, persisted }
         }
         const getCustomColors = () => readCustom()
         /**
@@ -3694,10 +3777,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         try { ctx.on('theme/change', healOnTheme) } catch (err) { /* 事件名变了就只靠定时器 */ }
         // auto 档：系统对比度偏好一变就重算（开 → 高对比档，关 → 回标准档）。
         // 老浏览器没有 addEventListener 就退化为「下次任意重算时跟进」。
+        // 监听器引用提到外层，cleanup 里要 remove（审计 2026-10-28 P2-L：否则热重载会累积监听）。
+        let contrastChangeHandler = null
         try {
           if (contrastMq && typeof contrastMq.addEventListener === 'function') {
-            const onContrastChange = () => { applyAll('prefers-contrast'); emitHc() }
-            contrastMq.addEventListener('change', onContrastChange)
+            contrastChangeHandler = () => { applyAll('prefers-contrast'); emitHc() }
+            contrastMq.addEventListener('change', contrastChangeHandler)
           }
         } catch (err) { /* 无 matchMedia 环境跳过 */ }
         try {
@@ -3725,6 +3810,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
             if (healTimer !== null) { clearInterval(healTimer); healTimer = null }
             if (typeof detachDev === 'function') { try { detachDev() } catch (err) { /* 忽略 */ } }
             if (langObserver !== null) { langObserver.disconnect(); langObserver = null }
+            if (contrastMq && contrastChangeHandler !== null && typeof contrastMq.removeEventListener === 'function') {
+              try { contrastMq.removeEventListener('change', contrastChangeHandler) } catch (err) { /* 忽略 */ }
+            }
           }
         }, 'dsh-theme-palette: token layer + 右栏样式')
 
@@ -3780,6 +3868,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
                 setLangPref,
                 getHealth,
                 subscribeHealth,
+                resetHeal,
               }),
             },
             PaletteSection,

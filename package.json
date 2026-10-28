@@ -40,10 +40,11 @@
     "dsh": ">=0.2.1-rc.1"
   },
   "scripts": {
-    "check": "node tools/check-audit.mjs && node tools/check-custom.mjs && node tools/check-ui.mjs && node tools/check-host-contract.mjs && node tools/check-selfheal.mjs && node tools/check-colormath.mjs",
+    "check": "node tools/check-all.mjs",
     "report": "node palette-dev.mjs && node palette-dev.mjs --hc",
     "packs": "node tools/export-theme-pack.mjs",
-    "shots": "node tools/shoot-settings.mjs"
+    "shots": "node tools/shoot-settings.mjs",
+    "sample-code": "node tools/sample-code.mjs"
   },
   "dsh": {
     "bundle": {

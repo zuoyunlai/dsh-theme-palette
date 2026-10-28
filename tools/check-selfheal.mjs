@@ -9,12 +9,15 @@
  *
  * 覆盖的场景：
  *   1. 正常应用：层写进 body，标记属性在，宿主侧只有一层
+ *   1b. 换一次配色不触发假重放（2026-10-28 P0-A 回归哨兵：宿主 overrideTokens
+ *       会同步 emit theme/change，自愈若不挡住就会拿旧 lastTokens 误判并拆掉新层）
  *   2. 宿主撤销该层：插件能发现并重放（不再假健康）
  *   3. 退避：连续失败不会密集重放
  *   4. 反复失效：达到上限后停用自动重放（只报一次错）
  *   5. 无层累积：重放前先撤旧层
  *   6. 取色拖动（1.11.0）：同一帧内多次改色只重放一次，且以最后一次为准
- *   7. 卸载：插件卸载后不再重放
+ *   7. 停用后手动重启（resetHeal）：重新启用自动恢复并能重放；随后卸载不再重放
+ *      （旧版场景 7 排在停用之后，healDisabled 恒真使断言形同虚设 —— 2026-10-28 修）
  *
  * 用法：node tools/check-selfheal.mjs
  */
@@ -43,6 +46,11 @@ const theme = {
     for (const [name, pair] of Object.entries(tokens)) {
       bodyProps.set(name, pair && pair.dark ? pair.dark : '')
     }
+    // 与真实宿主一致（2026-10-28 补）：ThemeRuntime.overrideTokens 内部同步 publish →
+    // emit('theme/change')，presenter 先写 body、插件的自愈监听器随后在**同一调用栈**里被触发。
+    // 旧假宿主从不 emit，「换配色时自愈误判重入」这一整类 bug 从未被覆盖。
+    const fn = handlers.get('theme/change')
+    if (fn) { try { fn() } catch (err) { /* 与宿主一致：监听器抛错不影响 publish */ } }
     return () => {
       disposeCalls++
       // 与宿主一致：disposer 只撤自己创建的那一层；同 source 已被新层顶掉时不动手
@@ -152,11 +160,21 @@ try {
   check(markPresent(), '标记属性 --dshtp-layer 已写进 body')
   check(layers.size === 1, '宿主侧只有一层')
 
+  // 1b. 换一次配色不触发假重放（P0-A 回归哨兵，2026-10-28）
+  //     假宿主现在会在 overrideTokens 内同步 emit theme/change：不挡住的话，
+  //     自愈会拿旧 lastTokens 误判 color-mismatch → 重入 applyAll → 外层 prev() 撤掉新层。
+  advance(5000) // 拉开与 boot 的 900ms 静默期，确保 heal 若未被 applying 挡住就一定会跑
+  settingsInject.setPalette('warm')
+  check(overrideCalls === 2, `换一次配色恰好再调一次 overrideTokens（实得 ${overrideCalls}；>2 说明自愈在应用栈内重入）`)
+  check(markPresent(), '换配色后标记属性仍在（新层没有被 prev() 撤掉）')
+  check(layers.size === 1, '换配色后宿主侧仍只有一层')
+  check(!logs.some((l) => l.includes('配色层不见了')), '换配色没有产生「层丢了」假警报')
+
   // 2. 宿主撤销该层 → 插件必须发现并重放
   revokeLayer()
   advance(2000)
   fireThemeChange()
-  check(overrideCalls === 2, `层被撤销后自动重放（overrideTokens 调用 ${overrideCalls} 次）`)
+  check(overrideCalls === 3, `层被撤销后自动重放（overrideTokens 调用 ${overrideCalls} 次）`)
   check(markPresent(), '重放后标记属性回来了')
   check(layers.size === 1, '重放后宿主侧仍只有一层（旧层已撤）')
   check(logs.some((l) => l.includes('已重放第 1 次')), '日志里有一次重放记录')
@@ -165,7 +183,7 @@ try {
   revokeLayer()
   advance(1000)
   fireThemeChange()
-  check(overrideCalls === 2, `退避期内不再重放（overrideTokens 调用 ${overrideCalls} 次）`)
+  check(overrideCalls === 3, `退避期内不再重放（overrideTokens 调用 ${overrideCalls} 次）`)
 
   // 4. 反复失效 → 达到上限后停用（退避表最长 600s，每次推进 700s）
   let guard = 0
@@ -201,13 +219,28 @@ try {
     check(false, '未捕获设置页 inject（无法验证帧合并）')
   }
 
-  // 7. 卸载后不再重放
-  if (effectCleanup) effectCleanup()
-  const afterUnload = overrideCalls
-  advance(700000)
-  fireThemeChange()
-  check(overrideCalls === afterUnload, '卸载后不再重放')
-  check(disposeCalls >= 1, '卸载时撤掉了覆盖层')
+  // 7. 停用后手动重启（resetHeal，2026-10-28 P0-B）→ 能重放；随后卸载不再重放
+  //    旧版这一场景排在停用之后、healDisabled 已恒真，断言形同虚设 —— 现在先证明
+  //    resetHeal 真的把自动恢复救活了（撤销+到期+触发 → 必须重放），再验卸载。
+  if (settingsInject && typeof settingsInject.resetHeal === 'function') {
+    settingsInject.resetHeal()
+    const beforeReenable = overrideCalls
+    revokeLayer()
+    advance(700000)
+    fireThemeChange()
+    check(overrideCalls > beforeReenable, `resetHeal 重新启用后能重放（实得 +${overrideCalls - beforeReenable}）`)
+    if (effectCleanup) effectCleanup()
+    // 与真实 cordis 一致：ctx.on 的监听挂在 fiber 上，fiber dispose 时自动摘除
+    // （假 ctx 的 on 只是塞 Map，得在这里补上这层语义，否则卸载后监听器残留、断言必红）
+    handlers.clear()
+    const afterUnload = overrideCalls
+    advance(700000)
+    fireThemeChange()
+    check(overrideCalls === afterUnload, '卸载后不再重放')
+    check(disposeCalls >= 1, '卸载时撤掉了覆盖层')
+  } else {
+    check(false, '未捕获 settingsInject.resetHeal（无法验证手动重启自动恢复）')
+  }
 } catch (err) {
   failed++
   console.log('  ✗ 自愈脚本异常：' + (err && err.stack ? err.stack : err))
