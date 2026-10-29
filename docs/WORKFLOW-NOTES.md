@@ -104,8 +104,10 @@ gh api -X PATCH repos/<me>/<repo>/git/refs/heads/<branch> -f sha=<new>
 
 - `package.json` 有 `dsh.bundle.patch` + 根目录 `cordis.patch.yml`；
 - 仓库加 `dsh-plugin` topic（主题类再加 `dsh-theme`）；
-- **五语 README**：`README.md`（英文源）+ `README-zh.md` / `-es.md` / `-pt.md` / `-hi.md`，且 `## ` 标题**逐字一致**；
-- 展示元数据：`locale/<lang>.json` 的 `meta.title` / `meta.description` + `exports["./icon"]`；
+- **六语 README**：`README.md`（英文源）+ `README-zh.md` / `-ja.md` / `-es.md` / `-pt.md` / `-hi.md`，且 `## ` 标题**逐字一致**（`check-ui` 同时断言 `## What it does` 的要点条数一致 —— 1.13.1 的 es/pt/hi 就少过一条，只比标题看不出来）；
+- 展示元数据：`locale/<lang>.json` 的 `meta.title` / `meta.description` + `exports["./icon"]`。
+  **每种 README 语言都要有一份 locale**（2026-10-29 审计 P2-11：此前 README 有 es/pt/hi、locale 没有，市场页缺三门语言的简介）；
+  `locale/*.json` 是**市场页元数据**，不是 UI 文案（UI 文案内联在 `client.js` 的 `TEXT`，见 `docs/DESIGN.md` §国际化）；
 - `files` 白名单只放运行时需要的（工具脚本不要进包）；
 - 截图放**自己仓库**并声明 `screenshots.json`（1–8 张，相对路径），不要塞进目录仓库的 PR。
 
@@ -115,7 +117,10 @@ gh api -X PATCH repos/<me>/<repo>/git/refs/heads/<branch> -f sha=<new>
 
 事故：README 安装示例钉着 `1.4.0`，实际已 1.4.3。
 
-做法：`package.json.version` 是唯一真源；`client.js` 的 `PLUGIN_VERSION` 由发版预检断言一致；README 里要么不写版本号，要么用发版脚本注入。
+做法：`package.json.version` 是唯一真源。**四处联动必须同时改**：`client.js` 的 `PLUGIN_VERSION`、
+`assets/screenshots.meta.json` 的 `pluginVersion`、CHANGELOG 最新版本节标题、四语 `notice` 文案。
+1.13.2 起 `tools/check-pack.mjs` 把其中三处与 `package.json` 直接对账（第四处 notice 由 `check-ui` 断言），
+跑在 `npm run check` 里 —— 而 `npm run check` 在 CI 上会跑（此前只有 `release.mjs` 断言一条边，而它不在 CI 里）。
 
 ---
 
@@ -293,3 +298,27 @@ npm 会用 **404** 掩盖信任配置类错误（防止枚举），CLI 侧只看
 3. **保存 ≠ 生效**：配置刚保存后立刻跑，仍可能拿到 `package not found`；隔一会儿（或保存后再确认一次）就通了。所以**别把一次失败当成结论**，重跑一次再判。
 
 另外：发布成功的标志不是 exit 0 就算完 —— 要核 `dist-tags.latest`、`dist.attestations`（provenance 是否带上）、以及 GitHub Release 资产 sha1 与 `dist.shasum` 是否逐字节一致。
+
+---
+
+## 12. 宿主契约要能在 CI 上真的跑（2026-10-29）
+
+**事故形状**：`tools/check-host-contract.mjs` 只认本机的 `app.asar`（Windows 硬编码路径）。
+在 `ubuntu-latest` 上它找不到，退出 78（SKIP），而总入口把 78 记成「未执行，不计失败」——
+**CI 全绿，这一层 0 条断言**。它恰好是唯一能发现「宿主把某个 `--dsw-*` 改名了」的手段，
+而这类事故的表现是静默的：覆盖层照收，样式不生效，配色悄悄跳回默认。
+
+**做法**：契约的取证来源不止 asar。宿主三件套在 npm 上有公开发布物，和桌面端内置的是同一份代码：
+
+| 包 | 取哪份文件 |
+|---|---|
+| `@deepseek-ai/dsh-client-ui-theme` | `lib/client.js`（token 名、`--dsw-alias-bg-base` 链路） |
+| `@deepseek-ai/dsh-client-ui-layout` | `lib/client.js`（presenter 的两条写法） |
+| `@deepseek-ai/dsh-web-frontend` | `dist/assets/index-*.css`（`_markdown_` / `md-code-block`） |
+
+三个包钉死在 `devDependencies`（当前 `0.2.1-rc.2`，需随宿主升级手动对齐），CI 跑
+`npm install` → `npm run check`（契约从 node_modules 取证，16 条断言）→
+`npm run contract`（`--strict`：两个来源都没有就红，禁止静默 SKIP）。
+
+**验证方式**：`node tools/check-host-contract.mjs --asar C:/nonexistent/app.asar --strict`
+强制走 node_modules 路径 —— 本机实测通过，输出会打印「取证来源」。

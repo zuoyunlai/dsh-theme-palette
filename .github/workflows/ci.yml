@@ -1,9 +1,12 @@
-# 全量质量门（审计 2026-10-27 P2-5）：此前六件套与报表只在本地/发版时跑，
-# 换机器或外部贡献时可能被整批跳过。这里在 push/PR 上跑同一组命令。
-# check 脚本只依赖 node 内建模块（semver 仅发版脚本用），无需 install；
-# 宿主契约脚本在拿不到 asar 的 CI 上 SKIP（退出码 78），总入口把它记为「未执行」而不是「通过」
-# —— CI 上这一层确实是 0 条断言，别让绿色骗人。有 asar 的机器可用
-# DSH_ASAR=<app.asar 路径> 跑 `node tools/check-host-contract.mjs --strict` 把它变成真门。
+# 全量质量门（审计 2026-10-27 P2-5 / 2026-10-29 P1-4）：
+# push/PR 上跑与本地 `npm run check` 同一组命令（tools/check-all.mjs 是唯一清单）。
+#
+# 关于宿主契约（唯一能发现「宿主把某个 --dsw-* 改名了」的那一层）：
+#   CI 上没有本机的 app.asar —— 此前这一层永远是 SKIP，等于 0 条断言。
+#   现在 `npm install` 会把宿主三件套的**公开 npm 包**装进 node_modules
+#   （@deepseek-ai/dsh-client-ui-theme / dsh-client-ui-layout / dsh-web-frontend），
+#   `check-host-contract.mjs` 从这些包里取证，断言数与真机一致；
+#   末尾的 `npm run contract` 再以 `--strict` 兜一次：两个来源都拿不到就红，不许静默 SKIP。
 name: CI
 
 on:
@@ -23,7 +26,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: 六件套（结构 / 契约 / 自愈 / 审计回归 / 自定义 / 色彩数学）
+
+      # 只为两件事装依赖：① 契约检查需要宿主 peer 包取证；② release.mjs 需要 semver
+      - name: 安装依赖（含宿主 peer 包，供契约检查取证）
+        run: npm install --no-audit --no-fund
+
+      - name: 工具链回归（结构 / 自愈 / 审计回归 / 自定义 / 色彩数学 / README 短码 / 包内容 / 版本一致性）
         run: npm run check
+
+      - name: 宿主契约硬门（拿不到 asar 或 peer 包时不许 SKIP）
+        run: npm run contract
+
       - name: 对比度报表（标准档 + 高对比档，硬失败退出码 1）
         run: npm run report
+
+      - name: 主题包导出（确认 npm run packs 也能在干净环境跑通）
+        run: npm run packs

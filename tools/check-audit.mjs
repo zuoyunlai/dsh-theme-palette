@@ -41,7 +41,10 @@ globalThis.__def.factory(() => ({
 
 const {
   buildTokens, SCHEMES, contrast, floors, encodeConfig, decodeConfig, writeCustom, toOklch, flatten,
-  devContrastReport, markdownCss, rampsFor, apcaContrast, pickLocale,
+  devContrastReport, markdownCss, rampsFor, apcaContrast, pickLocale, raiseToLc,
+  CONTRAST_SURFACES, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN,
+  MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK,
+  FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, hexToRgb,
 } = globalThis.__api
 const custom = SCHEMES.find((s) => s.id === 'custom')
 const F = floors(false)
@@ -394,7 +397,8 @@ console.log('\n16) 未知模式 id 必须告警（审计 3.9：拼错一个 id �
       check(seen.some((m) => m.includes('unknown ' + field + ' id') && m.includes(value)),
         `未知 ${field}="${value}" 打出了 console.warn`)
     }
-    check(seen.every((m) => m.includes('合法值')), '告警文案附带合法值清单')
+    // 空数组上 every() 恒真 —— 如果上面一条 console.warn 都没打出，这条会空转通过（审计 2026-10-29 P3-1）
+    check(seen.length > 0 && seen.every((m) => m.includes('合法值')), '告警文案附带合法值清单')
   } finally {
     console.warn = origWarn
   }
@@ -454,6 +458,31 @@ console.log('\n17) 侧栏「同色」必须真的等于画布，三档都沿用�
   }
 }
 
+console.log('\n18) 右栏完全不接管（1.9.10 撤除该设置，技术债一并清掉）')
+{
+  // 宿主右栏面板是 position:absolute 的整高透明覆盖层：染网格列看不见（被它盖住），
+  // 连面板一起染又会盖住主栏一大块、把开关按钮压在下面（用户实测）。
+  // 所以正确行为是「什么都不做」——用断言把这个决定钉住，防止哪天又被加回来。
+  check(!markdownCss.includes('data-rightbar-col') && !markdownCss.includes('data-sidebar-right-panel'),
+    '样式表不碰右栏网格列与面板元素')
+  check(!markdownCss.includes('--dshtp-rightbar') && !markdownCss.includes('--dshtp-canvas-fill'),
+    '样式表不引用任何右栏专用 token')
+  const moss = SCHEMES.find((s) => s.id === 'moss')
+  const tk = buildTokens(moss, 'deep', 'tinted')
+  const rightKeys = Object.keys(tk).filter((k) => /rightbar|dshtp-canvas-fill/.test(k))
+  check(rightKeys.length === 0, `不产出右栏相关 token（实得 ${rightKeys.join(',') || '无'}）`)
+  // 旧分享码里仍带 r，解析不能因此报错 —— 只是该字段已被彻底遗忘。
+  const legacy = { v: 1, p: 'moss', s: 'deep', t: 'tinted', r: 'canvas', c: 'neutral', k: 'accent', m: 'on', h: 'off', l: 'zh-CN' }
+  const code = 'dshs1.' + Buffer.from(JSON.stringify(legacy), 'utf8').toString('base64url')
+  const back = decodeConfig(code)
+  check(back !== null && back.palette === 'moss' && back.rightbar === undefined,
+    '旧分享码仍可解析，右栏字段被忽略（不报错、不复活）')
+  const fresh = encodeConfig({ palette: 'moss', sidebar: 'deep', text: 'tinted', scroll: 'neutral', control: 'accent', md: 'on', hc: 'off', lang: 'zh-CN' })
+  const payload = JSON.parse(Buffer.from(fresh.slice('dshs1.'.length), 'base64url').toString('utf8'))
+  check(!('r' in payload), '新分享码不再带右栏字段')
+  check(decodeConfig(fresh).palette === 'moss', '新分享码可原样解回')
+}
+
 console.log('\n19) 高对比边框：浅色对最亮面 3:1，深色对中间两层定标（1.9.10）')
 {
   // 深色有四层面（950 侧栏 / 875 / 850 / 800 模块面），一根线不可能对四层等强。
@@ -501,31 +530,6 @@ console.log('\n19) 高对比边框：浅色对最亮面 3:1，深色对中间两
       check(on800 >= 2.0, `${s} HC ${name} 在 800 上仍可辨（${on800.toFixed(2)} ≥ 2.0）`)
     }
   }
-}
-
-console.log('\n18) 右栏完全不接管（1.9.10 撤除该设置，技术债一并清掉）')
-{
-  // 宿主右栏面板是 position:absolute 的整高透明覆盖层：染网格列看不见（被它盖住），
-  // 连面板一起染又会盖住主栏一大块、把开关按钮压在下面（用户实测）。
-  // 所以正确行为是「什么都不做」——用断言把这个决定钉住，防止哪天又被加回来。
-  check(!markdownCss.includes('data-rightbar-col') && !markdownCss.includes('data-sidebar-right-panel'),
-    '样式表不碰右栏网格列与面板元素')
-  check(!markdownCss.includes('--dshtp-rightbar') && !markdownCss.includes('--dshtp-canvas-fill'),
-    '样式表不引用任何右栏专用 token')
-  const moss = SCHEMES.find((s) => s.id === 'moss')
-  const tk = buildTokens(moss, 'deep', 'tinted')
-  const rightKeys = Object.keys(tk).filter((k) => /rightbar|dshtp-canvas-fill/.test(k))
-  check(rightKeys.length === 0, `不产出右栏相关 token（实得 ${rightKeys.join(',') || '无'}）`)
-  // 旧分享码里仍带 r，解析不能因此报错 —— 只是该字段已被彻底遗忘。
-  const legacy = { v: 1, p: 'moss', s: 'deep', t: 'tinted', r: 'canvas', c: 'neutral', k: 'accent', m: 'on', h: 'off', l: 'zh-CN' }
-  const code = 'dshs1.' + Buffer.from(JSON.stringify(legacy), 'utf8').toString('base64url')
-  const back = decodeConfig(code)
-  check(back !== null && back.palette === 'moss' && back.rightbar === undefined,
-    '旧分享码仍可解析，右栏字段被忽略（不报错、不复活）')
-  const fresh = encodeConfig({ palette: 'moss', sidebar: 'deep', text: 'tinted', scroll: 'neutral', control: 'accent', md: 'on', hc: 'off', lang: 'zh-CN' })
-  const payload = JSON.parse(Buffer.from(fresh.slice('dshs1.'.length), 'base64url').toString('utf8'))
-  check(!('r' in payload), '新分享码不再带右栏字段')
-  check(decodeConfig(fresh).palette === 'moss', '新分享码可原样解回')
 }
 
 console.log('\n20) 色觉缺陷（CVD）下文字对比度不塌')
@@ -627,6 +631,142 @@ console.log('\n21) 界面语言回退（1.11.0，审计 2026-10-27 P1-2）：非
   )
   def2.factory(() => ({ createElement: () => null, useState: (v) => [v, () => {}], useSyncExternalStore: () => 'mono' }))
   check(api2 && api2.pickLocale('auto') === 'en', `宿主 fr → 回退 en（实得 ${api2 && api2.pickLocale('auto')}）`)
+}
+
+console.log('\n22) 承诺下限被**字面量**钉住（审计 2026-10-29 P1-1）')
+{
+  // 这些数字是 README / DESIGN 对用户白纸黑字承诺的下限。断言必须写**字面量**：
+  // 此前这里的期望值来自 floors() —— 同一个实现里的同一份常量。把 CONTRAST_FLOOR 从
+  // 4.5 改成 1.0，期望值跟着改，`check-all` 全绿（变异实测复现过）。
+  check(CONTRAST_FLOOR === 4.5, `CONTRAST_FLOOR === 4.5（AA 底线，实得 ${CONTRAST_FLOOR}）`)
+  check(CONTRAST_SOLVER_MARGIN === 0.93, `CONTRAST_SOLVER_MARGIN === 0.93（求解余量，实得 ${CONTRAST_SOLVER_MARGIN}）`)
+  check(MIN_MAIN === 12 && MIN_SECONDARY === 6.2 && MIN_TERTIARY === 4.85,
+    `浅色文字下限 12 / 6.2 / 4.85（实得 ${MIN_MAIN} / ${MIN_SECONDARY} / ${MIN_TERTIARY}）`)
+  check(MIN_LINK === 4.95 && MIN_LINK_DARK === 4.62,
+    `链接下限 4.95（浅）/ 4.62（深）（实得 ${MIN_LINK} / ${MIN_LINK_DARK}）`)
+  check(MIN_SECONDARY_DARK === 8.0 && MIN_TERTIARY_DARK === 6.4,
+    `深色次级/三级下限 8.0 / 6.4（实得 ${MIN_SECONDARY_DARK} / ${MIN_TERTIARY_DARK}）`)
+  check(FLOORS_HC.main === 15 && FLOORS_HC.secondary === 9 && FLOORS_HC.tertiary === 7
+    && FLOORS_HC.link === 7 && FLOORS_HC.linkDark === 7,
+    `HC 档下限 15 / 9 / 7 / 7 / 7（实得 ${FLOORS_HC.main} / ${FLOORS_HC.secondary} / ${FLOORS_HC.tertiary} / ${FLOORS_HC.link} / ${FLOORS_HC.linkDark}）`)
+  check(FLOORS_HC_DARK.secondary === 9.6 && FLOORS_HC_DARK.tertiary === 7.6,
+    `HC 深色次级/三级 9.6 / 7.6（实得 ${FLOORS_HC_DARK.secondary} / ${FLOORS_HC_DARK.tertiary}）`)
+  check(RAMP_MIN_GAP === 0.006, `RAMP_MIN_GAP === 0.006（色阶档间距，实得 ${RAMP_MIN_GAP}）`)
+}
+
+console.log('\n23) 报表字段独立复算：physicalCeiling / limitedByPhysics 不读被测字段（审计 2026-10-29 P1-1 后半）')
+{
+  // 这两个字段原先的断言是「字段 A 满足字段 B 的关系」，而 A、B 都出自同一个 buildContrastReport ——
+  // 一起漂移时断言照样过。这里改成：拿**渲染 token** 自己算一遍物理上限，再和报表比。
+  let cells = 0
+  let ceilingBad = 0
+  let limitedBad = 0
+  let sample = ''
+  for (const id of PRE) {
+    const scheme = SCHEMES.find((s) => s.id === id)
+    for (const hc of [false, true]) {
+      const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', hc)
+      const report = devContrastReport(id, { hc })
+      for (const row of report.rows) {
+        for (const cell of row.cells) {
+          if (cell.unmeasured) continue
+          const sf = CONTRAST_SURFACES.find((x) => x.id === cell.surface && x.mode === cell.mode)
+          if (!sf) continue
+          const bgPair = sf.token ? t[sf.token] : t['--dsw-static-neutral-bluish-' + sf.id]
+          if (!bgPair) continue
+          const canvasPair = t['--dsw-static-neutral-bluish-' + (sf.mode === 'light' ? '00' : '950')]
+          const bg = sf.token ? flatten(bgPair[sf.mode], canvasPair[sf.mode]) : bgPair[sf.mode]
+          const mine = Math.round(contrast(sf.mode === 'light' ? '#000000' : '#ffffff', bg) * 100) / 100
+          cells++
+          if (Math.abs(cell.physicalCeiling - mine) > 0.011) {
+            ceilingBad++
+            sample = `${id}${hc ? ' HC' : ''} ${row.role}/${sf.id} 报表 ${cell.physicalCeiling} vs 复算 ${mine}`
+          }
+          if (cell.limitedByPhysics !== (cell.declaredTarget > mine)) limitedBad++
+        }
+      }
+    }
+  }
+  check(cells > 0 && ceilingBad === 0, `physicalCeiling 与复算一致（${cells} 格，不一致 ${ceilingBad}${sample ? '：' + sample : ''}）`)
+  check(cells > 0 && limitedBad === 0, `limitedByPhysics 与复算一致（${cells} 格，不一致 ${limitedBad}）`)
+}
+
+console.log('\n24) APCA 参考值与 ×100 换算被钉住（审计 2026-10-29 P1-8）')
+{
+  const Lc = (fg, bg) => apcaContrast(fg, bg) * 100
+  // 公开参考值（SAPC-98G-4g）：数值对不上说明算法/常量/换算被动了
+  check(Math.abs(Lc('#000000', '#ffffff') - 106.04) <= 0.02, `黑 on 白 Lc ${Lc('#000000', '#ffffff').toFixed(2)} ≈ 106.04`)
+  check(Math.abs(Lc('#ffffff', '#000000') + 107.88) <= 0.02, `白 on 黑 Lc ${Lc('#ffffff', '#000000').toFixed(2)} ≈ −107.88`)
+  check(Math.abs(Lc('#888888', '#ffffff') - 63.06) <= 0.02, `#888 on 白 Lc ${Lc('#888888', '#ffffff').toFixed(2)} ≈ 63.06`)
+  // 精度必须是 0.01 Lc，不能是整数 —— 否则 raiseToLc 会在「量化后的 Lc」首次过闸就停
+  const fractional = ['#777777', '#888888', '#767676', '#123456']
+    .filter((fg) => { const v = apcaContrast(fg, '#ffffff'); return Math.abs(v * 100 - Math.round(v * 100)) > 1e-9 })
+  check(fractional.length > 0, `Lc 精度高于整数（带小数的样本 ${fractional.length} / 4）`)
+  // ×100 换算：raiseToLc 拿到的是 Lc 读数，闸门语义必须是「|Lc| ≥ 60」
+  // （暗底浅字为负，引擎内部取绝对值 —— 这里也照这个口径断言）
+  const raised = raiseToLc('#555555', ['#1f1c17'], 60)
+  const got = Math.abs(apcaContrast(raised, '#1f1c17') * 100)
+  check(got >= 60 - 0.02, `raiseToLc 把颜色顶到 |Lc| ≥ 60（${raised} 实得 ${got.toFixed(2)}）`)
+}
+
+console.log('\n25) 色阶单调 + 顺序表完整性（审计 2026-10-29 P1-7：900 曾漏在表外）')
+{
+  // 原缺陷的形状：BASE.bluish 有 '900'、色阶也构建它，但 RAMP_ORDER 里没有 →
+  // 900 既不参与递减比较也不被钳制（实测 875→900 的 ΔL 只有 0.00549）。
+  // 这里钉两件事：① 凡是构建出来的档位都必须在顺序表里；② 非墨色档严格递减。
+  check(RAMP_ORDER.includes('900')
+    && RAMP_ORDER.indexOf('875') < RAMP_ORDER.indexOf('900')
+    && RAMP_ORDER.indexOf('900') < RAMP_ORDER.indexOf('950'),
+    `顺序表含 900 且落在 875 / 950 之间（实得位置 ${RAMP_ORDER.indexOf('900')}）`)
+
+  const INK = { light: ['600', '700', '1000'], dark: ['50', '300', '400'] }
+  let uncovered = 0
+  let inverted = 0
+  let worst = { gap: Infinity }
+  for (const scheme of SCHEMES.filter((s) => s.tinted)) {
+    const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    const steps = Object.keys(t)
+      .filter((k) => k.startsWith('--dsw-static-neutral-bluish-'))
+      .map((k) => k.slice('--dsw-static-neutral-bluish-'.length))
+    for (const step of steps) if (!RAMP_ORDER.includes(step)) uncovered++
+    for (const side of ['light', 'dark']) {
+      let prev = null
+      let prevStep = ''
+      for (const step of RAMP_ORDER) {
+        const pair = t['--dsw-static-neutral-bluish-' + step]
+        if (!pair) continue
+        const L = toOklch(pair[side])[0]
+        if (!INK[side].includes(step) && prev !== null) {
+          const gap = prev - L
+          if (gap < worst.gap) worst = { gap, scheme: scheme.id, side, pair: prevStep + '→' + step }
+          if (gap <= 0) inverted++
+        }
+        prev = L
+        prevStep = step
+      }
+    }
+  }
+  check(uncovered === 0, `构建出的每个档位都在 RAMP_ORDER 里（未覆盖 ${uncovered} 个）`)
+  check(inverted === 0, `非墨色档严格递减（反序 ${inverted} 处）`)
+  // 名义下限是 RAMP_MIN_GAP=0.006，但钳制后要过 8-bit 量化，实测量会低 0.001 左右。
+  // 取 0.003 作为「量化后的可用下限」：真出现塌档（如 1.9.8 的 0.36 ΔE/同色）会立刻掉到 0 附近。
+  check(worst.gap >= 0.003,
+    `相邻非墨色档最小 ΔL ${worst.gap.toFixed(4)} ≥ 0.003（名义 ${RAMP_MIN_GAP}；${worst.scheme}/${worst.side} ${worst.pair}）`)
+}
+
+console.log('\n26) 颜色引擎对畸形 hex 有定义行为（审计 2026-10-29 P2-2）')
+{
+  check(hexToRgb('#abc') === null && hexToRgb('') === null && hexToRgb(null) === null,
+    'hexToRgb 对畸形输入返回 null（不再产出 NaN 三元组 / 抛 TypeError）')
+  let ok = true
+  for (const bad of ['#abc', '', null, undefined, '#gggggg', '#fff']) {
+    try {
+      const lch = toOklch(bad)
+      if (!Array.isArray(lch) || lch.some((v) => Number.isNaN(v))) ok = false
+    } catch { ok = false }
+  }
+  check(ok, 'toOklch 对畸形输入不抛错、不出 NaN（退化为定义值）')
+  check(hexToRgb('#a1b2c3').join(',') === '161,178,195', 'hexToRgb 正常路径不受守影响')
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)

@@ -1,6 +1,6 @@
 # dsh-theme-palette
 
-[English](README.md) · [中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
+[English](README.md) · [中文](README-zh.md) · [日本語](README-ja.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 Paleta de tema para DeepSeek Harness (web y escritorio): **4 paletas preajustadas + personalizada × claro/oscuro**, dos ejes independientes.
 
@@ -30,6 +30,7 @@ El plugin solo apila tokens de color mediante `ctx.theme.overrideTokens`; no reg
 - la escala se **recalcula** completa: reconstrucción OKLCH → croma por rol → **ajuste al gamut sRGB** → contraste resuelto sobre superficies reales;
 - se cubren todos los tokens de color del host (122 tokens en paletas con tinte, 17 en mono; 1080 combinaciones de ajuste escaneadas): texto, secundario, terciario, notas, enlaces, barras laterales, tarjetas, burbuja del usuario, botón primario, barras de desplazamiento, interruptores, títulos/negritas de Markdown, bloques de código;
 - ajustable: intensidad del texto (3), profundidad de la barra lateral (3), énfasis de Markdown, barras de desplazamiento, color de interruptores;
+- **paleta personalizada** (elige superficie / texto / acento — el motor mantiene sus garantías de contraste), **exportación/importación de configuración** con un código `dshs1.`, **modo de alto contraste** y **4 idiomas de interfaz**;
 - **autorreparable**: si el host descarta la capa de override, la paleta se vuelve a aplicar; tras fallos repetidos la autorreparación se pausa y la página de ajustes ofrece un botón para reactivarla;
 - **promesas de contraste**: el cuerpo tiene la promesa de 12:1 en claro y 10:1 en oscuro (15:1 en alto contraste), el secundario ≥ 6.2 en claro y 8.0 en oscuro (HC 9 / 9.6), el terciario ≥ 4.85 en claro y 6.4 en oscuro (HC 7 / 7.6), los enlaces ≥ 4.95 en claro y 4.62 en oscuro (HC 7; los mínimos claros llevan un margen para déficits de visión cromática; los enlaces oscuros además pasan una puerta APCA Lc ≥ 60, 75 en HC), medidos sobre las superficies donde el texto realmente cae (el lado oscuro necesita más: un cociente WCAG sobreestima la legibilidad sobre fondo oscuro);
 - las superficies prometidas son 00/60 en claro y 950/875 en oscuro; las oscuras 800 (superficie de módulo) y 850 (sub-superficie) **no** respaldan el texto del cuerpo: el informe las cuenta aparte como «fuera de política» (ni cuentan como aprobado ni como fallo);
@@ -43,7 +44,7 @@ cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
 ```
 
-Para fijar una versión, usa `pnpm add dsh-theme-palette@<version>` — la versión actual está en [CHANGELOG.md](CHANGELOG.md).
+Para fijar una versión, usa `pnpm add dsh-theme-palette@<version>` — [CHANGELOG.md](CHANGELOG.md) marca las secciones que nunca se publicaron en npm; no fijes una de esas.
 Desde el tarball de un release de GitHub: elige el asset en la [página de releases](https://github.com/zuoyunlai/dsh-theme-palette/releases) e instálalo con `pnpm add <ruta-del-tgz>`.
 
 Después **reinicia la interfaz**: un proceso en marcha conserva el módulo antiguo. Se abre en avatar → Ajustes → **Color theme**.
@@ -79,14 +80,16 @@ Las notas de diseño, el criterio por componente y las tablas de contraste está
 ## Development
 
 ```bash
-node palette-dev.mjs                  # informe de tokens de todas las paletas
-node tools/sheet.mjs                  # tablero de paletas → tools/sheet.html
-node tools/shoot-sheet.mjs            # captura del tablero (Chrome headless)
-node tools/compare.mjs --dir tools/out/<run>        # comparar con la línea base
-node tools/preview-settings.mjs --lang en           # renderizar la página de ajustes
-node tools/release.mjs --dry          # preflight de publicación
-node tools/release.mjs --tag          # publicar en npm + tag
-node tools/release.mjs --ci           # publicación en CI: solo tag; Actions publica con Trusted Publishing
+npm run report                        # informe de tokens de todas las paletas (-- --hc para alto contraste)
+npm run sheet                         # tablero de paletas → tools/sheet.html
+npm run shot-sheet                    # captura del tablero (Chrome/Edge headless)
+npm run compare -- --dir tools/out/<run>   # comparar con la línea base local
+npm run preview -- --lang en          # renderizar la página de ajustes
+npm run contract                      # contrato de tokens/DOM del host (strict: SKIP falla)
+npm run release -- --dry              # preflight de publicación
+npm run release -- --tag              # publicar en npm + tag
+npm run release -- --ci               # publicación en CI: solo tag; Actions publica con Trusted Publishing
+npm run clean                         # borrar tarballs locales / tools/out / dist
 ```
 
 La regresión visual tiene dos capas: el tablero de paletas (sin autenticación) y la ventana real del escritorio vía CDP (`tools/shoot-desktop.mjs`, requiere `--remote-debugging-port`). Ver [tools/README.md](tools/README.md).

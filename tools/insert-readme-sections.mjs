@@ -10,19 +10,22 @@
  *   - 只新增 `## Pitfalls we hit` / `## Sharing` / `## Trade-offs` 三个标题；
  *   - 不删改任何既有 `## ` 标题；
  *   - 插在 `## License` 之前；
- *   - 示例短码与 tools/sample-code.mjs 生成的完全一致（自检过 decodeConfig 往返）。
+ *   - 示例短码由 `tools/sample-code.mjs` **在运行时生成**（同一个函数，不手抄 ——
+ *     审计 2026-10-29 P1-6：这里曾硬编码一份 1.9.10 之前的码，带已撤除的 `"r":"sidebar"`，
+ *     于是 `--check` 在干净检出上永远红，脚本也就没人跑、越烂越没人跑）。
  *
  * 用法：node tools/insert-readme-sections.mjs [--check]
  */
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { generateSampleCode } from './sample-code.mjs'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const CHECK = process.argv.includes('--check')
 
-// 由 tools/sample-code.mjs 生成并通过 decodeConfig 自检（三色往返一致）
-const SAMPLE = 'dshs1.eyJ2IjoxLCJwIjoiY3VzdG9tIiwicyI6ImRlZXAiLCJ0IjoidGludGVkIiwiciI6InNpZGViYXIiLCJjIjoidGludGVkIiwiayI6ImFjY2VudCIsIm0iOiJvbiIsImgiOiJvZmYiLCJsIjoiemgtQ04iLCJ4Ijp7ImJnIjoiI2Y1ZWZlNiIsInRleHQiOiIjMWQxYTE3IiwiYWNjZW50IjoiIzNmNjZhMyJ9fQ'
+// 与 tools/sample-code.mjs 完全同源：调它的生成函数，自己不再留一份字面量
+const SAMPLE = generateSampleCode()
 
 const H_PITFALLS = '## Pitfalls we hit'
 const H_SHARING = '## Sharing'
@@ -109,7 +112,7 @@ const bodies = {
       'Toda la configuración — incluidos los tres colores personalizados — viaja en un código corto. Pégalo en el cuadro de importación y pulsa Vista previa para ver qué cambiará antes de aplicar:',
       'Este ejemplo real decodifica a:',
       [
-        'paleta: custom · barra lateral: deep · texto: tinted · panel derecho: sidebar',
+        'paleta: custom · barra lateral: deep · texto: tinted',
         'scrollbar: tinted · controles: accent · Markdown: on · alto contraste: off · idioma: zh-CN',
         'tres colores: `#f5efe6` (fondo) · `#1d1a17` (texto) · `#3f66a3` (acento)',
       ],
@@ -137,7 +140,7 @@ const bodies = {
       'Toda a configuração — incluindo as três cores personalizadas — viaja num código curto. Cole na caixa de importação e clique em Pré-visualizar para ver exatamente o que mudará antes de aplicar:',
       'Este exemplo real decodifica para:',
       [
-        'paleta: custom · barra lateral: deep · texto: tinted · painel direito: sidebar',
+        'paleta: custom · barra lateral: deep · texto: tinted',
         'scrollbar: tinted · controles: accent · Markdown: on · alto contraste: off · idioma: zh-CN',
         'três cores: `#f5efe6` (fundo) · `#1d1a17` (texto) · `#3f66a3` (acento)',
       ],
@@ -165,7 +168,7 @@ const bodies = {
       'पूरी कॉन्फ़िगरेशन — तीन कस्टम रंगों समेत — एक ही शॉर्ट कोड में जाती है। इम्पोर्ट बॉक्स में पेस्ट करें और प्रीव्यू दबाएँ — लागू करने से पहले देखें कि क्या बदलेगा:',
       'यह वास्तविक उदाहरण इसमें डिकोड होता है:',
       [
-        'पैलेट: custom · साइडबार: deep · टेक्स्ट: tinted · दायाँ पैनल: sidebar',
+        'पैलेट: custom · साइडबार: deep · टेक्स्ट: tinted',
         'स्क्रॉलबार: tinted · नियंत्रण: accent · Markdown: on · उच्च-कंट्रास्ट: off · भाषा: zh-CN',
         'तीन रंग: `#f5efe6` (फ़ॉन्ड) · `#1d1a17` (टेक्स्ट) · `#3f66a3` (एक्सेंट)',
       ],

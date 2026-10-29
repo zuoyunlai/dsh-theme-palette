@@ -1,6 +1,6 @@
 {
   "name": "dsh-theme-palette",
-  "version": "1.13.1",
+  "version": "1.13.2",
   "description": "DSH 主题配色：4 套配色 × 明暗两模式，OKLCH 色域安全重建 + 真实承载面对比度求解，可调强度与面板表面。",
   "type": "module",
   "main": "index.js",
@@ -25,10 +25,13 @@
     "CHANGELOG.md",
     "docs/DESIGN.md",
     "README-zh.md",
+    "README-ja.md",
     "README-es.md",
     "README-pt.md",
     "README-hi.md",
-    "locale"
+    "locale",
+    "tools/README.md",
+    "AUDIT-2026-10-27.md"
   ],
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.0",
@@ -44,7 +47,17 @@
     "report": "node palette-dev.mjs && node palette-dev.mjs --hc",
     "packs": "node tools/export-theme-pack.mjs",
     "shots": "node tools/shoot-settings.mjs",
-    "sample-code": "node tools/sample-code.mjs"
+    "sample-code": "node tools/sample-code.mjs",
+    "contract": "node tools/check-host-contract.mjs --strict",
+    "measure": "node tools/measure-preview.mjs",
+    "shot-desktop": "node tools/shoot-desktop.mjs",
+    "shot-html": "node tools/shoot-html.mjs",
+    "shot-sheet": "node tools/shoot-sheet.mjs",
+    "compare": "node tools/compare.mjs",
+    "sheet": "node tools/sheet.mjs",
+    "preview": "node tools/preview-settings.mjs",
+    "release": "node tools/release.mjs",
+    "clean": "node tools/clean.mjs"
   },
   "dsh": {
     "bundle": {
@@ -112,6 +125,9 @@
     }
   },
   "devDependencies": {
+    "@deepseek-ai/dsh-client-ui-layout": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-theme": "0.2.1-rc.2",
+    "@deepseek-ai/dsh-web-frontend": "0.2.1-rc.2",
     "semver": "^7.7.3"
   }
 }

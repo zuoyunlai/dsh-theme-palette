@@ -76,11 +76,27 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
-      - name: 门禁（六件套 + 两档 1080 组报表 + 包内容守卫）—— 不把红版本发出去
+      - name: 断言 tag 与 package.json 版本一致（审计 2026-10-29 P1-2）
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+          VERSION: ${{ steps.ver.outputs.version }}
         run: |
+          set -euo pipefail
+          # 发布的是 `npm publish` 读到的 package.json，不是 tag 推导出的 VERSION。
+          # 两者不一致时：探针查的是 tag 版本（404），publish 发的是 package.json 版本（可能是旧的），
+          # 后面「取 tarball」又按 tag 版本去 registry 拉 → 整条链会错在最难查的地方。
+          PKG_V=$(node -p "require('./package.json').version")
+          if [ "$PKG_V" != "$VERSION" ]; then
+            echo "::error::tag $TAG 要求发布 $VERSION，但 package.json 是 $PKG_V —— npm publish 会发错版本"
+            exit 1
+          fi
+          echo "tag $TAG 与 package.json 版本一致：$VERSION"
+
+      - name: 门禁（工具链回归 + 两档 1080 组报表）—— 不把红版本发出去
+        run: |
+          # 包内容守卫、版本一致性、包内链接自包含都在 `npm run check` 里（tools/check-all.mjs 单一清单）
           npm run check
           npm run report
-          node tools/check-pack.mjs
 
       - name: 发布到 npm（Trusted Publishing：OIDC，无 token、无 OTP）
         env:

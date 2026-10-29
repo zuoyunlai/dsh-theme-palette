@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Paleta de tema",
+    "description": "Cuatro paletas predefinidas (Mono, Arena cálida, Índigo, Musgo) más una personalizada, en claro y oscuro, calculadas en OKLCH sobre los tokens de tema de DSH."
+  }
+}

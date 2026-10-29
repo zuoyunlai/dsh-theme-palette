@@ -127,7 +127,10 @@ try {
   globalThis.__def.factory(() => ({ createElement: () => null, useState: (v) => [v, () => {}], useSyncExternalStore: () => 'mono' }))
   const { decodeConfig, encodeConfig } = globalThis.__api
 
-  const readmeFiles = ['README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md']
+  // 六语 README：标题逐字一致、示例码可被生产 decodeConfig 解析并往返自等。
+  // 集合口径（审计 2026-10-29 P2-11）：UI 支持的每门语言都要有 README（en / zh / ja），
+  // 其余语种（es / pt / hi）是额外翻译，可以多但不能少。
+  const readmeFiles = ['README.md', 'README-zh.md', 'README-ja.md', 'README-es.md', 'README-pt.md', 'README-hi.md']
   const codeRe = /dshs1\.[A-Za-z0-9_-]{20,}/g
   let headingsBase = null
   for (const f of readmeFiles) {
@@ -147,6 +150,52 @@ try {
     const headings = text.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.startsWith('## ')).sort().join('\n')
     if (headingsBase === null) headingsBase = headings
     else check(headings === headingsBase, `${f} 的 ## 标题与 README.md 一致`)
+  }
+
+  // 2a-2) 「What it does」的要点条数必须一致（审计 2026-10-29 P2-6）。
+  //    标题一致只保证章节在，不保证**内容条目**没少 —— 1.13.1 的 es/pt/hi 就少了一条
+  //    「自定义配色 + 短码导入导出 + 高对比 + 4 语界面」，而标题比对完全看不出来。
+  {
+    const counts = []
+    for (const f of readmeFiles) {
+      const text = fs.readFileSync(path.join(root, f), 'utf8')
+      const start = text.indexOf('\n## What it does\n')
+      const end = start < 0 ? -1 : text.indexOf('\n## ', start + 1)
+      if (start < 0 || end < 0) { check(false, `${f} 找不到 ## What it does 段落`); continue }
+      const bullets = text.slice(start, end).split('\n').filter((l) => /^- /.test(l)).length
+      counts.push(`${f}=${bullets}`)
+      check(bullets > 0, `${f} 的 ## What it does 有要点（实得 ${bullets} 条）`)
+    }
+    const uniq = new Set(counts.map((c) => c.split('=')[1]))
+    check(uniq.size === 1, `六语的 ## What it does 要点条数一致（${counts.join(' / ')}）`)
+  }
+
+  // 2a-3) locale 元数据集合（审计 2026-10-29 P2-10 / P2-11）：
+  //    locale/*.json 不是 UI 文案（UI 文案内联在 client.js，70 键 × 4 语），
+  //    而是**目录/市场页的元数据**。既然如此就要把它的口径钉住：
+  //    ① 每份只有 meta.title / meta.description（不能偷偷塞 UI 文案进去又没人读）；
+  //    ② 每份的 key 集完全一致；
+  //    ③ 每种 README 语言都有对应的 locale 元数据（少一个，市场页就缺一门语言的简介）。
+  {
+    const localeDir = path.join(root, 'locale')
+    const localeFiles = fs.readdirSync(localeDir).filter((f) => f.endsWith('.json'))
+    let keyBase = null
+    for (const f of localeFiles) {
+      const data = JSON.parse(fs.readFileSync(path.join(localeDir, f), 'utf8'))
+      const keys = Object.keys(data).sort().join(',')
+      if (keyBase === null) keyBase = keys
+      else check(keys === keyBase, `locale/${f} 的顶层 key 与其它 locale 一致（${keys}）`)
+      const meta = data.meta || {}
+      check(typeof meta.title === 'string' && typeof meta.description === 'string',
+        `locale/${f} 只有 meta.title / meta.description（市场页元数据）`)
+    }
+    const localeLangs = localeFiles.map((f) => f.replace(/\.json$/, ''))
+    const readmeLangs = readmeFiles.map((f) => (f === 'README.md' ? 'en' : f.replace(/^README-/, '').replace(/\.md$/, '')))
+    const missing = readmeLangs.filter((l) => !localeLangs.includes(l))
+    check(missing.length === 0, `每种 README 语言都有 locale 元数据（缺：${missing.join(',') || '无'}）`)
+    for (const uiLang of ['en', 'zh', 'zh-TW', 'ja']) {
+      check(localeLangs.includes(uiLang), `UI 语言 ${uiLang} 有 locale 元数据`)
+    }
   }
 
   // 2b) 文档口径对账门（2026-10-28 P1-a/d）：README 里最容易被手改漂移的两处数字。

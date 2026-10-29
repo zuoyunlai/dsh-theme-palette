@@ -88,8 +88,11 @@ try { run(process.execPath, ['--check', 'client.js']); ok('client.js 语法') } 
 // 1b. PLUGIN_VERSION 与 package.json 必须一致（否则设置页角标会说谎）
 {
   const src = readFileSync(path.join(root, 'client.js'), 'utf8')
-  const m = src.match(/const PLUGIN_VERSION = '([^']+)'/)
-  if (!m) warn('client.js 里找不到 PLUGIN_VERSION，跳过一致性检查')
+  // 正则与 check-ui.mjs / check-pack.mjs 用**同一个宽松版**（审计 2026-10-29 P1-3）：
+  // 原来只认单引号，把 client.js 的引号风格改成双引号就匹配不到 → 走 warn 分支 → 闸门被静默跳过。
+  // 发布路径上"找不到 PLUGIN_VERSION"必须是致命的，不能是"跳过一项检查"。
+  const m = src.match(/PLUGIN_VERSION\s*=\s*['"]([^'"]+)['"]/)
+  if (!m) die('client.js 里找不到 PLUGIN_VERSION —— 发布路径上这是致命的（版本角标会与包版本脱钩）')
   else if (m[1] !== version) die(`版本漂移：client.js PLUGIN_VERSION=${m[1]}，package.json=${version}`)
   else ok(`PLUGIN_VERSION 与 package.json 一致：${m[1]}`)
 }
@@ -152,33 +155,21 @@ try { run(process.execPath, ['--check', 'client.js']); ok('client.js 语法') } 
   }
 }
 
-// 1e. 回归与宿主契约：配色数值、自定义回归、宿主 token/DOM 钩子、README 截图新鲜度（check-ui 内）
-//     契约脚本在拿不到 asar 时会 SKIP（退出 78），不阻断其它机器发版 —— 但**不能**当成「通过」打印。
-for (const script of ['tools/check-audit.mjs', 'tools/check-custom.mjs', 'tools/check-ui.mjs', 'tools/check-selfheal.mjs', 'tools/check-colormath.mjs']) {
-  try {
-    run(process.execPath, [script])
-    ok(script + ' 通过')
-  } catch (err) {
-    die(script + ' 失败：' + String((err && (err.stdout || err.stderr)) || (err && err.message) || err).trim())
-  }
-}
-// 宿主契约单独跑：拿不到 asar 时它退出 78（SKIP），这时必须说「没验」，不能写「通过」
-// （2026-10-28 P3-O：原先 SKIP 与真通过都打「✓ 通过」，CI 上这一层其实是 0 条断言）。
+// 1e. 全量回归：直接调用 `tools/check-all.mjs`（审计 2026-10-29 P1-5）
+//     清单只有一份 —— 本地回归 / CI / 发版门看到的是同一个脚本列表，加第 8 个脚本不会再「CI 绿、发版门瞎」。
+//     check-all 把 SKIP（退出码 78）记为「未执行」而不是失败，所以这里单独扫输出：
+//     SKIP 要如实告警，不能写成「✓ 通过」（2026-10-28 P3-O）。
 try {
-  const contractOut = run(process.execPath, ['tools/check-host-contract.mjs'])
-  if (/SKIP/.test(contractOut)) {
-    warn('宿主契约检查未执行（找不到 asar）：本次发版未验证宿主 token 名与 DOM 钩子'
-      + '（可用 DSH_ASAR=<路径> 指定；CI/发版机建议加 --strict 让它变红）')
-  } else {
-    ok('tools/check-host-contract.mjs 通过')
+  const out = run(process.execPath, ['tools/check-all.mjs'])
+  for (const line of out.split('\n')) if (line.trim()) console.log(line)
+  ok('工具链回归通过（与 npm run check 同一入口）')
+  if (/SKIP/.test(out)) {
+    warn('其中宿主契约检查未执行（找不到宿主 asar 或 node_modules 里的宿主 peer 包）：'
+      + '本次发版未验证宿主 token 名与 DOM 钩子'
+      + '（可用 DSH_ASAR=<路径> 指定，或 npm i 装上 @deepseek-ai/dsh-client-ui-theme 等 peer 包）')
   }
 } catch (err) {
-  const out = String((err && (err.stdout || err.stderr)) || (err && err.message) || err)
-  if (/SKIP/.test(out)) {
-    warn('宿主契约检查未执行（找不到 asar）：本次发版未验证宿主 token 名与 DOM 钩子')
-  } else {
-    die('tools/check-host-contract.mjs 失败：' + out.trim())
-  }
+  die('工具链回归失败：' + String((err && (err.stdout || err.stderr)) || (err && err.message) || err).trim())
 }
 
 // 1f. 全组合扫描（2026-10-28 P3-P）：六件套只验默认组合，非默认轴掉线也能带硬失败发版。
@@ -196,26 +187,27 @@ const dirty = git('status', '--porcelain')
 if (dirty) die('工作区不干净，先提交：\n' + dirty)
 ok('工作区干净')
 
-// 包内容守卫（2026-10-28 P3-P）：只数文件个数会漏掉「某类文件没进包」。
-//     1.11.0 刚修过「README 截图 404（assets 没进包）」，但当时没有回归守卫：
-//     把 package.json 的 "assets" 删掉，六件套与本门全绿。
-//     清单现在住在 tools/check-pack.mjs —— 本地发版路径与 CI（Trusted Publishing）路径共用同一份，
-//     避免 required 清单在两处漂移（2026-10-29）。
-try {
-  run(process.execPath, ['tools/check-pack.mjs'])
-} catch (err) {
-  die('npm 包内容检查失败：' + String((err && (err.stdout || err.stderr)) || (err && err.message) || err).trim())
-}
+// 包内容守卫已经在 1e 的 `check-all` 里跑过（清单单一来源，2026-10-29 P1-5/P0-2），
+// 这里不再单独调一次 —— 单点维护清单之外的重复调用没有额外信息，只会让人以为有两条独立防线。
 
 // 2. 版本是否已在 registry（只读）
+//    网络错误与「版本不存在」必须分开（审计 2026-10-29 P2-12）：
+//    原来 catch 里一句「不可达就当没有」，会让离线/代理故障变成「放心发吧」。
 let remoteList = []
+let probeError = ''
 try {
   const r = await fetch(`${REGISTRY}/${name}`, { headers: { accept: 'application/json' } })
   if (r.status === 200) {
     const body = await r.json()
     remoteList = Object.keys(body.versions || {})
+  } else if (r.status !== 404) {
+    probeError = 'HTTP ' + r.status
   }
-} catch { /* 网络不可达就当"没有" */ }
+  // 404 = 这个包名在 registry 上还不存在（首次发布），是合法情况
+} catch (err) {
+  probeError = String((err && err.message) || err)
+}
+if (probeError) die(`查 registry 失败（${probeError}）—— 无法判断 ${version} 是否已发布，拒绝继续（离线/代理/限流都会走到这里）`)
 if (remoteList.includes(version)) {
   if (!has('skip-publish')) die('该版本已发布，先改 package.json 的 version')
   ok(`registry 上已有 ${version}（skip-publish）`)
@@ -288,6 +280,8 @@ if (!live) die('10 分钟内没出现在 registry —— 可能仍在审核，�
 ok(`registry 上已可下载 ${version}`)
 
 // 5. dist-tag
+//    前移失败必须 die（审计 2026-10-29 P2-12）：原来只 warn 然后 exit 0，
+//    脚本打印「完成」，`latest` 还指着旧版本 —— 用户装到的仍是旧版，而发版看起来成功了。
 const latest = npm(['view', `${name}`, 'dist-tags.latest', `--registry=${REGISTRY}`]).trim()
 if (latest === version) ok(`latest = ${version}`)
 else {
@@ -295,7 +289,10 @@ else {
   try {
     npm(['dist-tag', 'add', `${name}@${version}`, 'latest', `--registry=${REGISTRY}`])
     ok(`已前移 latest → ${version}`)
-  } catch { warn('前移失败，需要人工处理') }
+  } catch (err) {
+    die('前移 latest 失败（' + String((err && (err.stderr || err.message)) || err).trim() + '）—— '
+      + `latest 仍指向 ${latest}，用户装不到 ${version}；手动执行：npm dist-tag add ${name}@${version} latest`)
+  }
 }
 
 // 6. Git tag（可选）

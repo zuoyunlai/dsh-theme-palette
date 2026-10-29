@@ -67,7 +67,7 @@ const ok = (msg) => console.log('  ✓ ' + msg)
 
 const scrolls = new Set(rows.map((r) => r.scroll))
 if (scrolls.size === ACCENTS.length) ok('滚动条跟随强调色：' + rows.map((r) => r.accent + '→' + r.scroll).join('  '))
-else fail('滚动条没跟随强调色（%d 种强调只出 %d 种滚动条色）', ACCENTS.length, scrolls.size)
+else fail(`滚动条没跟随强调色（${ACCENTS.length} 种强调只出 ${scrolls.size} 种滚动条色）`)
 
 for (const r of rows) {
   const good = r.main >= 12 && r.secondary >= 6.1 && r.tertiary >= 4.6

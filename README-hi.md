@@ -1,6 +1,6 @@
 # dsh-theme-palette
 
-[English](README.md) · [中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
+[English](README.md) · [中文](README-zh.md) · [日本語](README-ja.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 DeepSeek Harness (वेब और डेस्कटॉप) के लिए थीम पैलेट: **4 प्रीसेट + कस्टम पैलेट × लाइट/डार्क**, दो स्वतंत्र अक्ष।
 
@@ -30,6 +30,7 @@ DeepSeek Harness (वेब और डेस्कटॉप) के लिए �
 - पूरी रैंप **दोबारा गणना** होती है, बदली नहीं जाती: OKLCH पुनर्निर्माण → भूमिका-आधारित क्रोमा → **sRGB गैमट क्लैंप** → वास्तविक सतहों पर कंट्रास्ट हल;
 - होस्ट के सभी रंग टोकन शामिल (रंगीन पैलेट में 122 टोकन, मोनो में 17; 1080 सेटिंग संयोजन पूरी तरह स्कैन किए गए): मुख्य टेक्स्ट, द्वितीयक, तृतीयक, कैप्शन, लिंक, साइडबार, कार्ड, उपयोगकर्ता बबल, प्राइमरी बटन, स्क्रॉलबार, स्विच, Markdown शीर्षक/बोल्ड, कोड ब्लॉक;
 - समायोज्य: टेक्स्ट की तीव्रता (3), साइडबार की गहराई (3), Markdown ज़ोर, स्क्रॉलबार, स्विच का रंग;
+- **कस्टम पैलेट** (सतह / टेक्स्ट / एक्सेंट चुनें — इंजन अपने कंट्रास्ट वादे बनाए रखता है), `dshs1.` कोड से **कॉन्फ़िगरेशन निर्यात/आयात**, **हाई-कॉन्ट्रास्ट** मोड, और **4 UI भाषाएँ**;
 - **स्व-उपचार**: यदि होस्ट ओवरराइड परत हटा दे, पैलेट फिर से लगा दी जाती है; बार-बार विफलता पर स्व-उपचार रुक जाता है और सेटिंग्स पेज पर इसे दोबारा चालू करने का बटन मिलता है;
 - **कंट्रास्ट के वादे**: मुख्य टेक्स्ट के लिए लाइट में 12:1 और डार्क में 10:1 (उच्च-कंट्रास्ट में 15:1), द्वितीयक ≥ 6.2 (लाइट) / 8.0 (डार्क) (HC 9 / 9.6), तृतीयक ≥ 4.85 (लाइट) / 6.4 (डार्क) (HC 7 / 7.6), लिंक ≥ 4.95 (लाइट) / 4.62 (डार्क) (HC 7) — लाइट की सीमाओं में रंग-दृष्टि दोष के लिए गुंजाइश रखी गई है; डार्क लिंक अतिरिक्त APCA Lc ≥ 60 (HC 75) — उन्हीं सतहों पर मापे गए जहाँ टेक्स्ट वास्तव में बैठता है (डार्क में ज़्यादा चाहिए: गहरे बैकग्राउंड पर WCAG अनुपात पढ़ने की सुविधा को बढ़ा-चढ़ा कर दिखाता है);
 - वादे की गई सतहें लाइट में 00/60 और डार्क में 950/875 हैं; डार्क 800 (मॉड्यूल सतह) और 850 (उप-सतह) मुख्य टेक्स्ट को नहीं सहनाते — रिपोर्ट उन्हें अलग «नीति से बाहर» के रूप में गिनती है (न तो पास, न ही फेल);
@@ -43,7 +44,7 @@ cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
 ```
 
-किसी संस्करण को पिन करने के लिए `pnpm add dsh-theme-palette@<version>` — मौजूदा रिलीज़ [CHANGELOG.md](CHANGELOG.md) में है।
+किसी संस्करण को पिन करने के लिए `pnpm add dsh-theme-palette@<version>` — [CHANGELOG.md](CHANGELOG.md) में जिन संस्करणों पर「未发布」लिखा है वे npm पर कभी प्रकाशित नहीं हुए; उन्हें पिन न करें।
 GitHub रिलीज़ के tarball से: [releases पेज](https://github.com/zuoyunlai/dsh-theme-palette/releases) पर asset चुनें, फिर `pnpm add <tgz का पता>`।
 
 इसके बाद **GUI को फिर से शुरू करें** — चल रहा प्रोसेस पुराना मॉड्यूल रखता है। खोलें: अवतार → सेटिंग्स → **Color theme**।
@@ -79,14 +80,16 @@ OKLCH(L, C, ह्यू) ──► गैमट क्लैंप (C पर �
 ## Development
 
 ```bash
-node palette-dev.mjs                  # सभी पैलेट का टोकन रिपोर्ट
-node tools/sheet.mjs                  # पैलेट बोर्ड → tools/sheet.html
-node tools/shoot-sheet.mjs            # बोर्ड का स्क्रीनशॉट (हेडलेस Chrome)
-node tools/compare.mjs --dir tools/out/<run>        # बेसलाइन से तुलना
-node tools/preview-settings.mjs --lang en           # सेटिंग्स पेज रेंडर करें
-node tools/release.mjs --dry          # रिलीज़ प्रीफ़्लाइट
-node tools/release.mjs --tag          # npm पर प्रकाशित + टैग
-node tools/release.mjs --ci           # CI में प्रकाशन: केवल tag; Actions Trusted Publishing से प्रकाशित करे
+npm run report                        # सभी पैलेट का टोकन रिपोर्ट (-- --hc से उच्च-कंट्रास्ट)
+npm run sheet                         # पैलेट बोर्ड → tools/sheet.html
+npm run shot-sheet                    # बोर्ड का स्क्रीनशॉट (हेडलेस Chrome/Edge)
+npm run compare -- --dir tools/out/<run>   # स्थानीय बेसलाइन से तुलना
+npm run preview -- --lang en          # सेटिंग्स पेज रेंडर करें
+npm run contract                      # होस्ट टोकन/DOM कॉन्ट्रैक्ट (strict: SKIP विफल)
+npm run release -- --dry              # रिलीज़ प्रीफ़्लाइट
+npm run release -- --tag              # npm पर प्रकाशित + टैग
+npm run release -- --ci               # CI में प्रकाशन: केवल tag; Actions Trusted Publishing से प्रकाशित करे
+npm run clean                         # स्थानीय tarball / tools/out / dist हटाएँ
 ```
 
 स्क्रीनशॉट रिग्रेशन की दो परतें हैं: पैलेट बोर्ड (बिना लॉगिन) और CDP से असली डेस्कटॉप विंडो (`tools/shoot-desktop.mjs`, `--remote-debugging-port` चाहिए)। देखें [tools/README.md](tools/README.md)।

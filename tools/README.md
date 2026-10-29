@@ -9,13 +9,19 @@
 
 两层的产物都进 `tools/out/<run>/`，与 `tools/baseline/` 做 sha256 对比。
 
+> **基线是本地产物，不入库**（审计 2026-10-29 P2-15）：`compare.mjs` 不在 CI 里，入库的基线会随机器与
+> Chrome 版本悄悄腐烂，看起来像"回归门"，其实没人跑。第一次用先
+> `npm run compare -- --dir tools/out/<run> --update` 生成自己机器上的基线；`tools/baseline-desktop/`
+> 同理（早已在 `.gitignore` 里）。
+
 ## A. 配色看板
 
 ```bash
-node tools/sheet.mjs                              # 生成 tools/sheet.html（颜色来自生产引擎）
-node tools/shoot-sheet.mjs                        # 4 张 → tools/out/<时间戳>/
-node tools/compare.mjs --dir tools/out/<run>      # 与基线比
-node tools/compare.mjs --dir tools/out/<run> --update   # 认这次为新基线
+npm run sheet                                     # 生成 tools/sheet.html（颜色来自生产引擎）
+npm run shot-sheet                                # 4 张 → tools/out/<时间戳>/
+npm run compare -- --dir tools/out/<run>          # 与基线比
+npm run compare -- --dir tools/out/<run> --update # 认这次为新基线
+npm run clean                                     # 清掉 tarball 与 tools/out（不动 dist/）
 ```
 
 同一台机器上渲染是确定的：连跑两次哈希一致（已实测 4/4 未变），所以**字节变化 = 像素变化**，
@@ -41,8 +47,8 @@ node tools/compare.mjs --dir tools/out/<run> --update   # 认这次为新基线
 然后：
 
 ```bash
-node tools/shoot-desktop.mjs --out tools/out/desk1        # 4 套 × 浅/深 = 8 张
-node tools/compare.mjs --dir tools/out/desk1 --baseline tools/baseline-desktop
+npm run shot-desktop -- --out tools/out/desk1        # 4 套 × 浅/深 = 8 张
+npm run compare -- --dir tools/out/desk1 --baseline tools/baseline-desktop
 ```
 
 `shoot-desktop.mjs` 的驱动方式不是"点界面"，而是走插件自己的开发期接口：

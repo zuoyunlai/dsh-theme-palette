@@ -1,6 +1,6 @@
 # dsh-theme-palette
 
-[English](README.md) · [中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
+[English](README.md) · [中文](README-zh.md) · [日本語](README-ja.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 Theme palette for DeepSeek Harness (web & desktop): **4 preset palettes + custom × light/dark**, two independent axes.
 
@@ -44,7 +44,7 @@ cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
 ```
 
-To pin a version, use `pnpm add dsh-theme-palette@<version>` — the current release is listed in [CHANGELOG.md](CHANGELOG.md).
+To pin a version, use `pnpm add dsh-theme-palette@<version>` — [CHANGELOG.md](CHANGELOG.md) marks the sections that were never published to npm, so you do not pin one of those.
 From a GitHub Release tarball: pick the asset on the [releases page](https://github.com/zuoyunlai/dsh-theme-palette/releases) and install it with `pnpm add <path-to-tgz>`.
 
 Then **restart the GUI** — a running process keeps the old module. Open it from avatar → Settings → **Color theme**.
@@ -80,14 +80,16 @@ Design notes, per-component rationale and the contrast tables live in [docs/DESI
 ## Development
 
 ```bash
-node palette-dev.mjs                  # token report for all palettes
-node tools/sheet.mjs                  # palette board → tools/sheet.html
-node tools/shoot-sheet.mjs            # screenshot the board (headless Chrome)
-node tools/compare.mjs --dir tools/out/<run>        # diff against baseline
-node tools/preview-settings.mjs --lang en           # render the settings page
-node tools/release.mjs --dry          # release preflight
-node tools/release.mjs --tag          # publish to npm + tag
-node tools/release.mjs --ci           # CI publish: tag only; Actions publishes via Trusted Publishing
+npm run report                        # token report for every palette (add -- --hc for the high-contrast tier)
+npm run sheet                         # palette board → tools/sheet.html
+npm run shot-sheet                    # screenshot the board (headless Chrome/Edge)
+npm run compare -- --dir tools/out/<run>   # diff against the local baseline
+npm run preview -- --lang en          # render the settings page
+npm run contract                      # host token / DOM contract (strict: SKIP becomes a failure)
+npm run release -- --dry              # release preflight
+npm run release -- --tag              # publish to npm + tag
+npm run release -- --ci               # CI publish: tag only; Actions publishes via Trusted Publishing
+npm run clean                         # drop local tarballs / tools/out / dist
 ```
 
 Screenshot regression has two layers: the palette board (no auth needed) and the real desktop window via CDP (`tools/shoot-desktop.mjs`, needs `--remote-debugging-port`). See [tools/README.md](tools/README.md).

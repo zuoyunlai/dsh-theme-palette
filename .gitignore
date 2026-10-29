@@ -10,6 +10,9 @@ Thumbs.db
 tools/preview.html
 *.tgz
 tools/baseline-desktop/
+# 截图基线是**本机产物**（审计 2026-10-29 P2-15）：compare.mjs 不在 CI 里，入库的基线会随机器/Chrome 版本腐烂。
+# 需要基线时在自己机器上 `npm run compare -- --dir tools/out/<run> --update` 生成。
+tools/baseline/
 
 # 主题包导出产物（可重建）
 dist/

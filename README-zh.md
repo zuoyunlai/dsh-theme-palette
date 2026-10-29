@@ -1,6 +1,6 @@
 # dsh-theme-palette
 
-[English](README.md) · [中文](README-zh.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
+[English](README.md) · [中文](README-zh.md) · [日本語](README-ja.md) · [Español](README-es.md) · [Português](README-pt.md) · [हिन्दी](README-hi.md)
 
 DeepSeek Harness（Web / 桌面）的主题配色插件：**4 套预设 + 自定义配色 × 明暗两模式**，两个轴互相独立。
 
@@ -44,7 +44,7 @@ cd ~/.dsh/profiles/desktop
 pnpm add dsh-theme-palette
 ```
 
-要钉住某个版本，用 `pnpm add dsh-theme-palette@<version>` —— 当前版本见 [CHANGELOG.md](CHANGELOG.md)。
+要钉住某个版本，用 `pnpm add dsh-theme-palette@<version>` —— [CHANGELOG.md](CHANGELOG.md) 里标了「未发布」的那些版本从未发到 npm，别钉它们。
 从 GitHub Release 的 tarball：在 [Releases 页面](https://github.com/zuoyunlai/dsh-theme-palette/releases) 选好资产后 `pnpm add <tgz 路径>`。
 
 装完**必须重启 GUI**（运行中的进程仍持旧模块）。入口：左下角头像 → **设置** → 「**主题色**」。
@@ -80,14 +80,16 @@ OKLCH(L, C, hue) ──► 色域钳位（对 C 二分） ──► sRGB hex
 ## Development
 
 ```bash
-node palette-dev.mjs                  # 全部配色的 token 报表
-node tools/sheet.mjs                  # 配色看板 → tools/sheet.html
-node tools/shoot-sheet.mjs            # 无头 Chrome 截看板
-node tools/compare.mjs --dir tools/out/<run>        # 与基线比
-node tools/preview-settings.mjs --lang en           # 渲染设置页
-node tools/release.mjs --dry          # 发版预检
-node tools/release.mjs --tag          # 发 npm + 打 tag
-node tools/release.mjs --ci           # CI 发布：只打 tag，Actions 用 Trusted Publishing 发布
+npm run report                        # 全部配色的 token 报表（-- --hc 切高对比档）
+npm run sheet                         # 配色看板 → tools/sheet.html
+npm run shot-sheet                    # 无头 Chrome/Edge 截看板
+npm run compare -- --dir tools/out/<run>   # 与本地基线比
+npm run preview -- --lang en          # 渲染设置页
+npm run contract                      # 宿主 token / DOM 契约（strict：SKIP 即失败）
+npm run release -- --dry              # 发版预检
+npm run release -- --tag              # 发 npm + 打 tag
+npm run release -- --ci               # CI 发布：只打 tag，Actions 用 Trusted Publishing 发布
+npm run clean                         # 清掉本地 tarball / tools/out / dist
 ```
 
 截图回归分两层：配色看板（免登录）与桌面真机窗口（`tools/shoot-desktop.mjs`，需要 `--remote-debugging-port`）。见 [tools/README.md](tools/README.md)。

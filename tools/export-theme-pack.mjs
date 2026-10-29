@@ -41,7 +41,7 @@ new Function('window', 'localStorage', 'document', 'navigator', source)(
 globalThis.__def.factory(() => ({ createElement: () => null, useState: (v) => [v, () => {}], useSyncExternalStore: () => 'mono' }))
 if (!engine) throw new Error('生产引擎没有暴露 dev 钩子')
 
-const { buildTokens, SCHEMES, contrast, floors } = engine
+const { buildTokens, SCHEMES, contrast, CONTRAST_TARGETS } = engine
 const HEX = /^#[0-9a-f]{6}([0-9a-f]{2})?$/i
 const MODES = ['light', 'dark']
 
@@ -62,9 +62,13 @@ for (const scheme of SCHEMES) {
     const bg = tokens['--dsw-static-neutral-bluish-' + (mode === 'light' ? '00' : '950')]
     const fg = tokens['--dsw-static-neutral-bluish-' + (mode === 'light' ? '1000' : '50')]
     const ratio = bg && fg ? contrast(fg, bg) : 0
-    const F = floors(false)
-    if (!(ratio >= F.main - 0.02)) {
-      console.error(`  ✗ ${scheme.id}/${mode}: 正文对画布 ${ratio.toFixed(2)} < ${F.main}`)
+    // 承诺目标按**明暗两侧分开取**（2026-10-29 顺手修掉的一个洞）：
+    // 这里原来写死 floors(false).main（浅色 12:1）去卡深色，而深色正文的承诺是 10:1
+    // （CONTRAST_TARGETS.main.dark.normal，1.9.7 策略 A）。结果是深色包永远「失败」——
+    // 三套深色包一个都导不出来，而 `npm run packs` 从来不在 CI 里，所以没人发现。
+    const target = CONTRAST_TARGETS.main[mode].normal
+    if (!(ratio >= target - 0.02)) {
+      console.error(`  ✗ ${scheme.id}/${mode}: 正文对画布 ${ratio.toFixed(2)} < ${target}`)
       failed++
       continue
     }

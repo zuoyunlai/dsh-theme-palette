@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.13.1'
+    const PLUGIN_VERSION = '1.13.2'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -346,11 +346,15 @@ window.__ModuleLoader__.load({
       { id: 'menuL', label: 'menu', mode: 'light', scope: false, token: '--dsw-specific-menu' },
       { id: 'menuD', label: 'menu', mode: 'dark', scope: false, token: '--dsw-specific-menu' },
     ]
+    // 角色的**序号**只用来在 UI 里排序与显示，不再携带 step 映射（审计 2026-10-29 P3-5）：
+    // 原来这里还挂着 step: { light: '1000', dark: '50' } 一份"角色 ↔ 色阶档"的映射，
+    // 但真正渲染用的是下面的 CONTRAST_ROLE_TOKENS，那份 step 全仓 0 引用 —— 死数据，
+    // 只会让人以为改它有用（并且会与真正生效的那张表无声漂移）。
     const CONTRAST_ROLES = [
-      { id: 'main', step: { light: '1000', dark: '50' } },
-      { id: 'secondary', step: { light: '700', dark: '300' } },
-      { id: 'tertiary', step: { light: '600', dark: '400' } },
-      { id: 'link', step: { light: 'link', dark: 'link' } },
+      { id: 'main' },
+      { id: 'secondary' },
+      { id: 'tertiary' },
+      { id: 'link' },
     ]
     /**
      * 角色 → **屏幕上真正渲染的那个 token**（按顺序取第一个存在的）。
@@ -610,7 +614,20 @@ window.__ModuleLoader__.load({
     const srgbToLinear = (v) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))
     const linearToSrgb = (v) => (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.pow(v, 1 / 2.4) - 0.055)
 
+    /** 合法的 6 位 hex（大小写均可）。带 alpha 的 8 位串由 flatten / withAlpha 另行处理。 */
+    const HEX6_RE = /^#[0-9a-fA-F]{6}$/
+
+    /**
+     * hex → [r, g, b]。**非法输入返回 null**（审计 2026-10-29 P2-2）。
+     *
+     * 原来是裸 `parseInt`：'#abc' / '' 产出 NaN 三元组、null 直接 TypeError，
+     * 一路传到 rgbToHex 就是 `#NaNNaNNaN`。用户路径本来进不来（readCustom / 取色器都过 HEX_RE，
+     * 敌意配色实测 0 个畸形 token），但颜色引擎不该把脏输入变成 NaN 颜色 —— 一旦将来多一个入口，
+     * 症状会是"某个 token 变成 #NaNNaNNaN、整块样式失效"，而且极难回溯到调用点。
+     * 这里一次收口：返回 null，由各调用点退化成确定值（见各处注释）。
+     */
     function hexToRgb(hex) {
+      if (typeof hex !== 'string' || !HEX6_RE.test(hex)) return null
       return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
     }
 
@@ -620,9 +637,9 @@ window.__ModuleLoader__.load({
         .join('')
     }
 
-    /** hex -> [L, C, h]（OKLCH；h 为角度）。 */
+    /** hex -> [L, C, h]（OKLCH；h 为角度）。非法输入退化为黑（确定值，不是 NaN）。 */
     function toOklch(hex) {
-      const [r, g, b] = hexToRgb(hex).map((v) => srgbToLinear(v / 255))
+      const [r, g, b] = (hexToRgb(hex) || [0, 0, 0]).map((v) => srgbToLinear(v / 255))
       const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
       const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
       const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
@@ -672,7 +689,7 @@ window.__ModuleLoader__.load({
     }
 
     function luminance(hex) {
-      const [r, g, b] = hexToRgb(hex).map((v) => srgbToLinear(v / 255))
+      const [r, g, b] = (hexToRgb(hex) || [0, 0, 0]).map((v) => srgbToLinear(v / 255))
       return 0.2126 * r + 0.7152 * g + 0.0722 * b
     }
 
@@ -706,7 +723,7 @@ window.__ModuleLoader__.load({
     const APCA_DELTA_Y_MIN = 0.0005
 
     function apcaY(hex) {
-      const [r, g, b] = hexToRgb(hex).map((v) => Math.pow(v / 255, APCA_MAIN_TRC))
+      const [r, g, b] = (hexToRgb(hex) || [0, 0, 0]).map((v) => Math.pow(v / 255, APCA_MAIN_TRC))
       return APCA_R_CO * r + APCA_G_CO * g + APCA_B_CO * b
     }
     /**
@@ -730,9 +747,16 @@ window.__ModuleLoader__.load({
         out = (Math.pow(bg, APCA_REV_BG) - Math.pow(txt, APCA_REV_TXT)) * APCA_SCALE
         out = out > -APCA_LO_CLIP ? 0 : out + APCA_LO_OFF
       }
-      return Math.round(out * 100) / 100
+      // 返回 **Lc / 100**（暗底浅字为负），精度 0.01 Lc（审计 2026-10-29 P1-8）。
+      // 原来写 `Math.round(out * 100) / 100`：out 本身就是 Lc/100，于是引擎发出的每个 Lc
+      // 都被取成整数（20000 组采样验证）。后果是 raiseToLc 在"量化后"的 Lc 首次过闸就停 ——
+      // 真实值可以是 59.77 而闸门是 60。现在 0.01 Lc 的精度让闸门与读数一致。
+      //
+      // ⚠️ 分母是 10000 不是 100：out = Lc/100，要保留 0.01 Lc 就是 round(Lc×100)/10000。
+      // 审计报告给的 `Math.round(out * 10000) / 100` 会返回 **Lc 本身**（差 100 倍），
+      // 照抄会让 raiseToLc 的 ×100 换算变成 ×1，实测算出的"Lc"是 -4708。
+      return Math.round(out * 10000) / 10000
     }
-
     /** 沿亮度把 fg 压暗，直到与 bg 的对比度达标（用于「实心按钮 + 浅色文字」）。 */
     function darkenUntil(hex, bgHex, target) {
       const [L, C, hue] = toOklch(hex)
@@ -745,10 +769,18 @@ window.__ModuleLoader__.load({
       return fromOklch(cur, C, hue)
     }
 
-    /** 线性混色：a 占 weight，其余取 b。 */
+    /**
+     * 混色：a 占 weight，其余取 b。**在 gamma 编码的 sRGB 分量上直接插值**
+     * （审计 2026-10-29 P2-1：原注释写"线性混色"，与实现不符）。
+     *
+     * 这是刻意的：混出来的结果用在气泡 / 代码块 / 引用块 / 表头这些**大面积色块**上，
+     * 在编码空间插值得到的中间色与"设计软件里拖滑杆"的观感一致；换到线性光里混，
+     * 黑→白的中点会从 #808080 变成 #bcbcbc（明显偏亮），色块会发灰。
+     * 想改语义就先改这条注释，别只改实现。
+     */
     function mixHex(a, b, weight) {
-      const x = hexToRgb(a)
-      const y = hexToRgb(b)
+      const x = hexToRgb(a) || [0, 0, 0]
+      const y = hexToRgb(b) || [0, 0, 0]
       return rgbToHex(x.map((v, i) => v * weight + y[i] * (1 - weight)))
     }
 
@@ -756,12 +788,14 @@ window.__ModuleLoader__.load({
       return hex + Math.round(clamp(alpha, 0, 1) * 255).toString(16).padStart(2, '0')
     }
 
-    /** 8 位 hex（带 alpha）按「覆盖在 bg 上」合成为不透明色；不带 alpha 时原样返回。 */
+    /** 8 位 hex（带 alpha）按「覆盖在 bg 上」合成为不透明色；不带 alpha 或非法输入时原样返回。 */
     function flatten(hex, bgHex) {
       if (typeof hex !== 'string' || hex.length !== 9) return hex
       const fg = hexToRgb(hex.slice(0, 7))
       const bg = hexToRgb(bgHex)
+      if (!fg || !bg) return hex
       const a = parseInt(hex.slice(7, 9), 16) / 255
+      if (Number.isNaN(a)) return hex
       return rgbToHex(fg.map((v, i) => v * a + bg[i] * (1 - a)))
     }
 
@@ -777,8 +811,9 @@ window.__ModuleLoader__.load({
     }
     function simulateCvd(hex, kind) {
       const m = CVD_MATRICES[kind]
-      if (!m || typeof hex !== 'string') return hex
-      const lin = hexToRgb(hex).map((v) => {
+      const rgb = hexToRgb(hex)
+      if (!m || !rgb) return hex
+      const lin = rgb.map((v) => {
         const s = v / 255
         return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4)
       })
@@ -788,7 +823,13 @@ window.__ModuleLoader__.load({
         return clamp(c * 255, 0, 255)
       }))
     }
-    /** 两个颜色在给定色觉模拟下的 OKLab 距离（×100，与设计软件的 ΔE 同量级）。 */
+    /**
+     * 两个颜色在给定色觉模拟下的 **OKLab 欧氏距离 ×100**（审计 2026-10-29 P2-3）。
+     *
+     * 它**不是** CIE ΔE（CIE76/CIEDE2000）：两者量级差得远 —— 纯红 vs 纯绿本函数给 51.98，
+     * CIE76 给 170.58。所以 UI 文案一律写「OKLab ΔE」，不要拿它跟设计软件里的 ΔE 阈值直接比。
+     * （×100 只是把 0–1 的距离摊到"设计软件里常见"的量级，不改变它是 OKLab 距离这件事。）
+     */
     function deltaE(a, b, kind) {
       const x = toOklch(simulateCvd(a, kind))
       const y = toOklch(simulateCvd(b, kind))
@@ -1446,18 +1487,25 @@ window.__ModuleLoader__.load({
     const RAMP_MIN_GAP = 0.006
     const RAMP_INK_LIGHT = ['600', '700', '1000']
     const RAMP_INK_DARK = ['50', '300', '400']
-    const RAMP_ORDER = ['00', '50', '60', '75', '100', '150', '200', '300', '400', '500', '600', '700', '750', '800', '850', '875', '950', '1000']
+    // 「900」曾在 1.9.x 漏掉（审计 2026-10-29 P1-7）：BASE.bluish 有 '900'，色阶也会构建它，
+    // 但它不在这个顺序表里 → 既不参与递减比较也不被钳制；实测 875→900 的 ΔL 只有 0.00549
+    // （低于自己声明的 0.006），而上面的注释还宣称"整条色阶单调"。
+    const RAMP_ORDER = ['00', '50', '60', '75', '100', '150', '200', '300', '400', '500', '600', '700', '750', '800', '850', '875', '900', '950', '1000']
 
+    /**
+     * 把色阶压回「序号越大越深」。**没有返回值**（审计 2026-10-29 P3-6）：
+     * 原来返回一个 `changed` 布尔，但唯一调用点丢弃它 —— 看起来像是打算用来触发重解或提示，
+     * 实际成了死数据。归一化是"静默修正"：它只会让颜色变深（对比度只升不降），
+     * 不需要调用方做任何事。要验证它有没有生效，请断言**结果**的不变式（见 check-audit 第 22 组）。
+     */
     function enforceRampOrder(pairs) {
       const key = (step) => '--dsw-static-neutral-bluish-' + step
       const present = RAMP_ORDER.filter((s) => pairs[key(s)])
-      if (present.length < 8) return false
-      let changed = false
+      if (present.length < 8) return
       const clampTo = (step, side, Lmax, C, h) => {
         const [L] = toOklch(pairs[key(step)][side])
         if (L <= Lmax) return
         pairs[key(step)][side] = fromOklch(Lmax, C, h)
-        changed = true
       }
       for (const side of ['light', 'dark']) {
         const inks = side === 'light' ? RAMP_INK_LIGHT : RAMP_INK_DARK
@@ -1484,7 +1532,6 @@ window.__ModuleLoader__.load({
           }
         }
       }
-      return changed
     }
 
     /* ---------- token 层结果缓存（审计 3.11）----------
@@ -2332,11 +2379,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.13.1：发版流程改用 Trusted Publishing（OIDC，无需长期 token），发布物带来源证明；没有任何界面变化。',
+        notice: '1.13.2：无障碍与文案修正——面板的 lang 跟随实际界面语言、「色觉缺陷」提示改称 OKLab ΔE、对比度矩阵的承载面名跟随语言；配色数值不变。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
-        explainCvd: '色觉缺陷提示：{kind} 视觉下强调色与底色/文字几乎同色（ΔE {dE}）。文字仍可读，但按钮与色块会分不开；换一个更亮或更暗的强调色即可。',
+        surfaceNames: { menu: '菜单' },
+        explainCvd: '色觉缺陷提示：{kind} 视觉下强调色与底色/文字几乎同色（OKLab ΔE {dE}）。文字仍可读，但按钮与色块会分不开；换一个更亮或更暗的强调色即可。',
         preview: '预览',
         sample: '试试示例',
         copyDiag: '复制诊断',
@@ -2404,11 +2452,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.13.1：發版流程改用 Trusted Publishing（OIDC，無需長期 token），發布物帶來源證明；沒有任何介面變化。',
+        notice: '1.13.2：無障礙與文案修正——面板的 lang 跟隨實際介面語言、「色覺缺陷」提示改稱 OKLab ΔE、對比度矩陣的承載面名跟隨語言；配色數值不變。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
-        explainCvd: '色覺缺陷提示：{kind} 視覺下強調色與底色/文字幾乎同色（ΔE {dE}）。文字仍可讀，但按鈕與色塊會分不開；換一個更亮或更暗的強調色即可。',
+        surfaceNames: { menu: '選單' },
+        explainCvd: '色覺缺陷提示：{kind} 視覺下強調色與底色/文字幾乎同色（OKLab ΔE {dE}）。文字仍可讀，但按鈕與色塊會分不開；換一個更亮或更暗的強調色即可。',
         preview: '預覽',
         sample: '試試示例',
         copyDiag: '複製診斷',
@@ -2476,11 +2525,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.13.1: releases now use Trusted Publishing (OIDC, no long-lived token), so published artifacts carry provenance; no UI changes.',
+        notice: '1.13.2: accessibility and wording fixes — the panel lang now matches the rendered UI language, the colour-vision note says OKLab ΔE, and contrast-matrix surface names follow the UI language. Palette values are unchanged.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
-        explainCvd: 'Colour-vision note: with {kind} vision the accent is nearly the same colour as the background/text (ΔE {dE}). Text stays readable, but buttons and swatches blur together — pick a lighter or darker accent.',
+        surfaceNames: { menu: 'Menu' },
+        explainCvd: 'Colour-vision note: with {kind} vision the accent is nearly the same colour as the background/text (OKLab ΔE {dE}). Text stays readable, but buttons and swatches blur together — pick a lighter or darker accent.',
         preview: 'Preview',
         sample: 'Try a sample',
         copyDiag: 'Copy diagnostics',
@@ -2548,11 +2598,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.13.1：リリースを Trusted Publishing（OIDC、長期トークン不要）に移行し、公開物に来歴証明が付くようになりました。UI の変更はありません。',
+        notice: '1.13.2：アクセシビリティと文言の修正 — パネルの lang を実際の表示言語に合わせ、「OKLab ΔE」表記に訂正、コントラスト表の面名も表示言語に追従。配色の数値は変わりません。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
-        explainCvd: '色覚のヒント：{kind} ではアクセント色が背景・文字とほぼ同色になります（ΔE {dE}）。文字は読めますが、ボタンと色面は見分けにくくなります。もっと明るい／暗いアクセント色に変えてください。',
+        surfaceNames: { menu: 'メニュー' },
+        explainCvd: '色覚のヒント：{kind} ではアクセント色が背景・文字とほぼ同色になります（OKLab ΔE {dE}）。文字は読めますが、ボタンと色面は見分けにくくなります。もっと明るい／暗いアクセント色に変えてください。',
         preview: 'プレビュー',
         sample: 'サンプルを試す',
         copyDiag: '診断をコピー',
@@ -2680,11 +2731,16 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       const customColors = React.useSyncExternalStore(props.subscribeCustom, props.getCustomColors)
       const locale = React.useSyncExternalStore(props.subscribeLocale, props.getLocale)
       const langPref = React.useSyncExternalStore(props.subscribeLocale, props.getLangPref)
-      const langAttr = langPref !== 'auto'
-        ? langPref
-        : ((typeof document !== 'undefined' && document.documentElement && document.documentElement.lang) || 'zh-CN')
-      const txt = TEXT[locale] || TEXT['zh-CN']
-      const lb = LABELS[locale] || LABELS['zh-CN']
+      // section 的 lang 必须等于**这里实际渲染的文案语言**（审计 2026-10-29 P2-5）。
+      // 原来 auto 时取宿主的 documentElement.lang —— 宿主是 fr 时面板标 lang="fr"，
+      // 渲染的却是英文（pickLocale 的兜底），屏幕阅读器会按法语规则念英文。
+      // `locale` 已经过 pickLocale（auto → 命中 zh/ja/en 才跟随，否则 en），直接用它。
+      const langAttr = locale
+      // 组件级回退必须与 pickLocale 同口径（审计 2026-10-29 P2-4）：
+      // 原来这里兜 zh-CN，而 pickLocale 明确兜 en —— 同一文件两套口径，
+      // 一旦某条 locale 缺键，界面会在这个组件里跳回中文。
+      const txt = TEXT[locale] || TEXT['en']
+      const lb = LABELS[locale] || LABELS['en']
       // 只在自定义面板显示；解释是只读的，不改变任何设置。取色异常不应拖垮设置页。
       let explain = null
       if (current === 'custom') {
@@ -2909,7 +2965,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
               { id: 'dsh-tp-matrix-body' },
               h('thead', null, h('tr', null,
                 h('th', { scope: 'col' }, ''),
-                CONTRAST_SURFACES.map((sf) => h('th', { key: sf.id, scope: 'col' }, (sf.label || sf.id) + (sf.scope === false ? '※' : ''))))),
+                // 表头：数字档直接印档位号（"950" 在各语言里都该是 950），
+                // 有 label 的面（menu）走本地化表 —— 原来四种语言一律印英文 "menu"（审计 2026-10-29 P2-13）
+                CONTRAST_SURFACES.map((sf) => h('th', { key: sf.id, scope: 'col' },
+                  (sf.label ? (txt.surfaceNames && txt.surfaceNames[sf.label]) || sf.label : sf.id)
+                  + (sf.scope === false ? '※' : ''))))),
               h('tbody', null, report.rows.map((row) => h('tr', { key: row.role },
                 h('th', { scope: 'row' }, roleLabel[row.role] || row.role),
                 row.cells.map((cell) => {
@@ -3185,8 +3245,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     }
 
     // 开发期接口：palette-dev.mjs 通过它拿到同一套引擎（避免「报表好看、上线不一样」）
+    // 下限常量也导出（审计 2026-10-29 P1-1）：`check-audit` 要用**字面量**断言它们没被改小，
+    // 必须能在测试里读到"实现里的那个数"。此前测试拿 floors() 的返回值当期望值 ——
+    // 常量一改、期望值跟着改，那道门就是空转的（变异实测：CONTRAST_FLOOR 4.5→1.0 全绿）。
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, hexToRgb, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
     }
 
     return {
@@ -3898,7 +3961,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
                   kind: 'popupSelect',
                   options: async () => {
                     const loc = pickLocale(readLangPref())
-                    const lb = LABELS[loc] || LABELS['zh-CN']
+                    const lb = LABELS[loc] || LABELS['en']
                     return SCHEMES.map((s) => ({
                       id: s.id,
                       label: lb.scheme[s.id] || s.label,
