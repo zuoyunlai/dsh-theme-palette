@@ -200,7 +200,7 @@ try {
 
   // 2b) 文档口径对账门（2026-10-28 P1-a/d）：README 里最容易被手改漂移的两处数字。
   //     · 「深色链接 6.4」是错的：代码真源 MIN_LINK_DARK = 4.62，深色链接另过 APCA Lc ≥ 60。
-  //     · 「27,000+ 处 token 引用」不可复现：今天可复现的量是 122 个 token × 1080 组设置。
+  //     · 「27,000+ 处 token 引用」不可复现：今天可复现的量是 158 个 token × 1080 组设置。
   for (const f of readmeFiles) {
     const text = fs.readFileSync(path.join(root, f), 'utf8')
     check(!/27[,.](000|000)\+/.test(text), `${f} 不再出现不可复现的「27,000+ 处 token 引用」`)

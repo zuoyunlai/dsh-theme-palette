@@ -28,7 +28,7 @@ The plugin only stacks colour tokens through `ctx.theme.overrideTokens`; it does
 
 - **4 presets + custom** — Mono, Warm sand, Indigo, Moss (each adapting to light *and* dark independently), plus a custom palette derived from three colours;
 - the whole ramp is **recomputed**, not swapped: OKLCH rebuild → role-based chroma → **sRGB gamut clamp** → contrast solved on real surfaces;
-- every host colour token is covered (122 tokens for tinted palettes, 17 for mono; 1080 setting combinations fully scanned): body, secondary, tertiary, captions, links, sidebars, cards, user bubble, primary button, scrollbars, switches, Markdown headings/bold, code blocks;
+- every host colour token is covered (158 tokens for tinted palettes, 19 for mono; 1080 setting combinations fully scanned): body, secondary, tertiary, captions, links, sidebars, cards, user bubble, primary button, scrollbars, switches, Markdown headings/bold, code blocks;
 - adjustable: text tint (3), sidebar depth (3), Markdown emphasis, scrollbars, switch colour;
 - **custom palette** (pick surface / text / accent — the engine keeps its contrast guarantees), **config export/import** via a `dshs1.` code, **high-contrast** mode, and 4 UI languages;
 - **self-healing**: if the host drops the override layer, the palette is re-applied; after repeated failures auto-restore pauses and the settings page offers a re-enable button;

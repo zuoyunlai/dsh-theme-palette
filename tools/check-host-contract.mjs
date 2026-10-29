@@ -153,5 +153,60 @@ else {
   check(text.includes('md-code-block'), '构建 CSS 仍含 md-code-block')
 }
 
+// ---- 表面别名映射：宿主把别名声成 var(--dsw-static-neutral-bluish-NN)，插件必须逐条对上 ----
+// 2026-10-29：左侧会话行的悬停卡拿到的仍是宿主原始色阶（#2c2c2e），因为插件只覆盖色阶、
+// 指望 var 链生效。插件改成把这些别名直接写成色阶值后，**映射必须与宿主一致**，
+// 否则会出现「层 1 用了层 2 的档」这种静默错色。这里从宿主真实构建里解出映射并对表。
+if (texts.theme) {
+  const grabBlock = (sel) => {
+    const esc = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp('(?:^|[};"])' + esc + '\\{([^}]*)\\}', 'g')
+    let acc = ''
+    let m
+    while ((m = re.exec(texts.theme))) acc += ';' + m[1]
+    return acc
+  }
+  const lightCss = grabBlock('body')
+  const darkCss = grabBlock('body[data-ds-dark-theme]')
+  const stepOf = (css, name) => {
+    const m = new RegExp(name.replace(/[-]/g, '\\-') + ':var\\(--dsw-static-neutral-bluish-(\\d+)\\)').exec(css)
+    return m ? m[1] : null
+  }
+  // 插件侧的期望表：从 client.js 的 dev 钩子取（与生产同一份表）
+  const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  let expected = null
+  try {
+    const src = fs.readFileSync(path.join(repoRoot, 'client.js'), 'utf8')
+    const win = {
+      __ModuleLoader__: { load: (d) => { globalThis.__def = d } },
+      __DSH_THEME_PALETTE_DEV__: (api) => { globalThis.__api = api },
+      __DSH_THEME_PALETTE_DEV_REQUEST__: true,
+    }
+    new Function('window', 'localStorage', 'document', 'navigator', src)(
+      win,
+      { getItem: () => null, setItem: () => {} },
+      { documentElement: { lang: 'zh' } },
+      { language: 'zh' },
+    )
+    globalThis.__def.factory(() => ({ createElement: () => null, useState: (v) => [v, () => {}], useSyncExternalStore: () => 'mono' }))
+    expected = globalThis.__api.SURFACE_ALIAS_STEPS
+  } catch (err) {
+    console.log('  ! 读不到 client.js 的 SURFACE_ALIAS_STEPS，跳过别名映射核对：' + (err && err.message))
+  }
+  if (expected) {
+    let drift = 0
+    let sample = ''
+    for (const [name, steps] of Object.entries(expected)) {
+      const hostLight = stepOf(lightCss, name)
+      const hostDark = stepOf(darkCss, name)
+      if (hostLight !== steps.light || hostDark !== steps.dark) {
+        drift++
+        sample = `${name}：宿主 ${hostLight}/${hostDark} vs 插件 ${steps.light}/${steps.dark}`
+      }
+    }
+    check(drift === 0, `表面别名映射与宿主一致（${Object.keys(expected).length} 条，漂移 ${drift}${sample ? '：' + sample : ''}）`)
+  }
+}
+
 console.log(failed === 0 ? '\n契约检查通过' : `\n${failed} 项契约失效`)
 process.exit(failed === 0 ? 0 : 1)

@@ -44,7 +44,7 @@ const {
   devContrastReport, markdownCss, rampsFor, apcaContrast, pickLocale, raiseToLc,
   CONTRAST_SURFACES, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN,
   MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK,
-  FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, hexToRgb,
+  FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, hexToRgb, SURFACE_ALIAS_STEPS,
 } = globalThis.__api
 const custom = SCHEMES.find((s) => s.id === 'custom')
 const F = floors(false)
@@ -767,6 +767,44 @@ console.log('\n26) 颜色引擎对畸形 hex 有定义行为（审计 2026-10-29
   }
   check(ok, 'toOklch 对畸形输入不抛错、不出 NaN（退化为定义值）')
   check(hexToRgb('#a1b2c3').join(',') === '161,178,195', 'hexToRgb 正常路径不受守影响')
+}
+
+console.log('\n27) 表面别名显式落地，不依赖 var 链（2026-10-29 悬停卡实测缺陷）')
+{
+  // 宿主把一批别名写成 `var(--dsw-static-neutral-bluish-NN)` 的引用；插件现在直接写成色阶值
+  // （左侧会话行的悬停卡此前拿到的是宿主原始色阶 #2c2c2e）。这里断言：
+  // ① 每个别名都在覆盖表里；② 两个模式的值都等于它声明的色阶档。
+  // 宿主侧映射是否漂移由 tools/check-host-contract.mjs 核对。
+  const scheme = SCHEMES.find((s) => s.id === 'warm')
+  const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  // 这 11 个别名由求解器/专门逻辑给值（品牌色、三级文字、链接、代码块、侧栏），
+  // 别名表遇到"已存在"的键会跳过，所以它们本来就不该等于色阶档。
+  const BESPOKE = new Set([
+    '--dsw-alias-brand-primary', '--dsw-alias-label-caption', '--dsw-alias-label-dimmed',
+    '--dsw-alias-label-document-preview', '--dsw-alias-label-secondary', '--dsw-alias-label-tertiary',
+    '--dsw-alias-markdown-code-block', '--dsw-alias-markdown-code-block-banner',
+    '--dsw-specific-sidebar-fill', '--dsw-specific-sidebar-nav-item-active',
+    '--dsw-specific-sidebar-nav-item-hover',
+  ])
+  let missing = 0
+  let mismatch = 0
+  let sample = ''
+  for (const [name, steps] of Object.entries(SURFACE_ALIAS_STEPS)) {
+    const pair = t[name]
+    if (!pair) { missing++; continue }
+    if (BESPOKE.has(name)) continue
+    for (const mode of ['light', 'dark']) {
+      const ramp = t['--dsw-static-neutral-bluish-' + steps[mode]]
+      if (!ramp || pair[mode] !== ramp[mode]) { mismatch++; sample = name + '/' + mode }
+    }
+  }
+  check(Object.keys(SURFACE_ALIAS_STEPS).length >= 40, `别名表够全（${Object.keys(SURFACE_ALIAS_STEPS).length} 条）`)
+  check(missing === 0, `每个表面别名都在覆盖表里（缺 ${missing} 个）`)
+  check(mismatch === 0, `表面别名 = 对应色阶档（不一致 ${mismatch}${sample ? '：' + sample : ''}）`)
+  // 悬停卡那条链上的关键三档：层底 / 卡片层 / 主文字
+  for (const name of ['--dsw-alias-bg-layer-1', '--dsw-alias-bg-layer-2', '--dsw-alias-label-primary']) {
+    check(!!t[name] && !!t[name].dark, `${name} 已被显式覆盖（不再靠 var 链）`)
+  }
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)

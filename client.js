@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.13.2'
+    const PLUGIN_VERSION = '1.13.3'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1493,6 +1493,68 @@ window.__ModuleLoader__.load({
     const RAMP_ORDER = ['00', '50', '60', '75', '100', '150', '200', '300', '400', '500', '600', '700', '750', '800', '850', '875', '900', '950', '1000']
 
     /**
+     * 宿主里所有「只是 `var(--dsw-static-neutral-bluish-NN)` 引用」的别名 → 色阶档位。
+     *
+     * 为什么要在插件侧再落一遍（2026-10-29，用户实测：左侧会话行的悬停卡不跟随主题色）：
+     * 插件过去只覆盖色阶，指望浏览器在 `body` 上把这些引用替换掉。实测那张卡拿到的仍是
+     * **宿主原始色阶**（背景 #2c2c2e = 宿主 850，标题近白 = 宿主 50），说明这条链在浮层里不生效。
+     * 这里把 47 个别名**直接写成色阶值**，不再依赖中间引用 —— 链正常时结果完全一致（同一档），
+     * 链不生效时就是修复。表由宿主构建逐条导出，`tools/check-host-contract.mjs` 会核对映射没漂。
+     *
+     * 只补**插件没有专门求解过**的键：label-secondary / tertiary / link / brand / bubble /
+     * markdown-code-block / sidebar-fill 等由求解器给值，循环里遇到已存在的一律跳过。
+     */
+    const SURFACE_ALIAS_STEPS = {
+      '--dsw-alias-bg-base': { light: '00', dark: '950' },
+      '--dsw-alias-bg-document-preview': { light: '100', dark: '950' },
+      '--dsw-alias-bg-layer-1': { light: '00', dark: '875' },
+      '--dsw-alias-bg-layer-2': { light: '00', dark: '850' },
+      '--dsw-alias-bg-layer-3': { light: '00', dark: '800' },
+      '--dsw-alias-bg-module-platform': { light: '60', dark: '800' },
+      '--dsw-alias-bg-overlay': { light: '150', dark: '700' },
+      '--dsw-alias-brand-primary': { light: '1000', dark: '50' },
+      '--dsw-alias-brand-primary-invert': { light: '1000', dark: '50' },
+      '--dsw-alias-brand-text': { light: '1000', dark: '50' },
+      '--dsw-alias-button-contrast-fill': { light: '700', dark: '50' },
+      '--dsw-alias-button-elevated-fill': { light: '00', dark: '750' },
+      '--dsw-alias-button-floating-fill': { light: '00', dark: '850' },
+      '--dsw-alias-button-floating-hover': { light: '75', dark: '800' },
+      '--dsw-alias-button-ghost-active-border': { light: '500', dark: '600' },
+      '--dsw-alias-button-ghost-active-fill': { light: '100', dark: '750' },
+      '--dsw-alias-button-ghost-active-hover': { light: '150', dark: '700' },
+      '--dsw-alias-button-primary-dimmed': { light: '100', dark: '750' },
+      '--dsw-alias-button-primary-hover': { light: '750', dark: '100' },
+      '--dsw-alias-interactive-bg-hover-solid': { light: '75', dark: '800' },
+      '--dsw-alias-label-caption': { light: '400', dark: '600' },
+      '--dsw-alias-label-dimmed': { light: '200', dark: '750' },
+      '--dsw-alias-label-document-preview': { light: '700', dark: '300' },
+      '--dsw-alias-label-primary': { light: '1000', dark: '50' },
+      '--dsw-alias-label-primary-dimmed': { light: '950', dark: '100' },
+      '--dsw-alias-label-primary-foreground': { light: '00', dark: '1000' },
+      '--dsw-alias-label-primary-inverted': { light: '00', dark: '800' },
+      '--dsw-alias-label-secondary': { light: '700', dark: '300' },
+      '--dsw-alias-label-tertiary': { light: '600', dark: '400' },
+      '--dsw-alias-markdown-citation': { light: '100', dark: '800' },
+      '--dsw-alias-markdown-code-block': { light: '50', dark: '900' },
+      '--dsw-alias-markdown-code-block-banner': { light: '50', dark: '850' },
+      '--dsw-alias-markdown-code-segment-selected': { light: '00', dark: '800' },
+      '--dsw-alias-markdown-code-segment-unselected': { light: '75', dark: '900' },
+      '--dsw-alias-markdown-placeholder': { light: '60', dark: '850' },
+      '--dsw-alias-markdown-tag': { light: '75', dark: '850' },
+      '--dsw-alias-switch-thumb': { light: '00', dark: '400' },
+      '--dsw-alias-toast-bg': { light: '800', dark: '750' },
+      '--dsw-alias-toast-label': { light: '00', dark: '00' },
+      '--dsw-alias-tooltip-bg': { light: '850', dark: '750' },
+      '--dsw-specific-input-major': { light: '00', dark: '850' },
+      '--dsw-specific-login-input': { light: '50', dark: '900' },
+      '--dsw-specific-selector': { light: '60', dark: '800' },
+      '--dsw-specific-sidebar-fill': { light: '50', dark: '900' },
+      '--dsw-specific-sidebar-nav-item-active': { light: '100', dark: '750' },
+      '--dsw-specific-sidebar-nav-item-hover': { light: '75', dark: '850' },
+      '--dsw-specific-tip': { light: '60', dark: '800' },
+    }
+
+    /**
      * 把色阶压回「序号越大越深」。**没有返回值**（审计 2026-10-29 P3-6）：
      * 原来返回一个 `changed` 布尔，但唯一调用点丢弃它 —— 看起来像是打算用来触发重解或提示，
      * 实际成了死数据。归一化是"静默修正"：它只会让颜色变深（对比度只升不降），
@@ -1860,6 +1922,20 @@ window.__ModuleLoader__.load({
       // 色阶排序归一化（审计 3.2）：放在最后 —— 前面的求解与参考墨色对齐都可能把某一档
       // 推出反序，收尾统一压一次，保证「序号越大越深」在整条色阶上成立。
       if (params.tinted) enforceRampOrder(pairs)
+      // 表面别名**显式落地**（2026-10-29 用户实测：左侧会话行的悬停卡没跟随主题色）。
+      //
+      // 宿主在 `body` / `body[data-ds-dark-theme]` 上把这一批别名写成
+      // `var(--dsw-static-neutral-bluish-NN)` 的**引用**；插件过去只覆盖色阶，指望浏览器
+      // 在 body 上完成 var 替换。实测那张悬停卡拿到的仍是宿主原始色阶值（#2c2c2e =
+      // 宿主 850），说明这条链在某些浮层里不生效。这里把别名**直接写成色阶值**，
+      // 不再依赖任何中间引用 —— 对能正常替换的地方结果完全一致（同一档），对不生效的地方是修复。
+      // 已由求解器给值的键（label-secondary / link / brand / bubble / sidebar-fill …）一律保留，不覆盖。
+      for (const [name, steps] of Object.entries(SURFACE_ALIAS_STEPS)) {
+        if (pairs[name]) continue
+        const light = pairs['--dsw-static-neutral-bluish-' + steps.light]
+        const dark = pairs['--dsw-static-neutral-bluish-' + steps.dark]
+        if (light && dark) pairs[name] = { light: light.light, dark: dark.dark }
+      }
       // 覆盖层标记（自愈判据用）：宿主撤销这一层时它会一起消失。
       pairs[LAYER_MARK] = { light: '1', dark: '1' }
 return pairs
@@ -2379,7 +2455,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.13.2：无障碍与文案修正——面板的 lang 跟随实际界面语言、「色觉缺陷」提示改称 OKLab ΔE、对比度矩阵的承载面名跟随语言；配色数值不变。',
+        notice: '1.13.3：修复左侧会话行悬停卡的底色不跟随主题色——宿主把表面别名写成色阶引用，浮层里这条链不生效；现在 47 个表面别名直接写入覆盖层。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2452,7 +2528,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.13.2：無障礙與文案修正——面板的 lang 跟隨實際介面語言、「色覺缺陷」提示改稱 OKLab ΔE、對比度矩陣的承載面名跟隨語言；配色數值不變。',
+        notice: '1.13.3：修正左側會話列懸停卡的底色不跟隨主題色——宿主把表面別名寫成色階引用，浮層裡這條鏈不生效；現在 47 個表面別名直接寫入覆蓋層。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2525,7 +2601,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.13.2: accessibility and wording fixes — the panel lang now matches the rendered UI language, the colour-vision note says OKLab ΔE, and contrast-matrix surface names follow the UI language. Palette values are unchanged.',
+        notice: '1.13.3: fixes the session-row hover card not following the palette — the host declares surface aliases as ramp references and that chain does not resolve inside popovers; all 47 surface aliases now go straight into the override layer.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2598,7 +2674,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.13.2：アクセシビリティと文言の修正 — パネルの lang を実際の表示言語に合わせ、「OKLab ΔE」表記に訂正、コントラスト表の面名も表示言語に追従。配色の数値は変わりません。',
+        notice: '1.13.3：セッション行のホバーカードが配色に追随しない問題を修正——ホストは表面別名を色階の参照で宣言しており、ポップオーバー内ではその連鎖が効きません。47 個の表面別名をオーバーライド層へ直接書き込むようにしました。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
@@ -3249,7 +3325,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     // 必须能在测试里读到"实现里的那个数"。此前测试拿 floors() 的返回值当期望值 ——
     // 常量一改、期望值跟着改，那道门就是空转的（变异实测：CONTRAST_FLOOR 4.5→1.0 全绿）。
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, hexToRgb, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, SURFACE_ALIAS_STEPS, hexToRgb, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
     }
 
     return {

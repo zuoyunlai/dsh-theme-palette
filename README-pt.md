@@ -28,7 +28,7 @@ O plugin apenas empilha tokens de cor via `ctx.theme.overrideTokens`; não regis
 
 - **4 predefinidas + personalizada** — Mono, Areia quente, Índigo, Musgo (cada uma adaptada de forma independente ao claro e ao escuro), mais uma paleta personalizada derivada de três cores;
 - a escala é **recalculada** por completo: reconstrução OKLCH → croma por papel → **limite de gamut sRGB** → contraste resolvido sobre superfícies reais;
-- todos os tokens de cor do host são cobertos (122 tokens nas paletas com tinta, 17 na mono; 1080 combinações de ajuste escaneadas): texto, secundário, terciário, legendas, links, barras laterais, cartões, balão do usuário, botão primário, barras de rolagem, interruptores, títulos/negrito de Markdown, blocos de código;
+- todos os tokens de cor do host são cobertos (158 tokens nas paletas com tinta, 19 na mono; 1080 combinações de ajuste escaneadas): texto, secundário, terciário, legendas, links, barras laterais, cartões, balão do usuário, botão primário, barras de rolagem, interruptores, títulos/negrito de Markdown, blocos de código;
 - ajustável: intensidade do texto (3), profundidade da barra lateral (3), ênfase de Markdown, barras de rolagem, cor dos interruptores;
 - **paleta personalizada** (escolha superfície / texto / acento — o motor mantém as garantias de contraste), **exportação/importação de configuração** por um código `dshs1.`, **modo de alto contraste** e **4 idiomas de interface**;
 - **autorrecuperação**: se o host descartar a camada de override, a paleta é reaplicada; após falhas repetidas a autorrecuperação pausa e a página de ajustes oferece um botão para reativá-la;
