@@ -2322,6 +2322,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         healedSuffix: ' 次',
         healStopped: '⚠ 自动恢复已停用（连续失败 {n} 次），主题可能无法自动回到你的配色。',
         healRetry: '重新启用自动恢复',
+        cmdDesc: '切换主题配色（4 套预设 + 自定义）',
         text: '强度',
         sidebar: '左侧栏底色',
         lang: '语言',
@@ -2393,6 +2394,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         healedSuffix: ' 次',
         healStopped: '⚠ 自動恢復已停用（連續失敗 {n} 次），主題可能無法自動回到你的配色。',
         healRetry: '重新啟用自動恢復',
+        cmdDesc: '切換主題配色（4 套預設 + 自訂）',
         text: '強度',
         sidebar: '左側欄底色',
         lang: '語言',
@@ -2464,6 +2466,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         healedSuffix: 'x',
         healStopped: '⚠ Auto-restore is disabled ({n} consecutive failures). Your palette may not come back on its own.',
         healRetry: 'Re-enable auto-restore',
+        cmdDesc: 'Switch the theme palette (4 presets + custom)',
         text: 'Strength',
         sidebar: 'Sidebar surface',
         lang: 'Language',
@@ -2535,6 +2538,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         healedSuffix: ' 回）',
         healStopped: '⚠ 自動復元が停止しました（連続 {n} 回失敗）。配色が自動では戻らない可能性があります。',
         healRetry: '自動復元を再開',
+        cmdDesc: 'テーマ配色を切り替える（4 プリセット + カスタム）',
         text: '強さ',
         sidebar: '左サイドバーの背景',
         lang: '言語',
@@ -3874,6 +3878,42 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
             PaletteSection,
           ),
         )
+
+        // /theme-palette 斜杠命令（2026-10-29，P2-K）：4 步切换（头像 → 设置 → 主题色 → 点卡片）变 1 步。
+        // 走 ctx.inject 做可选依赖：宿主没有 commandUi 服务时静默不挂，不影响主题本体。
+        // 照 dsh-free-search 的生产先例抄骨架，两条它的坑注记一并遵守：
+        //   ① description/label 必须传**函数**——传字符串会让 ui-commands 读回时抛 TypeError，
+        //     整份 "/" 候选列表一起失败（菜单空白、别的命令也点不到）；
+        //   ② 名字带前缀避免与宿主命令目录撞名——candidates() 对撞名是直接 throw，同样炸整个菜单。
+        try {
+          ctx.inject(['commandUi'], (sctx) => {
+            const command = sctx.get('commandUi')
+            sctx.effect(() => {
+              const dispose = command.register({
+                name: 'theme-palette',
+                label: () => TEXT[pickLocale(readLangPref())].nav,
+                description: () => TEXT[pickLocale(readLangPref())].cmdDesc,
+                available: () => true,
+                ui: {
+                  kind: 'popupSelect',
+                  options: async () => {
+                    const loc = pickLocale(readLangPref())
+                    const lb = LABELS[loc] || LABELS['zh-CN']
+                    return SCHEMES.map((s) => ({
+                      id: s.id,
+                      label: lb.scheme[s.id] || s.label,
+                      active: s.id === current,
+                    }))
+                  },
+                  onSelect: async (option) => { setPalette(option.id) },
+                },
+              })
+              return dispose
+            })
+          })
+        } catch (err) {
+          console.warn('[dsh-theme-palette] /theme-palette 命令注册失败（不影响配色本体）：', err)
+        }
       },
     }
   },

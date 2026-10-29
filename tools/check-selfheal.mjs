@@ -16,7 +16,9 @@
  *   4. 反复失效：达到上限后停用自动重放（只报一次错）
  *   5. 无层累积：重放前先撤旧层
  *   6. 取色拖动（1.11.0）：同一帧内多次改色只重放一次，且以最后一次为准
- *   7. 停用后手动重启（resetHeal）：重新启用自动恢复并能重放；随后卸载不再重放
+ *   8. /theme-palette 命令（1.13.0，P2-K）：可选依赖注册、label/description 为函数
+ *      （字符串会让整个 / 菜单崩）、popupSelect 五选项、onSelect 真切换
+ *   7. 停用后手动重启（resetHeal）：重新启用自动恢复并能重放；随后卸载不再重放、命令一并摘除
  *      （旧版场景 7 排在停用之后，healDisabled 恒真使断言形同虚设 —— 2026-10-28 修）
  *
  * 用法：node tools/check-selfheal.mjs
@@ -123,22 +125,32 @@ new Function(...names, source)(...names.map((n) => sandbox[n]))
 if (!sandbox.def) throw new Error('拿不到插件定义')
 
 // ---- 假 ctx：抓住 effect 的清理函数、theme/change 订阅与设置页注入的 setter ----
-let effectCleanup = null
+let effectCleanups = []   // ctx.effect 可被多次调用（boot 层 + 命令注册各一次），清理函数全部收集
 let settingsInject = null
 const handlers = new Map()
+const injectCalls = []   // ctx.inject(名数组, 回调) 的记录：/theme-palette 命令是可选依赖，注册入口要有人调
+let commandContribution = null   // /theme-palette 命令注册进来的 contribution（commandUi 假服务记录）
 const ctx = {
-  get: (n) => (n === 'theme' ? theme : undefined),
+  get: (n) => (n === 'theme' ? theme
+    : n === 'commandUi' ? { register: (c) => { commandContribution = c; return () => { commandContribution = null } } }
+      : undefined),
   effect: (f) => {
     const d = f()
-    effectCleanup = typeof d === 'function' ? d : null
-    return () => { if (effectCleanup) { effectCleanup(); effectCleanup = null } }
+    if (typeof d === 'function') effectCleanups.push(d)
+    return () => {}
   },
   on: (name, fn) => { handlers.set(name, fn); return () => handlers.delete(name) },
-  inject: () => {},
+  inject: (names, cb) => { injectCalls.push(names); if (cb) cb(ctx) },
   slots: {
     inject: (n, fn) => fn(),
     register: (def) => { settingsInject = def.inject(); return () => {} },
   },
+}
+const runEffectCleanups = () => {
+  while (effectCleanups.length) {
+    const d = effectCleanups.pop()
+    try { d() } catch (err) { logs.push('cleanup err: ' + err) }
+  }
 }
 const plugin = sandbox.def.factory(() => ({
   createElement: (type, props, ...kids) => ({ type, props: props || {}, kids }),
@@ -219,6 +231,32 @@ try {
     check(false, '未捕获设置页 inject（无法验证帧合并）')
   }
 
+  // 8. /theme-palette 命令（2026-10-29 P2-K）：可选依赖注册 + popupSelect + onSelect 真切换
+  //    放在卸载之前测：卸载清理会把 contribution 一并摘掉。
+  const cmd = commandContribution
+  check(injectCalls.some((names) => Array.isArray(names) && names.includes('commandUi')),
+    '向宿主请求了 commandUi 服务（可选依赖，宿主没有就静默不挂）')
+  check(!!cmd && cmd.name === 'theme-palette', `命令注册成功：name=theme-palette（带前缀防与宿主命令目录撞名）`)
+  check(!!cmd && typeof cmd.description === 'function' && typeof cmd.label === 'function',
+    'label/description 均为函数（传字符串会让 ui-commands 抛 TypeError、整个 / 菜单崩——dsh-free-search 踩过的坑）')
+  check(!!cmd && !!cmd.ui && cmd.ui.kind === 'popupSelect', 'ui.kind = popupSelect（弹 5 套配色选择）')
+  if (cmd && cmd.ui && typeof cmd.ui.options === 'function') {
+    const opts = await cmd.ui.options()
+    check(Array.isArray(opts) && opts.length === 5, `options 返回 5 套配色（实得 ${Array.isArray(opts) ? opts.length : '非数组'}）`)
+    if (Array.isArray(opts)) {
+      check(opts.every((o) => o && typeof o.id === 'string' && typeof o.label === 'string' && typeof o.active === 'boolean'),
+        '每个选项带 id/label/active（active 标当前配色）')
+      const activeIds = opts.filter((o) => o.active).map((o) => o.id)
+      check(activeIds.length === 1, `恰好一个 active（当前配色 ${activeIds.join(',')}）`)
+    }
+    const beforeSwitch = overrideCalls
+    await cmd.ui.onSelect({ id: 'indigo' })
+    check(overrideCalls === beforeSwitch + 1, `onSelect 切换配色恰好 +1 次 overrideTokens（实得 +${overrideCalls - beforeSwitch}）`)
+    check(markPresent(), 'onSelect 切换后标记属性仍在')
+  } else {
+    check(false, 'ui.options 不是函数（命令注册形态不对）')
+  }
+
   // 7. 停用后手动重启（resetHeal，2026-10-28 P0-B）→ 能重放；随后卸载不再重放
   //    旧版这一场景排在停用之后、healDisabled 已恒真，断言形同虚设 —— 现在先证明
   //    resetHeal 真的把自动恢复救活了（撤销+到期+触发 → 必须重放），再验卸载。
@@ -229,7 +267,7 @@ try {
     advance(700000)
     fireThemeChange()
     check(overrideCalls > beforeReenable, `resetHeal 重新启用后能重放（实得 +${overrideCalls - beforeReenable}）`)
-    if (effectCleanup) effectCleanup()
+    runEffectCleanups()
     // 与真实 cordis 一致：ctx.on 的监听挂在 fiber 上，fiber dispose 时自动摘除
     // （假 ctx 的 on 只是塞 Map，得在这里补上这层语义，否则卸载后监听器残留、断言必红）
     handlers.clear()
@@ -238,6 +276,7 @@ try {
     fireThemeChange()
     check(overrideCalls === afterUnload, '卸载后不再重放')
     check(disposeCalls >= 1, '卸载时撤掉了覆盖层')
+    check(commandContribution === null, '卸载后命令注册一并摘除')
   } else {
     check(false, '未捕获 settingsInject.resetHeal（无法验证手动重启自动恢复）')
   }
