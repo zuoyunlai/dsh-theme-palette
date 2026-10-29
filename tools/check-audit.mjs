@@ -44,7 +44,7 @@ const {
   devContrastReport, markdownCss, rampsFor, apcaContrast, pickLocale, raiseToLc,
   CONTRAST_SURFACES, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN,
   MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK,
-  FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, hexToRgb, SURFACE_ALIAS_STEPS,
+  FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, hexToRgb, SURFACE_ALIAS_STEPS, hostPatchCss,
 } = globalThis.__api
 const custom = SCHEMES.find((s) => s.id === 'custom')
 const F = floors(false)
@@ -805,6 +805,22 @@ console.log('\n27) 表面别名显式落地，不依赖 var 链（2026-10-29 悬
   for (const name of ['--dsw-alias-bg-layer-1', '--dsw-alias-bg-layer-2', '--dsw-alias-label-primary']) {
     check(!!t[name] && !!t[name].dark, `${name} 已被显式覆盖（不再靠 var 链）`)
   }
+}
+
+console.log('\n28) 宿主悬停卡：写死的底色被接回配色（2026-10-29 第二次回执）')
+{
+  // dsh-web-frontend 把悬停卡底色写死在卡片元素上：`--dsw-hovercard-bg:#2C2C2E`。
+  // 插件用一个两档同值的专用 token + 注入样式把它接回配色的暗面（暗底白字，对比度不变）。
+  const scheme = SCHEMES.find((s) => s.id === 'moss')
+  const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  const hc = t['--dsh-tp-hovercard-bg']
+  const ramp = t['--dsw-static-neutral-bluish-850']
+  check(!!hc && hc.light === hc.dark, '--dsh-tp-hovercard-bg 明暗同值（悬停卡保持暗底白字）')
+  check(!!hc && !!ramp && hc.dark === ramp.dark, '悬停卡底色 = 色阶 850 的暗面（带配色色相，不再是中性 #2C2C2E）')
+  check(typeof hostPatchCss === 'string' && /\*\{--dsw-hovercard-bg:var\(--dsh-tp-hovercard-bg[^}]*!important\}/.test(hostPatchCss),
+    '宿主补丁样式把 --dsw-hovercard-bg 接到专用 token 上（!important：宿主声明在卡片元素自身）')
+  const mono = buildTokens(SCHEMES.find((s) => s.id === 'mono'), 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  check(!mono['--dsh-tp-hovercard-bg'], '黑白档不产出悬停卡 token（回落到宿主原色）')
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)

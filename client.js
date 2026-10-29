@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.13.3'
+    const PLUGIN_VERSION = '1.13.4'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1936,6 +1936,12 @@ window.__ModuleLoader__.load({
         const dark = pairs['--dsw-static-neutral-bluish-' + steps.dark]
         if (light && dark) pairs[name] = { light: light.light, dark: dark.dark }
       }
+      // 宿主悬停卡的专用底色（配合 HOST_PATCH_CSS）：宿主把卡片底色写死成 #2C2C2E，
+      // 这里给一个**两档都取暗面**的 token —— 卡片始终是暗底白字（对比度不变），但带上配色色相。
+      if (pairs['--dsw-static-neutral-bluish-850']) {
+        const hoverBg = pairs['--dsw-static-neutral-bluish-850'].dark
+        pairs['--dsh-tp-hovercard-bg'] = { light: hoverBg, dark: hoverBg }
+      }
       // 覆盖层标记（自愈判据用）：宿主撤销这一层时它会一起消失。
       pairs[LAYER_MARK] = { light: '1', dark: '1' }
 return pairs
@@ -1996,7 +2002,25 @@ return pairs
       '[class*="_markdown_"] :not(pre) > code{background:var(--dshtp-code-inline,inherit)}',
     ].join('')
 
-    /* ================= 设置页样式（head 里第二条 CSS） ================= */
+    /* ================= 宿主补丁样式（head 里第三条 CSS） =================
+     *
+     * 为什么需要它（2026-10-29 用户实测，第二轮回执）：
+     *   宿主的「悬停卡」（hover card，会话行悬停时弹出的小卡）把底色**写死在卡片元素上**：
+     *   dsh-web-frontend 的 `._card_38jqx_9{--dsw-hovercard-bg:#2C2C2E;background:var(--dsw-hovercard-bg)}`。
+     *   这是一个**手写字面量**（全站唯一的大写 hex），既不读色阶也不读别名 ——
+     *   所以浅色模式下它也是深灰、明暗两套主题下颜色一模一样。改多少条 token 都碰不到它。
+     *
+     * 修法：给一个**专用 token**（`--dsh-tp-hovercard-bg`，见 buildTokens：两档都取色阶 850 的暗色值），
+     * 再用 `*` + `!important` 把它接到宿主的 `--dsw-hovercard-bg` 上 —— 宿主的声明在卡片元素自身，
+     * 普通声明压不过它，必须 important。白字保持不变（暗底白字，对比度不受影响），
+     * 卡片从此带上配色的色相，而不是一块中性的深灰。
+     */
+    const HOST_PATCH_STYLE_ID = 'dsh-theme-palette/host-patch.css'
+    const HOST_PATCH_CSS = `
+/* 宿主悬停卡：--dsw-hovercard-bg 是宿主写死的 #2C2C2E；这里接回配色的暗面（见 buildTokens 的 --dsh-tp-hovercard-bg） */
+*{--dsw-hovercard-bg:var(--dsh-tp-hovercard-bg,#2c2c2e)!important}
+`
+    /* ================= 设置页样式（head 里第四条 CSS） ================= */
     const SETTINGS_STYLE_ID = 'dsh-theme-palette/settings.css'
     const SETTINGS_CSS = `
 .dsh-tp{display:flex;flex-direction:column;gap:14px;width:100%;color:var(--dsw-alias-label-primary);box-sizing:border-box}
@@ -2127,8 +2151,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       }
     }
 
-    function installSettingsStyle() {
-      try {
+    function installSettingsStyle() {      try {
         if (typeof document === 'undefined' || !document.head) return () => {}
         let tag = document.querySelector('style[data-plugin-css="' + SETTINGS_STYLE_ID + '"]')
         if (!tag) {
@@ -2142,6 +2165,25 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         return () => { if (tag.parentNode) tag.remove() }
       } catch (err) {
         console.warn('[dsh-theme-palette] 设置页样式注入失败：', err)
+        return () => {}
+      }
+    }
+
+    /** 宿主补丁（悬停卡写死的底色）——与另外两条样式同构：覆盖写 + 卸载移除。 */
+    function installHostPatchStyle() {
+      try {
+        if (typeof document === 'undefined' || !document.head) return () => {}
+        let tag = document.querySelector('style[data-plugin-css="' + HOST_PATCH_STYLE_ID + '"]')
+        if (!tag) {
+          tag = document.createElement('style')
+          tag.dataset.plugin = 'dsh-theme-palette'
+          tag.dataset.pluginCss = HOST_PATCH_STYLE_ID
+          document.head.appendChild(tag)
+        }
+        tag.textContent = HOST_PATCH_CSS
+        return () => { if (tag.parentNode) tag.remove() }
+      } catch (err) {
+        console.warn('[dsh-theme-palette] 宿主补丁样式注入失败：', err)
         return () => {}
       }
     }
@@ -2455,7 +2497,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.13.3：修复左侧会话行悬停卡的底色不跟随主题色——宿主把表面别名写成色阶引用，浮层里这条链不生效；现在 47 个表面别名直接写入覆盖层。',
+        notice: '1.13.4：悬停卡底色不再被宿主写死成中性深灰 —— 接到配色的暗面，白字与对比度不变。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2528,7 +2570,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.13.3：修正左側會話列懸停卡的底色不跟隨主題色——宿主把表面別名寫成色階引用，浮層裡這條鏈不生效；現在 47 個表面別名直接寫入覆蓋層。',
+        notice: '1.13.4：懸停卡底色不再被宿主寫死成中性深灰 —— 接到配色的暗面，白字與對比度不變。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2601,7 +2643,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.13.3: fixes the session-row hover card not following the palette — the host declares surface aliases as ramp references and that chain does not resolve inside popovers; all 47 surface aliases now go straight into the override layer.',
+        notice: '1.13.4: the hover card background is no longer the hardcoded neutral dark from the host — it now follows the palette dark surface, keeping white text and contrast.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2674,7 +2716,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.13.3：セッション行のホバーカードが配色に追随しない問題を修正——ホストは表面別名を色階の参照で宣言しており、ポップオーバー内ではその連鎖が効きません。47 個の表面別名をオーバーライド層へ直接書き込むようにしました。',
+        notice: '1.13.4：ホバーカードの背景がホスト固定の中立ダークから配色の暗面に切り替わりました（白文字とコントラストはそのまま）。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
@@ -3325,7 +3367,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     // 必须能在测试里读到"实现里的那个数"。此前测试拿 floors() 的返回值当期望值 ——
     // 常量一改、期望值跟着改，那道门就是空转的（变异实测：CONTRAST_FLOOR 4.5→1.0 全绿）。
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, SURFACE_ALIAS_STEPS, hexToRgb, LAYER_MARK, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, SURFACE_ALIAS_STEPS, hexToRgb, LAYER_MARK, hostPatchCss: HOST_PATCH_CSS, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
     }
 
     return {
@@ -3941,10 +3983,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           applyAll('boot')
           const removeStyle = installMarkdownStyle()
           const removeSettings = installSettingsStyle()
+          const removeHostPatch = installHostPatchStyle()
           return () => {
             disposeLayer()
             removeStyle()
             removeSettings()
+            removeHostPatch()
             try {
               document.removeEventListener('visibilitychange', healOnVisible)
               window.removeEventListener('focus', healOnFocus)
