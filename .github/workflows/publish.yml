@@ -13,7 +13,11 @@
 # 前提（**只有一次手工动作**，在 npmjs.com 上做）：
 #   包 dsh-theme-palette → Settings → Trusted Publisher → 连 GitHub 仓库
 #   zuoyunlai/dsh-theme-palette，Workflow 文件名填 `publish.yml`，Environment 留空。
-#   连上之后，本 workflow 就能直接发版。
+#   ⚠️ 还要在 **Allowed actions** 里勾上「npm publish」—— 2026-09-03 之后创建的配置
+#   默认只允许 `npm stage publish`（暂存），不勾这一项，本 workflow 的 `npm publish` 会被拒。
+#   另外：trusted publishing 要求 **npm CLI ≥ 11.5.1**，所以本文件固定跑 node 24
+#   （node 22 自带 npm 10.x，会静默退化成「无凭据发布」，症状只是一个含糊的 404）。
+#   首次发布必须在配置后 2 天内完成，否则该配置会过期（npm 官方行为）。
 #
 # 发版顺序（**别弄反**，反了会 E409）：
 #   本地：门禁 → commit → 打 tag → 推 tag（`node tools/release.mjs --ci`）
@@ -46,10 +50,24 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # **必须是 node 24**：trusted publishing 要求 npm CLI ≥ 11.5.1，而 node 22 自带 npm 10.x ——
+          # 用 22 会静默退化成「无凭据发布」，只拿到一个语焉不详的 404
+          # （2026-10-29 实测：node 22 → E404 Not Found / PUT，排查了很久才发现是 npm 版本）。
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
           # 注意：**不要设 NODE_AUTH_TOKEN**。Trusted Publishing 走 OIDC，
           # 设了反而会让 npm 走 token 路径（并可能撞上「绕过 2FA 的 token 收紧」那条政策）。
+
+      - name: 断言 npm CLI 支持 trusted publishing（< 11.5.1 直接红，别让它退化成无凭据发布）
+        run: |
+          set -euo pipefail
+          echo "node $(node -v) / npm $(npm -v)"
+          node -e "
+            const [maj, min] = require('child_process').execSync('npm -v').toString().trim().split('.').map(Number);
+            const ok = maj > 11 || (maj === 11 && min >= 5);
+            if (!ok) { console.error('::error::npm CLI 版本过低（需要 ≥ 11.5.1 才支持 trusted publishing），当前 ' + maj + '.' + min); process.exit(1); }
+            console.log('npm CLI 满足 trusted publishing 要求（≥ 11.5.1）');
+          "
 
       - name: 取版本号
         id: ver
