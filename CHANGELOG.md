@@ -4,6 +4,18 @@
 
 ## 版本一览
 
+### 1.13.1
+发版链路改造：改用 **Trusted Publishing（OIDC）** 从 GitHub Actions 直接发布，不再依赖长期 token。**插件运行时没有任何变化** —— 这一版主要是让 README 与包内容跟上门禁与流程的真实状态。
+
+- **为什么改**：npm 正在收紧「绕过 2FA 的 token」用于直接发布的权限（registry 会打印 `npm tokens that bypass 2FA are being restricted for account changes and direct publishing`）。本地发布要么给一次性验证码，要么换机制 —— 而本机账号从未在验证器 app 里开过 2FA，验证码这条路走不通。Trusted Publishing 用 OIDC 换一次性凭据，仓库里不存任何 token。
+- **新增 `.github/workflows/publish.yml`**：tag 触发 → 门禁 → `npm publish`（OIDC + provenance）→ 等 registry 放出 → **自动建 GitHub Release**（资产取 registry 官方 tarball，sha1 与 `dist.shasum` 逐字节核对；notes 从本文件对应版本节抽出）。顺带补上这个仓库的老缺口：此前没有 publish 用 CI，GitHub Release 每次都得手工建。
+- **`tools/release.mjs` 新增 `--ci` 模式**：本地只打签名 tag 推上去，不 publish。顺序不能反 —— 本地先 publish 会先占坑，CI 再 publish 必然 E409；`--ci` 与 `--skip-publish` 显式互斥。
+- **包内容守卫抽成 `tools/check-pack.mjs`**：清单原先写死在 `release.mjs` 里，只有本地发版路径会跑到，CI 直接推 tag 时会漏。现在本地 `npm run check`、CI、`release.mjs` 三条路径共用同一份 required（进了标准回归第 7 项）。
+- **踩到并修掉的一个坑（值得记下）**：workflow 最初用 node 22 —— 它自带 npm 10.x，**不支持 OIDC**，于是 `npm publish` 静默退化成「无凭据发布」，症状只是一个含糊的 `E404 Not Found - PUT`，看起来像仓库或权限问题。npm 官方要求 **npm CLI ≥ 11.5.1 + Node ≥ 22.14**，现固定 node 24 并加了断言（npm 版本不够直接红）。
+- **另一条 npm 的隐形前提**：2026-09-03 之后创建的 Trusted Publisher 配置**默认只允许 `npm stage publish`**，必须在 **Allowed actions** 里勾上「npm publish」才会允许直接发布；且首次成功发布要在配置后 2 天内完成，否则配置过期。
+- 五语 README 的 Development 段补 `--ci` 用法；`docs/WORKFLOW-NOTES.md` 新增第 11 节（事故出处、npm 政策、配置步骤、三个坑）。
+- 复核：`npm run check` 七件套全绿（新增包内容守卫）；两档报表 exit 0，1080 组硬门 0。
+
 ### 1.13.0
 新增斜杠命令 `/theme-palette`：切换配色从 4 步（头像 → 设置 → 主题色 → 点卡片）变成 1 步 —— 输入 `/theme-palette` 弹出 5 套配色（黑白 / 暖砂 / 靛蓝 / 苔绿 / 自定义），当前配色带 active 标记，选中即切换并保存。
 

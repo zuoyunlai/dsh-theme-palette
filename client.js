@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.13.0'
+    const PLUGIN_VERSION = '1.13.1'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -2332,7 +2332,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.13.0：新增斜杠命令 /theme-palette —— 输入即可切换配色（4 套预设 + 自定义，当前配色带选中标记），不必再走「头像 → 设置 → 主题色 → 点卡片」四步。',
+        notice: '1.13.1：发版流程改用 Trusted Publishing（OIDC，无需长期 token），发布物带来源证明；没有任何界面变化。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2404,7 +2404,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.13.0：新增斜杠命令 /theme-palette —— 輸入即可切換配色（4 套預設 + 自訂，目前配色帶選中標記），不必再走「頭像 → 設定 → 主題色 → 點卡片」四步。',
+        notice: '1.13.1：發版流程改用 Trusted Publishing（OIDC，無需長期 token），發布物帶來源證明；沒有任何介面變化。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2476,7 +2476,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.13.0: new slash command /theme-palette — type it to switch palettes (4 presets + custom, current one marked); no more avatar → Settings → Color theme → card.',
+        notice: '1.13.1: releases now use Trusted Publishing (OIDC, no long-lived token), so published artifacts carry provenance; no UI changes.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2548,7 +2548,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.13.0：新しいスラッシュコマンド /theme-palette（入力して配色を切り替え：4 プリセット + カスタム、現在選択中のものにチェックが付きます）。「アバター → 設定 → テーマカラー → カード」の 4 クリックが不要になりました。',
+        notice: '1.13.1：リリースを Trusted Publishing（OIDC、長期トークン不要）に移行し、公開物に来歴証明が付くようになりました。UI の変更はありません。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
