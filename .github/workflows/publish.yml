@@ -99,12 +99,15 @@ jobs:
             exit 0
           fi
           echo "id_token 长度 ${#TOK}"
-          # 与 npm CLI 完全相同的交换端点（npm/lib/utils/oidc.js:120）
-          OUT=$(curl -sS -X POST -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
-            -w '\nHTTP %{http_code}' \
-            "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$PKG")
-          echo "----- 交换结果（末尾是 HTTP 状态）-----"
-          printf '%s\n' "$OUT" | tail -c 900
+          # 与 npm CLI 完全相同的交换端点（npm/lib/utils/oidc.js:120）。
+          # 逐个试候选包名：如果信任配置误建在另一个包上，这里会直接显示出来。
+          for NAME in "$PKG" dsh-pet-plugin; do
+            OUT=$(curl -sS -X POST -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
+              -w '\nHTTP %{http_code}' \
+              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$NAME")
+            echo "----- $NAME -----"
+            printf '%s\n' "$OUT" | tail -c 400
+          done
 
       - name: 发布到 npm（Trusted Publishing：OIDC，无 token、无 OTP）
         env:
