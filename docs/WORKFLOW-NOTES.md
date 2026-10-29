@@ -259,3 +259,37 @@ node tools/release.mjs --ci
 （`gh release create … --latest`，资产核 sha1==dist.shasum）。`publish.yml` 把这一步也收进 CI，
 并保留同样的资产校验：资产仍取 registry 上的**官方** tarball，sha1 必须与 `dist.shasum` 逐字节一致。
 另外 workflow 里也带上了 provenance（`id-token: write`），发布物带来源证明。
+
+### 排查手册：OIDC 发布被拒时怎么定位（2026-10-29 实测）
+
+npm 会用 **404** 掩盖信任配置类错误（防止枚举），CLI 侧只看到一句
+`404 The requested resource 'pkg@ver' could not be found or you do not have permission to access it.`
+这时不要猜，直接打它的交换端点，拿原始原因：
+
+```yaml
+# 在 publish 步骤之前加一步（continue-on-error: true，只读诊断、不产生发布）
+- run: |
+    RESP=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+      "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org")
+    TOK=$(printf '%s' "$RESP" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>process.stdout.write(JSON.parse(s).value))")
+    curl -sS -X POST -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
+      -w '\nHTTP %{http_code}' \
+      "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/<包名>"
+```
+
+端点与 audience 取自 npm CLI 自己的实现（`npm/lib/utils/oidc.js:120`），不是猜的。
+判读：
+
+| 结果 | 含义 |
+|---|---|
+| `HTTP 201` + `{"token":"..."}` | 信任配置对上了，鉴权没问题 |
+| `{"message":"OIDC token exchange error - package not found"}` / 404 | 该 repo+workflow 组合**没有绑定到这个包**（建错包 / workflow 文件名不符 / 环境名不符） |
+| 200 但 `npm publish` 仍 404 | 权限层：检查 **Allowed actions** 是否勾上 `npm publish` |
+
+**实测到的三个坑（都踩过）**
+
+1. **npm 版本**：trusted publishing 需要 npm CLI ≥ 11.5.1。workflow 用 `node 22`（自带 npm 10.x）会静默退化成「无凭据发布」，症状只是含糊的 `E404 Not Found - PUT`。→ 固定 `node 24`，并加断言 `npm -v ≥ 11.5.1` 直接红。
+2. **Allowed actions**：2026-09-03 之后新建的信任配置**默认只允许 `npm stage publish`**，必须在 Allowed actions 里显式勾上 `npm publish`。
+3. **保存 ≠ 生效**：配置刚保存后立刻跑，仍可能拿到 `package not found`；隔一会儿（或保存后再确认一次）就通了。所以**别把一次失败当成结论**，重跑一次再判。
+
+另外：发布成功的标志不是 exit 0 就算完 —— 要核 `dist-tags.latest`、`dist.attestations`（provenance 是否带上）、以及 GitHub Release 资产 sha1 与 `dist.shasum` 是否逐字节一致。

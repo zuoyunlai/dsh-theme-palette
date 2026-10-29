@@ -82,33 +82,6 @@ jobs:
           npm run report
           node tools/check-pack.mjs
 
-      - name: 诊断 OIDC ↔ registry 交换（信任配置对不上时会打印 npm 的原始原因）
-        continue-on-error: true
-        run: |
-          set -uo pipefail
-          PKG=$(node -p "require('./package.json').name")
-          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
-            echo "没有 ACTIONS_ID_TOKEN_REQUEST_URL（缺 id-token: write 权限）"
-            exit 0
-          fi
-          RESP=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=npm:registry.npmjs.org")
-          TOK=$(printf '%s' "$RESP" | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{try{process.stdout.write(JSON.parse(s).value||'')}catch{process.stdout.write('')}})")
-          if [ -z "$TOK" ]; then
-            echo "GitHub 没返回 id_token：$(printf '%s' "$RESP" | head -c 300)"
-            exit 0
-          fi
-          echo "id_token 长度 ${#TOK}"
-          # 与 npm CLI 完全相同的交换端点（npm/lib/utils/oidc.js:120）。
-          # 逐个试候选包名：如果信任配置误建在另一个包上，这里会直接显示出来。
-          for NAME in "$PKG" dsh-pet-plugin; do
-            OUT=$(curl -sS -X POST -H "Authorization: Bearer $TOK" -H 'Content-Type: application/json' \
-              -w '\nHTTP %{http_code}' \
-              "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$NAME")
-            echo "----- $NAME -----"
-            printf '%s\n' "$OUT" | tail -c 400
-          done
-
       - name: 发布到 npm（Trusted Publishing：OIDC，无 token、无 OTP）
         env:
           TAG: ${{ steps.ver.outputs.tag }}
