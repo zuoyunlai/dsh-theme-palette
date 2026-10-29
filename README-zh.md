@@ -87,6 +87,7 @@ node tools/compare.mjs --dir tools/out/<run>        # 与基线比
 node tools/preview-settings.mjs --lang en           # 渲染设置页
 node tools/release.mjs --dry          # 发版预检
 node tools/release.mjs --tag          # 发 npm + 打 tag
+node tools/release.mjs --ci           # CI 发布：只打 tag，Actions 用 Trusted Publishing 发布
 ```
 
 截图回归分两层：配色看板（免登录）与桌面真机窗口（`tools/shoot-desktop.mjs`，需要 `--remote-debugging-port`）。见 [tools/README.md](tools/README.md)。

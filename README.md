@@ -87,6 +87,7 @@ node tools/compare.mjs --dir tools/out/<run>        # diff against baseline
 node tools/preview-settings.mjs --lang en           # render the settings page
 node tools/release.mjs --dry          # release preflight
 node tools/release.mjs --tag          # publish to npm + tag
+node tools/release.mjs --ci           # CI publish: tag only; Actions publishes via Trusted Publishing
 ```
 
 Screenshot regression has two layers: the palette board (no auth needed) and the real desktop window via CDP (`tools/shoot-desktop.mjs`, needs `--remote-debugging-port`). See [tools/README.md](tools/README.md).

@@ -205,3 +205,57 @@ tgz 资产正常，很容易被误记成“已验证”。1.7.0 起改用本机 
   推上去 CDN 几分钟后自动换图，**不需要再向目录仓库提 PR**。
 
 - 不要为了“看着绿”用网页上传或重写历史；签名是给 tag 对象加签名块，force-push 只更新那个 tag。
+
+---
+
+## 11. 发版：改用 Trusted Publishing，别再靠长期 token 绕 2FA
+
+**事故（2026-10-29）**：连续两次发版（1.12.0 / 1.13.0）都被 2FA 拦住 —— registry 返回 401 EOTP，
+「requires a one-time password」。而本机的 npm 账号（zhuoerbufan）**从来没有在验证器 app 里开过 2FA**
+（Microsoft Authenticator 里没有 npm 这一项），所以"找一次性验证码"这条路本身走不通。
+最后是靠 `.npmrc.bak.20260924-133157` 里翻出一个旧的 automation token 才发出去的 ——
+**那是运气，不是流程**。备份文件被清掉的那天，发版就彻底卡死。
+
+**根因是 npm 的政策，不是配置写错了。** registry 会明确提示：
+
+```
+npm tokens that bypass 2FA are being restricted for account changes and direct publishing
+→ https://gh.io/npm-gat-bypass2fa-deprecation
+```
+
+「绕过 2FA 的 token 用来直接发布」这条路正在被官方收回：今天还能用的 automation token，
+明天就可能跟普通 token 一样要一次性验证码。所以正确解法不是去找 OTP，而是**换成没有任何长期凭据的机制**。
+
+### 解法：Trusted Publishing（OIDC）
+
+GitHub Actions 用自己的身份（OIDC token）向 npm 换一个一次性发布凭据，
+仓库里不需要存任何 token，也不需要 2FA 验证码，token 泄漏的风险面直接归零。
+
+**一次性配置（只有这一步要手工做）**
+
+1. npmjs.com → 包 `dsh-theme-palette` → Settings → **Trusted Publisher** → 连 GitHub 仓库
+   `zuoyunlai/dsh-theme-palette`，**Workflow 文件名填 `publish.yml`**，Environment 留空；
+2. 之后发版就两条命令：
+
+```bash
+# 本地：门禁 → commit → 打 tag → 推 tag（本地**不** publish）
+node tools/release.mjs --ci
+# CI：被 tag 触发 → 门禁 → npm publish（provenance）→ 等 registry → 自动建 GitHub Release
+```
+
+### 三个坑
+
+- **顺序不能反**：本地先 publish 再推 tag，版本号先占坑，CI 再 publish 必然 E409 ——
+  这跟 19.27.1/19.27.2 那次事故是同一个形状。`--ci` 模式因此**显式不 publish**，
+  两条路径互斥（`--ci` 与 `--skip-publish` 同时给会直接报错）。
+- **GitHub 的 latest 按创建时间判，不是语义版本** —— 补建历史 Release 时它会把 latest 抢到旧版本上
+  （补建 v1.11.0 时真发生过）。workflow 里显式 `gh release edit --latest` 兜底。
+- **别把备份文件当保险**：`~/.npmrc` 里那个能免 OTP 的 token 迟早会被同样收紧。
+  换成 Trusted Publishing 才是根治 —— 备份只是过渡期的拐杖。
+
+### 顺带补上的老缺口
+
+这个仓库此前**没有 publish 用 CI**，GitHub Release 每次都得手工建
+（`gh release create … --latest`，资产核 sha1==dist.shasum）。`publish.yml` 把这一步也收进 CI，
+并保留同样的资产校验：资产仍取 registry 上的**官方** tarball，sha1 必须与 `dist.shasum` 逐字节一致。
+另外 workflow 里也带上了 provenance（`id-token: write`），发布物带来源证明。

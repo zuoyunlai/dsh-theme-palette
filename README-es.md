@@ -86,6 +86,7 @@ node tools/compare.mjs --dir tools/out/<run>        # comparar con la línea bas
 node tools/preview-settings.mjs --lang en           # renderizar la página de ajustes
 node tools/release.mjs --dry          # preflight de publicación
 node tools/release.mjs --tag          # publicar en npm + tag
+node tools/release.mjs --ci           # publicación en CI: solo tag; Actions publica con Trusted Publishing
 ```
 
 La regresión visual tiene dos capas: el tablero de paletas (sin autenticación) y la ventana real del escritorio vía CDP (`tools/shoot-desktop.mjs`, requiere `--remote-debugging-port`). Ver [tools/README.md](tools/README.md).

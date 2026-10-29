@@ -6,6 +6,15 @@
  *   node tools/release.mjs                  # 真发布（需要 npm 登录态）
  *   node tools/release.mjs --tag            # 发布后再打 tag 并推 main + tag
  *   node tools/release.mjs --skip-publish   # 只打 tag（版本已经在 registry 上了）
+ *   node tools/release.mjs --ci             # **CI 发布模式**：本地不发布，只打 tag 推上去，
+ *                                          # 由 GitHub Actions 用 Trusted Publishing（OIDC）发布
+ *
+ * 两条发布路径，别弄反：
+ *   本地发布（默认）：publish → 等 registry → 前移 latest → 打 tag 推 main+tag。
+ *     依赖一个能免 2FA 的长期 token —— npm 正在收紧这类 token 的直接发布权限
+ *     （gh.io/npm-gat-bypass2fa-deprecation），本地路径迟早要走一次性验证码。
+ *   CI 发布（--ci）：门禁 → 打 tag 推 main+tag → Actions 用 OIDC publish + 自动建 GitHub Release。
+ *     不需要任何长期凭据。**绝不要本地先 publish 再推 tag** —— 版本号先占坑，CI 再 publish 会 E409。
  *
  * 安全约束（2026-10-21 审计后改）：
  *   - **不再用 shell 拼字符串**。`package.json` 的 name/version 会进命令，若有人提交一个
@@ -187,28 +196,15 @@ const dirty = git('status', '--porcelain')
 if (dirty) die('工作区不干净，先提交：\n' + dirty)
 ok('工作区干净')
 
-const packed = npm(['pack', '--dry-run', '--json'])
+// 包内容守卫（2026-10-28 P3-P）：只数文件个数会漏掉「某类文件没进包」。
+//     1.11.0 刚修过「README 截图 404（assets 没进包）」，但当时没有回归守卫：
+//     把 package.json 的 "assets" 删掉，六件套与本门全绿。
+//     清单现在住在 tools/check-pack.mjs —— 本地发版路径与 CI（Trusted Publishing）路径共用同一份，
+//     避免 required 清单在两处漂移（2026-10-29）。
 try {
-  const info = JSON.parse(packed.slice(packed.indexOf('[')))[0]
-  ok(`打包 ${info.entryCount} 个文件 / ${(info.size / 1024).toFixed(1)} KB`)
-  // 包内容守卫（2026-10-28 P3-P）：只数文件个数会漏掉「某类文件没进包」。
-  //     1.11.0 刚修过「README 截图 404（assets 没进包）」，但当时没有回归守卫：
-  //     把 package.json 的 "assets" 删掉，六件套与本门全绿。
-  const files = (info.files || []).map((f) => f.path)
-  const required = [
-    'package.json', 'index.js', 'client.js', 'cordis.patch.yml', 'icon.svg',
-    'README.md', 'README-zh.md', 'README-es.md', 'README-pt.md', 'README-hi.md',
-    'CHANGELOG.md', 'LICENSE', 'docs/DESIGN.md',
-    'assets/screenshot-settings-light.png', 'assets/screenshot-settings-dark.png',
-    'assets/screenshot-settings-custom.png', 'assets/screenshot-settings-hc.png',
-    'assets/screenshots.meta.json',
-    'locale/en.json', 'locale/zh.json', 'locale/ja.json', 'locale/zh-TW.json',
-  ]
-  const missing = required.filter((p) => !files.includes(p))
-  if (missing.length) die('npm 包里少了这些文件：\n  ' + missing.join('\n  '))
-  ok(`包内容齐备（${required.length} 个必需文件都在）`)
-} catch {
-  die('读不出 npm pack --dry-run 的结果')
+  run(process.execPath, ['tools/check-pack.mjs'])
+} catch (err) {
+  die('npm 包内容检查失败：' + String((err && (err.stdout || err.stderr)) || (err && err.message) || err).trim())
 }
 
 // 2. 版本是否已在 registry（只读）
@@ -228,6 +224,43 @@ if (remoteList.includes(version)) {
 }
 
 if (has('dry')) { console.log('\n干跑结束：没有发布、没有推送、没有打 tag。\n'); process.exit(0) }
+
+/**
+ * 打签名 tag 并推 main + tag（本地发布与 CI 发布两条路径共用）。
+ * 签名密钥读 user.signingkey —— 本机是 SSH 公钥 + gpg.format=ssh，所以走 -s（SSH 签名）。
+ */
+const tagAndPush = () => {
+  try {
+    const signingKey = (() => { try { return git('config', '--get', 'user.signingkey').trim() } catch { return '' } })()
+    const tagArgs = ['tag', '-a', tag, '-m', `${name} ${version}`]
+    if (signingKey) tagArgs.splice(1, 0, '-s')
+    git(...tagArgs)
+    git('push', 'origin', 'main', tag)
+    ok(`已打${signingKey ? '（签名）' : ''} tag 并推送 ${tag}`)
+    if (!signingKey) warn('未配置 GPG 签名密钥，tag 是未签名注解——装了 `user.signingkey` 后会自动改用 -s')
+    return true
+  } catch (err) {
+    warn('tag/推送失败：' + (err.stderr || err.message))
+    return false
+  }
+}
+
+// 3b. CI 发布模式（--ci）：本地**不发布**，只打 tag 推上去，由 GitHub Actions 用
+//     Trusted Publishing（OIDC）发布并自动建 GitHub Release。
+//     为什么不能本地先 publish 再推 tag：版本号会先占坑，CI 再 publish 必然 E409
+//     （这是 19.27.1/19.27.2 事故的同一形状）。
+if (has('ci')) {
+  if (has('skip-publish')) die('--ci 与 --skip-publish 互斥（--ci 本身就不本地发布）')
+  if (remoteList.includes(version)) die('registry 上已有 ' + version + ' —— 别重复发')
+  warn('CI 发布模式：本地不 publish（本地先发会让 CI 撞 E409）')
+  if (!tagAndPush()) die('tag/推送失败，本次没发出去')
+  console.log('\n下一步：')
+  console.log('  1. GitHub Actions 会被 ' + tag + ' 触发，用 Trusted Publishing（OIDC，无需 token）发布 ' + version);
+  console.log('  2. CI 等 registry 放出后，自动建 GitHub Release（资产 sha1 与 registry dist.shasum 核对一致）');
+  console.log('  3. 若 CI 没被触发：查 npmjs.com 的 Trusted Publisher 是否已连上本仓库（workflow 文件名填 publish.yml）');
+  console.log('');
+  process.exit(0)
+}
 
 // 3. 发布
 if (!has('skip-publish')) {
@@ -266,18 +299,6 @@ else {
 }
 
 // 6. Git tag（可选）
-if (has('tag')) {
-  try {
-    const signingKey = (() => { try { return git('config', '--get', 'user.signingkey').trim() } catch { return '' } })()
-    const tagArgs = ['tag', '-a', tag, '-m', `${name} ${version}`]
-    if (signingKey) tagArgs.splice(1, 0, '-s')
-    git(...tagArgs)
-    git('push', 'origin', 'main', tag)
-    ok(`已打${signingKey ? '（签名）' : ''} tag 并推送 ${tag}`)
-    if (!signingKey) warn('未配置 GPG 签名密钥，tag 是未签名注解——装了 `user.signingkey` 后会自动改用 -s')
-  } catch (err) {
-    warn('tag/推送失败：' + (err.stderr || err.message))
-  }
-}
+if (has('tag')) tagAndPush()
 
 console.log(`\n完成：https://www.npmjs.com/package/${name}/v/${version}\n`)

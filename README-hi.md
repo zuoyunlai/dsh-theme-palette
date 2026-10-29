@@ -86,6 +86,7 @@ node tools/compare.mjs --dir tools/out/<run>        # बेसलाइन स�
 node tools/preview-settings.mjs --lang en           # सेटिंग्स पेज रेंडर करें
 node tools/release.mjs --dry          # रिलीज़ प्रीफ़्लाइट
 node tools/release.mjs --tag          # npm पर प्रकाशित + टैग
+node tools/release.mjs --ci           # CI में प्रकाशन: केवल tag; Actions Trusted Publishing से प्रकाशित करे
 ```
 
 स्क्रीनशॉट रिग्रेशन की दो परतें हैं: पैलेट बोर्ड (बिना लॉगिन) और CDP से असली डेस्कटॉप विंडो (`tools/shoot-desktop.mjs`, `--remote-debugging-port` चाहिए)। देखें [tools/README.md](tools/README.md)।

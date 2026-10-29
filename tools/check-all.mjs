@@ -22,6 +22,9 @@ const scripts = [
   'tools/check-host-contract.mjs',
   'tools/check-selfheal.mjs',
   'tools/check-colormath.mjs',
+  // 包内容守卫（2026-10-29）：必需文件清单与发版门共用同一份（tools/check-pack.mjs），
+  // 所以本地 npm run check、CI、release.mjs 三条路径看到的是同一把尺子。
+  'tools/check-pack.mjs',
 ]
 
 let failed = 0
