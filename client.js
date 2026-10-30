@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.13.4'
+    const PLUGIN_VERSION = '1.13.5'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -56,6 +56,48 @@ window.__ModuleLoader__.load({
         '300': '#93c5fd', '400': '#60a5fa', '450': '#4d93f8', '500': '#3b82f6',
         '600': '#2563eb', '800': '#1e40af', '900': '#0e3074', '950': '#172554',
       },
+    }
+
+    /* ================= 语义色阶（宿主原生红 / 绿 / 琥珀）=================
+     * 2026-10-30：宿主 `design-platform.css` 里除了四个中性/品牌色阶（bluish / neutral /
+     * deepseek / blue），还并列着三族**语义色阶**：red / green / amber。插件此前只重建前四族，
+     * 于是自定义配色下「步骤点、`data-tone` 标签、文件 diff 的 +/− 行、危险菜单项悬停、
+     * 无效输入边框」永远停在宿主的纯红 / 纯绿 / 纯琥珀（逐条核过：58 个颜色 token 里
+     * 39 个最终落在字面色值上，红绿琥珀占了绝大多数）。
+     *
+     * 重建方式与 file-diff 同一手法 —— **只换温度，不动语义**：
+     * 色相往配色色相拉一小段（封顶 ±8°，见 harmonizeSemantic）、色度压到 0.88–0.92，
+     * 明度一律沿用宿主。明度不动是关键：宿主的语义色明暗节奏（浅色 600/500 当字、100 当底；
+     * 深色反过来用 400/900）是它自己的对比度策略，改明度会把宿主的层次算坏。
+     *
+     * 黑白档（mono）不重建：它按设计只动 19 个 token，语义色保持宿主原样。
+     */
+    const SEMANTIC_BASE = {
+      red: { '50': '#fef2f2', '100': '#fee2e2', '400': '#f25a5a', '500': '#ef4444', '600': '#ec1313', '900': '#570c0c' },
+      green: { '100': '#e6faed', '400': '#4ed17e', '500': '#22c55e', '900': '#233c2c' },
+      amber: { '100': '#fef5e7', '400': '#f7ad31', '500': '#f59e0b', '600': '#dd8629', '900': '#27241f' },
+    }
+    /* 宿主在同一条色阶上另给了四个**带 alpha 的底色档**（diff 行底），单列在这里：
+     * 它们不是独立色相，而是 base + alpha，调和时只能先调 base 再补 alpha，
+     * 否则 8 位 hex 进 harmonize 会被当非法输入。 */
+    const SEMANTIC_ALPHA = {
+      green: { '500-a08': ['500', 0.078], '500-a12': ['500', 0.121] },
+      red: { '600-a08': ['600', 0.078], '400-a12': ['400', 0.121] },
+    }
+    /* 语义色色相旋转上限（度）与拉近系数。一个都不能多：苔绿配色（hue 162）的
+     * "短路径"会把红（OKLCH h≈28°）往黄绿推，推多了红就滑成琥珀、和警告撞色；
+     * 封到 8° 后观感只是"同一件语义色换了冷暖"（暖砂→朱红、靛蓝→绯红），语义不丢。 */
+    const SEMANTIC_TURN = 8
+    const SEMANTIC_PULL = 0.12
+
+    /**
+     * 语义色温度调和：与 harmonize 的差别只有一条 —— **色相旋转按 SEMANTIC_TURN 封顶**。
+     * 明度与色相的"主"部分保持宿主原样，所以红仍是红、绿仍是绿、琥珀仍是琥珀。
+     */
+    function harmonizeSemantic(hex, targetHue, chromaScale) {
+      const [L, C, h] = toOklch(hex)
+      const dh = ((targetHue - h + 540) % 360) - 180
+      return fromOklch(L, C * chromaScale, h + clamp(dh * SEMANTIC_PULL, -SEMANTIC_TURN, SEMANTIC_TURN))
     }
 
     /**
@@ -238,6 +280,29 @@ window.__ModuleLoader__.load({
       }
       const lightC = achromatic ? 0 : clampN(bg[1] * 0.9, 0.008, 0.045)
       const darkC = achromatic ? 0 : clampN(bg[1] * 0.75, 0.006, 0.035)
+      /* ---------- 底色明度（2026-10-30 用户回执 #2：选 #070b11 当底色，界面还是"默认深灰"）----------
+       * 1.13.5 以前只取底色的**色相与色度**，明度完全由引擎按模式给：
+       * 深色画布固定 L≈0.235（#191c21 一档的蓝灰）。用户把「底色」设成 #070b11（L≈0.15）时，
+       * 屏幕上看不到自己选的那个底色 —— 读起来就是"很多地方底色还是默认的"，而且说得对。
+       *
+       * 现在把「底色」当真的底色用：
+       *   底色偏暗（L ≤ 0.45）→ 它就是**深色模式**的画布明度（钳到 0.10–0.24，别把卡层挤没）；
+       *   底色偏亮（L ≥ 0.55）→ 它就是**浅色模式**的画布明度（钳到 0.90–0.985）。
+       * 中间灰（0.45–0.55）视为"没有偏好"，两侧都沿用引擎值 —— 那种输入表达不出明暗意图。
+       * 只锚**画布这一档**：其余层按原间距整体平移（见 buildRamps），文字对比度照旧由求解器
+       * 在新承载面上重算，承诺下限不变。 */
+      /* 下限 0.14 是**层次余量**，不是审美：深色侧还有三个更亮的面（875/850/800，各 +0.03 L）
+       * 和左栏「更深」一档（再 -0.042）——画布压到 0.10 时左栏会掉到 #020407（近纯黑，
+       * 和画布只差 ΔE 2 但整体塌成一块）。0.14 让整条阶梯仍有 ~0.09 L 的可用空间，
+       * 用户选 #070b11 这种近黑底色时观感仍是"近黑"，但层次还在。
+       *
+       * 阈值 0.35 / 0.75：只有"明显偏暗"或"明显偏亮"才算表达了明暗意图；
+       * 中间灰（L 0.35–0.75）两侧都不锚 —— 那既不表达深色也不表达浅色，硬锚会把浅色画布
+       * 压成 0.90 的中灰，等于凭空换了套配色。 */
+      const CANVAS_L_DARK = [0.14, 0.30]
+      const CANVAS_L_LIGHT = [0.90, 0.985]
+      const canvasDarkL = bg[0] <= 0.35 ? clampN(bg[0], CANVAS_L_DARK[0], CANVAS_L_DARK[1]) : undefined
+      const canvasLightL = bg[0] >= 0.75 ? clampN(bg[0], CANVAS_L_LIGHT[0], CANVAS_L_LIGHT[1]) : undefined
       return {
         id: 'custom', label: '自定义', desc: '三色派生', tinted: true, custom: true,
         hue, darkHue: hue, achromatic,
@@ -247,6 +312,7 @@ window.__ModuleLoader__.load({
         textC: achromatic ? 0 : clampN(tx[1], 0.002, 0.030), textHue: achromatic ? hue : tx[2],
         darkC, darkLift: 0.030,
         paperC: achromatic ? 0 : clampN(tx[1], 0.004, 0.030), paperHue: achromatic ? hue : tx[2],
+        canvasDarkL, canvasLightL,
         // accentL 必须钳位：500 档同时是 --dsw-alias-link、button-info-fill 与勾选支点的来源。
         // 纯白/荧光黄会让填充与白字同色；只在极端输入时归一化，预设色不受影响。
         accentHue: ac[2], accentC: clampN(ac[1], 0.04, 0.18), accentL: clampN(ac[0], 0.30, 0.64), accentScale: 1.0,
@@ -944,6 +1010,21 @@ window.__ModuleLoader__.load({
         const hue = L <= 0.45 && scheme.darkHue !== undefined ? scheme.darkHue : scheme.hue
         neutral[step] = fromOklch(compressL(L), c, hue)
       }
+      /* 语义色阶：只换温度（见 harmonizeSemantic），明度与宿主一致。
+       * 面（50/100/900）压到 0.88 的色度、字（400–600）留 0.92 —— 大面积色块要读成
+       * 「同一张纸」，而标签/步骤点的字色一旦发灰，「操作成功/失败」就不再一眼可辨。 */
+      const semantic = {}
+      for (const [family, table] of Object.entries(SEMANTIC_BASE)) {
+        const out = {}
+        for (const [step, hex] of Object.entries(table)) {
+          const surface = step === '50' || step === '100' || step === '900'
+          out[step] = scheme.achromatic === true ? hex : harmonizeSemantic(hex, scheme.hue, surface ? 0.88 : 0.92)
+        }
+        for (const [suffix, [base, alpha]] of Object.entries(SEMANTIC_ALPHA[family] || {})) {
+          out[suffix] = withAlpha(out[base], alpha)
+        }
+        semantic[family] = out
+      }
       const accent = (ramp) => {
         const out = {}
         for (const [step, hex] of Object.entries(ramp)) {
@@ -1003,7 +1084,24 @@ window.__ModuleLoader__.load({
         bluish['100'] = lerp(0.55)
         bluish['200'] = lerp(1.25)
       }
-      return { bluish, neutral, deepseek: accent(BASE.deepseek), blue: accent(BASE.blue) }
+      /* 自定义配色：把画布锚到用户「底色」的明度（见 customScheme 的 canvasDarkL / canvasLightL）。
+       * 在整条色阶**建好之后**按同一 delta 平移那一组面，层与层的间距不变；
+       * 只动面档（深色 800–950 / 浅色 00–200），文字档留给 tuneRamps 在新面上重解。
+       * 预置不参与：它们的明度是设计稿钉死的（SURFACE_TARGETS）。 */
+      if (scheme.custom === true) {
+        const shiftSurfaces = (steps, target, canvasStep) => {
+          if (target === undefined) return
+          const delta = target - toOklch(bluish[canvasStep])[0]
+          if (Math.abs(delta) < 0.002) return
+          for (const step of steps) {
+            const [L, C, h] = toOklch(bluish[step])
+            bluish[step] = fromOklch(clamp(L + delta, 0.02, 0.995), C, h)
+          }
+        }
+        shiftSurfaces(['800', '850', '875', '900', '950'], scheme.canvasDarkL, '950')
+        shiftSurfaces(['00', '60', '75', '100', '150', '200'], scheme.canvasLightL, '00')
+      }
+      return { bluish, neutral, deepseek: accent(BASE.deepseek), blue: accent(BASE.blue), ...semantic }
     }
 
     /**
@@ -1219,7 +1317,7 @@ window.__ModuleLoader__.load({
      * 不跟着色阶走，必须单独覆盖，否则暖底上会出现冷灰发丝线。
      * 值按「浅色 / 深色」给一对（overrideTokens 的硬性要求）。
      */
-    function aliasOverrides(r, hc) {
+    function aliasOverrides(r, hc, params) {
       const ink = r.bluish['1000'] // 浅色模式的墨色
       const paper = r.bluish['50'] // 深色模式的纸白
       const grey = r.bluish['700'] // 悬浮在媒体上的工具条用中性灰
@@ -1228,9 +1326,19 @@ window.__ModuleLoader__.load({
        * （参考实现也是这个量级，界面不会变成表格）。但高对比模式继续用 alpha 就说不过去了：
        * 1.9.8 的 HC 只改了文字，边框 alpha 没动，实测数值完全一样，HC 名不副实。
        * 现在 HC 下按 SC 1.4.11 对承载面反解到 3:1 / 3.4:1 / 4:1，三档保留层级。
-       */
+       *
+       * 2026-10-30（用户回执 #2「线条色还是默认的」）：发丝线一直取**文字色**的 alpha。
+       * 文字色一旦近中性（例如自定义的 #e1eced，C≈0.012），线条就等于中性白 α —— 屏幕上
+       * 确实没有任何主题色。自定义配色下改成：明度与 alpha 仍取墨/纸（对比关系不变），
+       * 但**色相取配色色相、色度给下限 0.02**，让线条带上主题色而不是一块灰。 */
+      const borderInk = (mode) => {
+        const base = mode === 'light' ? ink : paper
+        if (!params || params.custom !== true) return base
+        const [L, C, h] = toOklch(base)
+        return fromOklch(L, Math.max(C, 0.02), params.hue)
+      }
       const inkOf = (mode) => (mode === 'light' ? ink : paper)
-      const alphaBorder = (mode, alpha) => withAlpha(inkOf(mode), alpha)
+      const alphaBorder = (mode, alpha) => withAlpha(borderInk(mode), alpha)
       /**
        * HC 的边框要的是**定量**：3.0 / 3.4 / 4.0。之前用 solveForeground 求解，
        * 从墨色起步时它一步都不用挪就「已达标」→ 直接返回墨色，实测 16.9:1 ——
@@ -1246,7 +1354,7 @@ window.__ModuleLoader__.load({
        */
       const solidBorder = (mode, target) => mixToContrast(
         mode === 'light' ? [r.bluish['00'], r.bluish['60']] : [r.bluish['875'], r.bluish['850']],
-        inkOf(mode),
+        borderInk(mode),
         target,
       )
       const border = (mode, alpha, target) => (hc ? solidBorder(mode, target) : alphaBorder(mode, alpha))
@@ -1339,6 +1447,39 @@ window.__ModuleLoader__.load({
           light: mixHex(r.deepseek['500'], r.bluish['00'], 0.11),
           dark: mixHex(r.deepseek['400'], r.bluish['950'], 0.13),
         },
+
+        /* ---- 语义色（2026-10-30）----
+         * 宿主把这一族写成 `var(--dsw-static-red/green/amber-NN)`，而这三族此前根本没被重建，
+         * 于是一整套「错误 / 成功 / 警告 / diff / 危险悬停」在自定义配色下保持宿主原色。
+         * 现在色阶跟着配色调温度（SEMANTIC_BASE），别名这里**显式落地**对应档位 ——
+         * 明暗两侧档位不同（错误浅色 600 / 深色 400，成功与警告两侧同档），
+         * 与宿主 design-platform.css 逐条对齐，`tools/check-host-contract.mjs` 会核这张表。
+         */
+        '--dsw-alias-state-error-primary': { light: r.red['600'], dark: r.red['400'] },
+        '--dsw-alias-state-error-secondary': { light: r.red['400'], dark: r.red['400'] },
+        '--dsw-alias-state-success-primary': { light: r.green['500'], dark: r.green['500'] },
+        '--dsw-alias-state-success-secondary': { light: r.green['400'], dark: r.green['400'] },
+        // 成功/警告的「浅底」在深色模式换成深底（宿主用的是 green-900 / amber-900）
+        '--dsw-alias-state-success-tertiary': { light: r.green['100'], dark: r.green['900'] },
+        '--dsw-alias-state-warn-primary': { light: r.amber['500'], dark: r.amber['500'] },
+        '--dsw-alias-state-warn-secondary': { light: r.amber['400'], dark: r.amber['400'] },
+        '--dsw-alias-state-warn-tertiary': { light: r.amber['100'], dark: r.amber['900'] },
+        '--dsw-alias-state-warn-label': { light: r.amber['600'], dark: r.amber['600'] },
+        // 宿主**没有定义**、但构建 CSS 在用的错误文字色（设置页「保存失败」那一行）。
+        // 缺失时那条 color 声明整条失效 → 文字回落到继承色，看着像没报错。
+        '--dsw-alias-label-error': { light: r.red['600'], dark: r.red['400'] },
+        // 文件 diff 的 +/− 行底：宿主现在用的是 code-diff-*（不是 file-diff-*，后者仍保留给旧构建）
+        '--dsw-alias-code-diff-added': { light: r.green['500-a08'], dark: r.green['500-a12'] },
+        '--dsw-alias-code-diff-deleted': { light: r.red['600-a08'], dark: r.red['400-a12'] },
+        // 危险菜单项 hover/focus 底：宿主给的是 `#ec13130d`（浅，5%）/`#f25a5a26`（深，15%）两个字面量，
+        // 这里用同一档密度（13/255 与 38/255）从语义红重新合成，色相才跟得上配色
+        '--dsw-alias-interactive-bg-hover-danger': {
+          light: withAlpha(r.red['600'], 13 / 255),
+          dark: withAlpha(r.red['400'], 38 / 255),
+        },
+        // 宿主同样没有定义、但构建 CSS 在用的第四层面（帮助按钮 hover）：给一档与
+        // --dsw-alias-button-floating-hover 同档的面，正好是「比 layer-3 再抬一层」的语义
+        '--dsw-alias-bg-layer-4': { light: r.bluish['75'], dark: r.bluish['800'] },
       }
     }
 
@@ -1652,7 +1793,7 @@ window.__ModuleLoader__.load({
             }
           }
         }
-        const aliases = aliasOverrides(ramps, hc)
+        const aliases = aliasOverrides(ramps, hc, params)
         for (const [name, pair] of Object.entries(aliases)) pairs[name] = pair
       }
       const sidebar = sidebarTokens(ramps, sidebarMode, params.tinted, params)
@@ -2493,11 +2634,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         lang: '语言',
         hc: '高对比',
         custom: '自定义配色',
-        customHint: '取三个色的色相与色度；过亮/过暗的强调色会归一化以保证可读，明度由引擎按模式计算。',
+        customHint: '取三个色的色相与色度；底色偏暗会当作深色模式的画布、偏亮会当作浅色模式的画布（过暗/过亮的会被夹回可用区间）；过亮/过暗的强调色会归一化以保证可读。',
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.13.4：悬停卡底色不再被宿主写死成中性深灰 —— 接到配色的暗面，白字与对比度不变。',
+        notice: '1.13.5：错误/成功/警告与文件 diff 的 +/− 行也跟着配色了 —— 红/绿/琥珀三族第一次参与重建，只调温度、色相旋转封顶 8°。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2566,11 +2707,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         lang: '語言',
         hc: '高對比',
         custom: '自訂配色',
-        customHint: '取三個色的色相與色度；過亮/過暗的強調色會正規化以確保可讀性，明度由引擎依模式計算。',
+        customHint: '取三個色的色相與色度；底色偏暗會當作深色模式的畫布、偏亮會當作淺色模式的畫布（過暗/過亮的會被夾回可用區間）；過亮/過暗的強調色會正規化以確保可讀性。',
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.13.4：懸停卡底色不再被宿主寫死成中性深灰 —— 接到配色的暗面，白字與對比度不變。',
+        notice: '1.13.5：錯誤/成功/警告與檔案 diff 的 +/− 行也跟著配色了 —— 紅/綠/琥珀三族第一次參與重建，只調溫度、色相旋轉上限 8°。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2639,11 +2780,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         lang: 'Language',
         hc: 'High contrast',
         custom: 'Custom palette',
-        customHint: 'Takes hue and chroma from three colours; extreme accents are normalised for readability; lightness comes from the engine per mode.',
+        customHint: 'Takes hue and chroma from three colours plus the surface lightness: a dark surface becomes the canvas in dark mode, a light one in light mode (out-of-range values are clamped); extreme accents are normalised for readability.',
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.13.4: the hover card background is no longer the hardcoded neutral dark from the host — it now follows the palette dark surface, keeping white text and contrast.',
+        notice: '1.13.5: error/success/warning states and the +/− diff rows now follow the palette too — the semantic red/green/amber scales join the rebuild, temperature only, hue rotation capped at 8°.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2712,11 +2853,11 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         lang: '言語',
         hc: 'ハイコントラスト',
         custom: 'カスタム配色',
-        customHint: '3 色の色相と彩度を使用。極端なアクセント色は可読性のため正規化され、明度はモードごとにエンジンが決めます。',
+        customHint: '3 色の色相と彩度に加えて、背景色の明度も使います（暗い背景ならダークモードのキャンバス、明るい背景ならライトモードのキャンバス。範囲外はクランプ）。極端なアクセント色は可読性のため正規化されます。',
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.13.4：ホバーカードの背景がホスト固定の中立ダークから配色の暗面に切り替わりました（白文字とコントラストはそのまま）。',
+        notice: '1.13.5：エラー/成功/警告とファイル diff の +/− 行も配色に追従するようになりました（赤/緑/アンバーの三色階が再構築に参加、色相の回転は 8° まで）。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
