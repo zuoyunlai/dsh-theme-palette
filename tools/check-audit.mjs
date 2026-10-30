@@ -42,6 +42,7 @@ globalThis.__def.factory(() => ({
 const {
   buildTokens, SCHEMES, contrast, floors, encodeConfig, decodeConfig, writeCustom, toOklch, flatten,
   devContrastReport, markdownCss, rampsFor, apcaContrast, pickLocale, raiseToLc,
+  customScheme, readCustom, deltaE,
   CONTRAST_SURFACES, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN,
   MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK,
   FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, hexToRgb, SURFACE_ALIAS_STEPS, hostPatchCss,
@@ -821,6 +822,169 @@ console.log('\n28) 宿主悬停卡：写死的底色被接回配色（2026-10-29
     '宿主补丁样式把 --dsw-hovercard-bg 接到专用 token 上（!important：宿主声明在卡片元素自身）')
   const mono = buildTokens(SCHEMES.find((s) => s.id === 'mono'), 'deep', 'tinted', 'tinted', 'accent', 'on', false)
   check(!mono['--dsh-tp-hovercard-bg'], '黑白档不产出悬停卡 token（回落到宿主原色）')
+}
+
+console.log('\n29) 语义色：红/绿/琥珀三族参与重建（2026-10-30 覆盖核查）')
+{
+  /* 起因：插件只重建 bluish / neutral / deepseek / blue 四族，宿主另外三族语义色阶
+   * （red / green / amber）从未被碰过 —— 自定义配色下「步骤点、data-tone 标签、
+   * 文件 diff 的 +/− 行、危险菜单项悬停、无效输入边框」永远是宿主的纯红/纯绿/纯琥珀。
+   * 这里钉住四件事：①三族真的产出了；②色相只转了 ≤8°（封顶，语义不丢）；
+   * ③红/绿/琥珀彼此仍分得开；④宿主没定义但构建 CSS 在用的两个 token 有兜底。 */
+  const HOST_HUE_SAMPLE = { '--dsw-static-red-600': '#ec1313', '--dsw-static-green-500': '#22c55e', '--dsw-static-amber-500': '#f59e0b' }
+  const hueOf = (hex) => toOklch(hex)[2]
+  const hueGap = (a, b) => Math.abs(((a - b + 540) % 360) - 180)
+  // 宿主 design-platform.css 的语义别名映射（明暗两侧档位不同），contract 脚本核这张表
+  const HOST_SEMANTIC = {
+    '--dsw-alias-state-error-primary': { light: ['red', '600'], dark: ['red', '400'] },
+    '--dsw-alias-state-error-secondary': { light: ['red', '400'], dark: ['red', '400'] },
+    '--dsw-alias-state-success-primary': { light: ['green', '500'], dark: ['green', '500'] },
+    '--dsw-alias-state-success-secondary': { light: ['green', '400'], dark: ['green', '400'] },
+    '--dsw-alias-state-success-tertiary': { light: ['green', '100'], dark: ['green', '900'] },
+    '--dsw-alias-state-warn-primary': { light: ['amber', '500'], dark: ['amber', '500'] },
+    '--dsw-alias-state-warn-secondary': { light: ['amber', '400'], dark: ['amber', '400'] },
+    '--dsw-alias-state-warn-tertiary': { light: ['amber', '100'], dark: ['amber', '900'] },
+    '--dsw-alias-state-warn-label': { light: ['amber', '600'], dark: ['amber', '600'] },
+    '--dsw-alias-code-diff-added': { light: ['green', '500-a08'], dark: ['green', '500-a12'] },
+    '--dsw-alias-code-diff-deleted': { light: ['red', '600-a08'], dark: ['red', '400-a12'] },
+  }
+  let hueBad = 0
+  let mapBad = 0
+  for (const scheme of SCHEMES.filter((s) => s.tinted)) {
+    const t = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    for (const family of ['red', 'green', 'amber']) {
+      const hasFamily = Object.keys(t).some((k) => k.startsWith('--dsw-static-' + family + '-'))
+      check(hasFamily, `${scheme.id}: 产出 --dsw-static-${family}-* 色阶`)
+    }
+    for (const [name, hostHex] of Object.entries(HOST_HUE_SAMPLE)) {
+      const gap = hueGap(hueOf(t[name].light), hueOf(hostHex))
+      if (gap > 8.6) { hueBad++; console.log(`    ! ${scheme.id} ${name} 色相偏移 ${gap.toFixed(1)}°`) }
+    }
+    for (const [name, steps] of Object.entries(HOST_SEMANTIC)) {
+      for (const mode of ['light', 'dark']) {
+        const [family, step] = steps[mode]
+        if (t[name][mode] !== t[`--dsw-static-${family}-${step}`][mode]) { mapBad++; console.log(`    ! ${scheme.id} ${name}/${mode} 不等于 ${family}-${step}`) }
+      }
+    }
+    for (const mode of ['light', 'dark']) {
+      const err = hueOf(t['--dsw-alias-state-error-primary'][mode])
+      const warn = hueOf(t['--dsw-alias-state-warn-primary'][mode])
+      const ok = hueOf(t['--dsw-alias-state-success-primary'][mode])
+      check(hueGap(err, warn) >= 25, `${scheme.id}/${mode}: 错误与警告可辨（${hueGap(err, warn).toFixed(1)}° ≥ 25°）`)
+      check(hueGap(ok, warn) >= 40, `${scheme.id}/${mode}: 成功与警告可辨（${hueGap(ok, warn).toFixed(1)}° ≥ 40°）`)
+    }
+  }
+  check(hueBad === 0, `三族主档色相偏移全部 ≤ 8°（超限 ${hueBad} 个）`)
+  check(mapBad === 0, `语义别名映射与宿主一致（不一致 ${mapBad} 处）`)
+  // 宿主没定义、但构建 CSS 在用的两个 token：缺失时整条声明失效（文字回落继承色 / 悬停底消失）
+  {
+    const t = buildTokens(SCHEMES.find((s) => s.id === 'warm'), 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    check(!!t['--dsw-alias-label-error'] && !!t['--dsw-alias-label-error'].dark, '补上宿主缺失的 --dsw-alias-label-error')
+    check(!!t['--dsw-alias-bg-layer-4'] && t['--dsw-alias-bg-layer-4'].light !== t['--dsw-alias-bg-layer-4'].dark,
+      '补上宿主缺失的 --dsw-alias-bg-layer-4（明暗分档）')
+    // 危险悬停底：宿主是 `#ec13130d`（13/255）/`#f25a5a26`（38/255）两个字面量，
+    // 重合成时**密度必须逐字节对上** —— 密度错一位，悬停强度就整体偏一档（1.13.5 起草时真踩过 20/255）。
+    const danger = t['--dsw-alias-interactive-bg-hover-danger']
+    const alphaOf = (hex) => (hex.length === 9 ? parseInt(hex.slice(7), 16) : null)
+    check(alphaOf(danger.light) === 13 && alphaOf(danger.dark) === 38,
+      `危险悬停底密度与宿主一致（浅 ${alphaOf(danger.light)}/255 · 深 ${alphaOf(danger.dark)}/255；宿主 13 / 38）`)
+  }
+  /* diff 行：语义色落在自己的淡底上。宿主原值本身就在 AA 以下（浅色 +/− 行 2.13 / 3.95 起），
+   * 这里只钉「温度调和不得把它拉得更差」。基线必须**按该配色的画布现算**（自定义配色的画布
+   * 不是纯白，拿常数比会假红），允许 0.2 的浮动：色度压 8% 会带去一点亮度偏移，
+   * 而宿主这一族是**明暗同值**的单一档位，任何靠调明度补对比度的做法都会在另一侧反噬。 */
+  const HOST_INK = {
+    light: { added: ['#22c55e', '#22c55e14'], deleted: ['#ec1313', '#ec131314'] },
+    dark: { added: ['#22c55e', '#22c55e1f'], deleted: ['#f25a5a', '#f25a5a1f'] },
+  }
+  for (const scheme of SCHEMES.filter((s) => s.tinted)) {
+    const tt = buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    for (const mode of ['light', 'dark']) {
+      const canvas = tt['--dsw-static-neutral-bluish-' + (mode === 'light' ? '00' : '950')][mode]
+      const added = contrast(tt['--dsw-alias-state-success-primary'][mode], flatten(tt['--dsw-alias-code-diff-added'][mode], canvas))
+      const deleted = contrast(tt['--dsw-alias-state-error-primary'][mode], flatten(tt['--dsw-alias-code-diff-deleted'][mode], canvas))
+      const [hostInkAdd, hostBgAdd] = HOST_INK[mode].added
+      const [hostInkDel, hostBgDel] = HOST_INK[mode].deleted
+      const baseAdded = contrast(hostInkAdd, flatten(hostBgAdd, canvas))
+      const baseDeleted = contrast(hostInkDel, flatten(hostBgDel, canvas))
+      check(Math.abs(added - baseAdded) <= 0.2 && Math.abs(deleted - baseDeleted) <= 0.2,
+        `${scheme.id}/${mode}: diff 行对比度与宿主同量级（+ ${added.toFixed(2)} / − ${deleted.toFixed(2)}；宿主 ${baseAdded.toFixed(2)} / ${baseDeleted.toFixed(2)}）`)
+    }
+  }
+  // 黑白档按设计只动 19 个 token：语义色保持宿主原样
+  {
+    const mono = buildTokens(SCHEMES.find((s) => s.id === 'mono'), 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    check(!Object.keys(mono).some((k) => /^--dsw-static-(red|green|amber)-/.test(k)), '黑白档不重建语义色阶（保持宿主原样）')
+  }
+  // 无彩自定义配色没有色相可调和：语义色必须一个像素都不动
+  writeCustom({ bg: '#ffffff', text: '#111111', accent: '#ffffff' })
+  {
+    const grey = buildTokens(custom, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    check(grey['--dsw-static-red-600'].light === '#ec1313' && grey['--dsw-static-green-500'].light === '#22c55e',
+      '无彩自定义配色下语义色保持宿主原值（achromatic 不做温度调和）')
+  }
+}
+
+console.log('\n30) 自定义配色的「底色」当真的底色用（2026-10-30 用户回执 #2）')
+{
+  /* 用户回执原话：「很多地方底色、线条色都是按默认的」。核查结论：
+   * ① 1.13.5 以前只取底色的色相/色度，深色画布固定 L≈0.235 —— 用户把底色设成 #070b11（L≈0.15）
+   *    屏幕上根本看不到它，读起来就是"底色还是默认的"；
+   * ② 线条色一直取**文字色**的 alpha，文字近中性时线条也是中性灰。
+   * 这一组钉住修正后的行为：底色偏暗/偏亮 → 成为对应模式的画布明度；线条色跟随配色色相。 */
+  const canvasL = (t, mode) => toOklch(t['--dsw-static-neutral-bluish-' + (mode === 'light' ? '00' : '950')][mode])[0]
+  // 参照：中间灰（L≈0.6）不表达明暗意图 → 两侧都是引擎默认值
+  writeCustom({ bg: '#808080', text: '#e8e8e8', accent: '#3f66a3' })
+  const mid = buildTokens(custom, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  const darkRef = canvasL(mid, 'dark')
+  const lightRef = canvasL(mid, 'light')
+  check(Math.abs(canvasL(mid, 'dark') - darkRef) < 1e-9 && Math.abs(canvasL(mid, 'light') - lightRef) < 1e-9, '中间灰底色的两侧画布取引擎默认值')
+
+  // 深色底色 → 深色画布
+  writeCustom({ bg: '#070b11', text: '#e1eced', accent: '#055157' })
+  const dark = buildTokens(custom, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  const bgL = toOklch('#070b11')[0]
+  check(Math.abs(canvasL(dark, 'dark') - bgL) <= 0.02,
+    `深色底色 #070b11（L ${bgL.toFixed(3)}）成为深色画布（实测 L ${canvasL(dark, 'dark').toFixed(3)}）`)
+  check(canvasL(dark, 'dark') < darkRef - 0.03,
+    `深色画布明显暗于引擎默认 ${darkRef.toFixed(3)}（不再读成"默认深灰"）`)
+  const layers = ['950', '875', '850', '800'].map((k) => toOklch(dark['--dsw-static-neutral-bluish-' + k].dark)[0])
+  check(layers.every((L, i) => i === 0 || L - layers[i - 1] >= 0.02),
+    `四层面仍逐层变亮（${layers.map((L) => L.toFixed(3)).join(' → ')}）`)
+  check(deltaE(dark['--dsw-specific-sidebar-fill'].dark, dark['--dsw-static-neutral-bluish-950'].dark) >= 2,
+    '左栏与画布仍分得开（ΔE ≥ 2）')
+  check(contrast(dark['--dsw-static-neutral-bluish-50'].dark, dark['--dsw-static-neutral-bluish-950'].dark) >= 10,
+    `锚定后深色正文在画布上仍 ≥ 10:1（${contrast(dark['--dsw-static-neutral-bluish-50'].dark, dark['--dsw-static-neutral-bluish-950'].dark).toFixed(2)}）`)
+  check(contrast(dark['--dsw-static-neutral-bluish-50'].dark, dark['--dsw-static-neutral-bluish-875'].dark) >= 10,
+    `锚定后深色正文在 875 上仍 ≥ 10:1（${contrast(dark['--dsw-static-neutral-bluish-50'].dark, dark['--dsw-static-neutral-bluish-875'].dark).toFixed(2)}）`)
+
+  // 线条色：自定义跟配色色相且有最小色度；预置保持原路（墨/纸）
+  {
+    const params = customScheme(readCustom())
+    const border = dark['--dsw-alias-border-l2'].dark.slice(0, 7)
+    const [, bc, bh] = toOklch(border)
+    const hueGap = Math.abs(((bh - params.hue + 540) % 360) - 180)
+    check(hueGap <= 12, `自定义线条色跟随配色色相（线 ${bh.toFixed(0)}° vs 配色 ${params.hue.toFixed(0)}°）`)
+    check(bc >= 0.015, `自定义线条色带最小色度（C ${bc.toFixed(3)} ≥ 0.015，不再是一块灰）`)
+  }
+  const warm = buildTokens(SCHEMES.find((s) => s.id === 'warm'), 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  {
+    // 边框取的是**色阶里的纸色**（alias 层早于「暗色正文按 10:1 定标」那一步），
+    // 所以对照物是 rampsFor 的 bluish-50，而不是最终 token（那个已经被定标压暗）。
+    const paperAtAlias = rampsFor(SCHEMES.find((s) => s.id === 'warm'), 'tinted', false).bluish['50']
+    const bw = toOklch(warm['--dsw-alias-border-l2'].dark.slice(0, 7))[2]
+    const pw = toOklch(paperAtAlias)[2]
+    check(Math.abs(((bw - pw + 540) % 360) - 180) <= 1.5, '预置的线条色仍取墨/纸原色（未被改道）')
+  }
+  // 纯黑底色：画布不许压到层次塌掉
+  writeCustom({ bg: '#000000', text: '#ffffff', accent: '#00a0ff' })
+  const black = buildTokens(custom, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  check(canvasL(black, 'dark') >= 0.135, `纯黑底色时深色画布仍留层次余量（L ${canvasL(black, 'dark').toFixed(3)} ≥ 0.135）`)
+  // 默认自定义色（浅底）不应改变深色侧
+  writeCustom({ bg: '#f5efe6', text: '#1d1a17', accent: '#a9683e' })
+  const light = buildTokens(custom, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  check(Math.abs(canvasL(light, 'dark') - darkRef) <= 0.02, '浅色底色不改动深色画布（回落引擎默认）')
+  check(Math.abs(canvasL(light, 'light') - toOklch('#f5efe6')[0]) <= 0.03, '浅色底色成为浅色画布（默认自定义色的行为不变）')
 }
 
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)

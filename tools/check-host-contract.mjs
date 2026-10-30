@@ -208,5 +208,96 @@ if (texts.theme) {
   }
 }
 
+/**
+ * 颜色覆盖守卫（2026-10-30）：构建 CSS 实际 `var()` 消费的颜色 token，必须要么被插件**声明**，
+ * 要么其 `var()` 链最终落到插件声明过的 token 上。
+ *
+ * 为什么需要：宿主 token 表有 400+ 个名字，插件声明 160 来个，靠肉眼看不出差集。真实缺陷
+ * 就是这么漏的 —— 红/绿/琥珀三族语义色阶从没被重建，于是「步骤点 / data-tone 标签 /
+ * 文件 diff 的 +− 行 / 危险悬停 / 无效输入边框」在自定义配色下一直是宿主原色，
+ * 而插件与 README 都宣称"覆盖全部颜色 token"。
+ *
+ * 判定：`var()` 链只在宿主自己的两张样式表（light / dark）里展开 —— 也就是浏览器在 body 上
+ * 解析出来的那条链（插件把 override 层写成 body 的内联自定义属性，所以链条末尾一旦是
+ * 插件声明的 token，实际渲染值就跟着配色走）。
+ */
+function auditColourCoverage(texts, api) {
+  if (!texts.theme || !texts.css || !api) return
+  const declared = new Set()
+  for (const scheme of api.SCHEMES) {
+    const tokens = api.buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    for (const name of Object.keys(tokens)) declared.add(name)
+  }
+  const grab = (sel) => {
+    const esc = sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const re = new RegExp('(?:^|[};"])' + esc + '\\{([^}]*)\\}', 'g')
+    let acc = ''
+    let m
+    while ((m = re.exec(texts.theme))) acc += ';' + m[1]
+    return acc
+  }
+  const parse = (css) => {
+    const map = new Map()
+    for (const decl of css.split(';')) {
+      const t = decl.trim()
+      if (!t.startsWith('--')) continue
+      const i = t.indexOf(':')
+      if (i < 0) continue
+      map.set(t.slice(0, i).trim(), t.slice(i + 1).trim())
+    }
+    return map
+  }
+  const light = parse(grab('body'))
+  const dark = parse(grab('body[data-ds-dark-theme]'))
+  // 宿主只在使用处给值的 token（焦点环由 [data-input-modality] 规则逐元素下发，兜底走
+  // --dsw-alias-state-business-primary，已覆盖）
+  const ALLOW_UNDEFINED = new Set(['--dsw-focus-ring-color'])
+  // 宿主写成字面量、任何 token 覆盖都碰不到的面：遮罩/透明分隔线/首次引导页/悬停卡
+  // （悬停卡由 host-patch.css 用 !important 接回配色，见 check-audit 第 28 组）
+  const ALLOW_LITERAL = new Set([
+    '--dsw-alias-bg-mask-1', '--dsw-alias-bg-mask-2', '--dsw-alias-bg-mask-3', '--dsw-alias-bg-mask-photo',
+    '--dsw-alias-border-inverted', '--dsw-alias-border-inverted2',
+    '--dsw-alias-onboarding-accent', '--dsw-alias-onboarding-secondary-fill',
+    '--dsw-hovercard-bg',
+  ])
+  const COLORISH = /^--dsw-(alias|static|specific)-/
+  const used = [...new Set([...texts.css.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((m) => m[1]))]
+    .filter((name) => COLORISH.test(name))
+
+  const classify = (name, mode, seen = new Set()) => {
+    if (declared.has(name)) return 'covered'
+    if (seen.has(name)) return 'covered'
+    seen.add(name)
+    const map = mode === 'dark' ? dark : light
+    const value = map.get(name)
+    if (value === undefined) return 'undefined'
+    const refs = [...value.matchAll(/var\(\s*(--[a-z0-9-]+)/g)].map((m) => m[1])
+    if (refs.length === 0) return /#|rgb|hsl|color-mix/.test(value) ? 'literal' : 'undefined'
+    const kinds = refs.map((ref) => classify(ref, mode, new Set(seen)))
+    if (kinds.every((k) => k === 'covered')) return 'indirect'
+    if (kinds.includes('literal')) return 'literal'
+    if (kinds.includes('undefined')) return 'undefined'
+    return 'indirect'
+  }
+
+  const leaks = []
+  for (const name of used) {
+    const modes = [classify(name, 'light'), classify(name, 'dark')]
+    for (const [i, kind] of modes.entries()) {
+      const mode = i === 0 ? 'light' : 'dark'
+      if (kind === 'covered' || kind === 'indirect') continue
+      if (kind === 'literal' && ALLOW_LITERAL.has(name)) continue
+      if (kind === 'undefined' && ALLOW_UNDEFINED.has(name)) continue
+      leaks.push(`${name}（${mode}: ${kind}）`)
+    }
+  }
+  check(leaks.length === 0,
+    `构建 CSS 消费的 ${used.length} 个颜色 token 全部能落到插件声明上`
+    + (leaks.length ? `：漏 ${leaks.length} 处 → ${[...new Set(leaks)].slice(0, 8).join('、')}` : ''))
+}
+
+if (typeof globalThis.__api === 'object' && globalThis.__api) auditColourCoverage(texts, globalThis.__api)
+else console.log('  ! 读不到 client.js 的 dev 钩子，跳过颜色覆盖守卫')
+
 console.log(failed === 0 ? '\n契约检查通过' : `\n${failed} 项契约失效`)
 process.exit(failed === 0 ? 0 : 1)

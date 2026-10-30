@@ -67,11 +67,29 @@ try {
   process.exit(1)
 }
 
-let info
-try {
-  info = JSON.parse(out.slice(out.indexOf('[')))[0]
-} catch {
-  console.error('  ✗ 读不出 npm pack --dry-run 的结果')
+/**
+ * `npm pack --dry-run --json` 的输出形状跨版本变过：
+ *   · npm ≤ 10：`[{ name, version, files, … }]`
+ *   · npm ≥ 11：`{ "包名": { name, version, files, … } }`（按包名分组的对象）
+ * 2026-10-30 实测 npm 12.2.1 走的是后者 —— 旧代码 `JSON.parse(out.slice(out.indexOf('[')))[0]`
+ * 会从 files 数组里那个 `[` 开始截，直接 parse 失败，报"读不出结果"（看起来像网络/npm 坏了）。
+ * 这里两种形状都吃，并且对"JSON 前后混了 npm 日志"再兜一层。
+ */
+function parsePackJson(text) {
+  const t = String(text || '').trim()
+  const starts = [0, t.indexOf('['), t.indexOf('{')].filter((i) => i >= 0)
+  for (const start of starts) {
+    let raw
+    try { raw = JSON.parse(t.slice(start)) } catch { continue }
+    if (Array.isArray(raw)) return raw[0] || null
+    if (raw && typeof raw === 'object') return raw[Object.keys(raw)[0]] || null
+  }
+  return null
+}
+
+const info = parsePackJson(out)
+if (!info || !Array.isArray(info.files)) {
+  console.error('  ✗ 读不出 npm pack --dry-run 的结果' + (out ? '（原始输出前 200 字：' + String(out).trim().slice(0, 200) + '）' : ''))
   process.exit(1)
 }
 
