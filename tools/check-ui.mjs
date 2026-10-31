@@ -158,7 +158,10 @@ try {
   {
     const counts = []
     for (const f of readmeFiles) {
-      const text = fs.readFileSync(path.join(root, f), 'utf8')
+      // 统一成 LF 再扫：Windows 检出（core.autocrlf=true）默认把工作区换成 CRLF，
+      // 而仓库里存的是 LF —— 只认 LF 的话这条检查会「只在 Windows 本机红、CI 绿」，
+      // 属于典型的假红（2026-10-31 实测踩到）。
+      const text = fs.readFileSync(path.join(root, f), 'utf8').replace(/\r\n/g, '\n')
       const start = text.indexOf('\n## What it does\n')
       const end = start < 0 ? -1 : text.indexOf('\n## ', start + 1)
       if (start < 0 || end < 0) { check(false, `${f} 找不到 ## What it does 段落`); continue }
