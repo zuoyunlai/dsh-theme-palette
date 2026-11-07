@@ -8,6 +8,24 @@
 > 1.13.2 起逐节标注 —— 此前 27 个版本节看起来都能装，用户按 CHANGELOG 钉版本会撞 404
 > （2026-10-29 审计 P2-9）。
 
+### 1.13.6
+本版是**宿主升级适配**，没有配色行为变化。
+
+- **事实**：DSH `0.2.2-rc.1` 的 `@deepseek-ai/dsh-client-ui-theme` **不再声明**
+  `--dsw-specific-sidebar-nav-item-hover`。取证：`0.2.1-rc.2` 的同一文件里它是
+  `var(--dsw-static-neutral-bluish-75)` / `-850`（出现 2 次）；`0.2.2-rc.1` 里出现 **0 次**，
+  sidebar 专有 token 只剩 `-fill` / `-nav-item-active` / `-nav-item-active-accent`。
+- **修法**：`SURFACE_ALIAS_STEPS` 删掉这一条。它对那个 token 从来只是兜底 ——
+  `buildTokens` 里 `if (pairs[name]) continue`，而 `sidebarTokens()` 早已写过这三条，
+  所以删除在 `≤0.2.1` 与 `0.2.2` 两代宿主上都是**零行为变化**；token 值继续由
+  `sidebarTokens()` 写出，`≤0.2.1` 宿主照旧读它。侧栏悬停配色实测仍跟随
+  （2026-11-07 用户回执「跟色正常」）。
+- **断言**：`npm run contract --strict` 从「47 条 / 漂移 1 / `exit 1`」恢复为
+  「46 条 / 漂移 0 / `exit 0`」。在 0.2.1 宿主上仍是 46 条 —— 该门只迭代插件自己的表，
+  不会因为宿主多一条而误红。
+- **不受影响**：`-sidebar-fill` / `-nav-item-active` 两代宿主都在；`engines.dsh` 仍是
+  `>=0.2.1-rc.1`（无上界），新版本在 0.2.1 与 0.2.2 上都能装。
+
 ### 1.13.5
 用户回执：「自定义色派生好像有问题？并未覆盖所有啊，好多颜色仍然是默认色」。
 这次不是猜：把宿主 `app.asar` 里的 token 表（`ui-theme` 的 `design-platform.css` + 应用 CSS）整份解出来，

@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.13.5'
+    const PLUGIN_VERSION = '1.13.6'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1691,7 +1691,14 @@ window.__ModuleLoader__.load({
       '--dsw-specific-selector': { light: '60', dark: '800' },
       '--dsw-specific-sidebar-fill': { light: '50', dark: '900' },
       '--dsw-specific-sidebar-nav-item-active': { light: '100', dark: '750' },
-      '--dsw-specific-sidebar-nav-item-hover': { light: '75', dark: '850' },
+      // 2026-11-07（宿主 0.2.2-rc.1 实测）：`--dsw-specific-sidebar-nav-item-hover` 已从宿主 ui-theme 移除。
+      //   证据：0.2.1-rc.2 的 `dsh-client-ui-theme/lib/client.js` 里它是 `var(--dsw-static-neutral-bluish-75)`
+      //   / `-850`（出现 2 次）；0.2.2-rc.1 的同一文件里**出现 0 次**，sidebar 专有 token 只剩
+      //   `-fill` / `-nav-item-active` / `-nav-item-active-accent`。
+      //   本表的口径是「宿主确实声明过的 bluish 引用别名」，所以这一条要删 —— 它已经不再是宿主事实，
+      //   留着会让 `tools/check-host-contract.mjs` 恒报「漂移 1」（宿主 null/null vs 插件 75/850）。
+      //   删掉不丢值：`sidebarTokens()` 仍会写这个 token（≤0.2.1 宿主读它），而本循环对它的作用
+      //   从来只是兜底 —— 见下面 `if (pairs[name]) continue`，sidebarTokens 先写、这里一律跳过。
       '--dsw-specific-tip': { light: '60', dark: '800' },
     }
 
@@ -2638,7 +2645,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.13.5：错误/成功/警告与文件 diff 的 +/− 行也跟着配色了 —— 红/绿/琥珀三族第一次参与重建，只调温度、色相旋转封顶 8°。',
+        notice: '1.13.6：适配 dsh 0.2.2 —— 宿主构建不再声明「侧栏导航悬停」这个 token，本版把那条已失效的别名登记删掉；配色行为不变（侧栏悬停仍跟随配色），宿主契约门恢复全绿。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2711,7 +2718,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.13.5：錯誤/成功/警告與檔案 diff 的 +/− 行也跟著配色了 —— 紅/綠/琥珀三族第一次參與重建，只調溫度、色相旋轉上限 8°。',
+        notice: '1.13.6：適配 dsh 0.2.2 —— 宿主建置不再宣告「側欄導覽懸停」這個 token，本版把該條已失效的別名登記刪掉；配色行為不變（側欄懸停仍跟隨配色），宿主契約門恢復全綠。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2784,7 +2791,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.13.5: error/success/warning states and the +/− diff rows now follow the palette too — the semantic red/green/amber scales join the rebuild, temperature only, hue rotation capped at 8°.',
+        notice: '1.13.6: adapt to dsh 0.2.2 — the host build no longer declares the sidebar nav hover token, so this release drops that now-stale alias entry. Colours behave the same (sidebar hover still follows the palette) and the host contract gate is green again.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2857,7 +2864,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.13.5：エラー/成功/警告とファイル diff の +/− 行も配色に追従するようになりました（赤/緑/アンバーの三色階が再構築に参加、色相の回転は 8° まで）。',
+        notice: '1.13.6：dsh 0.2.2 への追従 —— ホストのビルドがサイドバーのナビ項目ホバーの token を宣言しなくなったため、失効した別名の登録を外しました。配色の挙動は変わらず（サイドバーのホバーも配色に追従）、ホスト契約ゲートは再び緑です。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
