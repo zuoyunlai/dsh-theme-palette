@@ -35,6 +35,10 @@ try {
   const light = read('preview-light.html')
   check(light.includes('dsh-tp-row-hc'), '高对比在默认展开区')
   check(!light.includes('class="dsh-tp-adv"'), '默认不渲染「更多选项」容器')
+  check(light.includes('dsh-tp-sample'), '设置页含阅读样本')
+  check(['dsh-tp-json-prop', 'dsh-tp-json-string', 'dsh-tp-json-number', 'dsh-tp-json-keyword']
+    .every((c) => light.includes(c)), '阅读样本含四种 JSON 语法角色')
+  check(light.includes('dsh-tp-diff-add') && light.includes('dsh-tp-diff-del'), '阅读样本含 diff 的 +/− 行')
 
   preview(['--palette', 'custom', '--adv', '1'])
   const custom = read('preview-light-custom.html')

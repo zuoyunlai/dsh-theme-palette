@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.13.6'
+    const PLUGIN_VERSION = '1.13.7'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -353,6 +353,9 @@ window.__ModuleLoader__.load({
        4.62 在自定义配色的 875 面上只有 Lc 52.7，低于本插件给文字定的 Lc 60 下限。
        tuneRamps 里改为沿亮度把 Lc 顶到 60（高对比 75），这里只保留浅色侧的下限。 */
     const MIN_LINK_DARK = 4.62
+    /* JSON 树（工具输出里的语法高亮）是 12px 等宽小字，按正常文本 AA 再留一档余量。
+       它有自己的承载面（--dsw-alias-bg-layer-1：浅 00 / 深 875），不套用正文的 12 / 10。 */
+    const MIN_JSON_TREE = 5
 
     /* ---------- 深色侧单独一套文字下限（审计 3.1）----------
      * WCAG 2.x 的比值是「相对亮度之比」，它在暗底上系统性高估可读性：
@@ -2070,6 +2073,43 @@ window.__ModuleLoader__.load({
       // 色阶排序归一化（审计 3.2）：放在最后 —— 前面的求解与参考墨色对齐都可能把某一档
       // 推出反序，收尾统一压一次，保证「序号越大越深」在整条色阶上成立。
       if (params.tinted) enforceRampOrder(pairs)
+      // JSON 树语法色（2026-11-22 审计 P1）：宿主这七个角色是固定字面量
+      // （浅色 #881391 / #c41a16 / #1c00cf …），不跟随配色，工具输出里的语法高亮始终是
+      // 宿主原色。这里只做两件事，且都不改角色的语义：
+      //   1) 温度调和：色相朝配色色相旋转，但沿用语义色的 8° 封顶 + 0.88 色度缩放 ——
+      //      「属性仍是紫、字符串仍是红、数字仍是蓝」，六个角色之间的区分度不被抹平；
+      //   2) 在**树自己的承载面**上求解：宿主树的底色是 --dsw-alias-bg-layer-1
+      //      （浅 00 / 深 875），不是画布；按画布求解会得出偏松的读数。
+      // 错误态不动：宿主的 .errorPayload 在局部把这几个变量改写成错误色，优先级在我们之上。
+      // 黑白配色（!params.tinted）同样不动：它本来就保留宿主原貌。
+      if (params.tinted) {
+        const treeBg = {
+          light: pairs['--dsw-static-neutral-bluish-00'] && pairs['--dsw-static-neutral-bluish-00'].light,
+          dark: pairs['--dsw-static-neutral-bluish-875'] && pairs['--dsw-static-neutral-bluish-875'].dark,
+        }
+        const TREE_BASE = {
+          property: { light: '#881391', dark: '#5db0d7' },
+          string: { light: '#c41a16', dark: '#f28b82' },
+          number: { light: '#1c00cf', dark: '#99c8ff' },
+          keyword: { light: '#1c00cf', dark: '#99c8ff' },
+          punctuation: { light: '#202124', dark: '#e8eaed' },
+          icon: { light: '#5f6368', dark: '#9aa0a6' },
+        }
+        for (const [role, base] of Object.entries(TREE_BASE)) {
+          const pair = {}
+          for (const mode of ['light', 'dark']) {
+            const bg = treeBg[mode]
+            const tuned = harmonizeSemantic(base[mode], params.hue, 0.88)
+            pair[mode] = bg ? solveForeground({ base: tuned }, 'base', bg, MIN_JSON_TREE, 0.08) : tuned
+          }
+          pairs['--dsw-alias-json-tree-' + role] = pair
+        }
+        // 悬停底色是叠加层（宿主原值 4% / 5%），跟强调色走，透明度保持很低。
+        pairs['--dsw-alias-json-tree-hover'] = {
+          light: withAlpha(ramps.deepseek['500'], 0.06),
+          dark: withAlpha(ramps.deepseek['400'], 0.08),
+        }
+      }
       // 表面别名**显式落地**（2026-10-29 用户实测：左侧会话行的悬停卡没跟随主题色）。
       //
       // 宿主在 `body` / `body[data-ds-dark-theme]` 上把这一批别名写成
@@ -2181,6 +2221,19 @@ return pairs
 .dsh-tp-explain{margin:0;display:flex;flex-direction:column;gap:4px;font-size:12px;line-height:18px;color:var(--dsw-alias-label-tertiary)}
 .dsh-tp-preview{display:flex;flex-direction:column;gap:8px;padding:10px 12px;border-radius:10px;border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1)}
 .dsh-tp-preview p{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
+.dsh-tp-sample{display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:10px;border:.5px solid var(--dsw-alias-border-l3);background:var(--dsw-alias-bg-layer-1)}
+.dsh-tp-sample-head{font-size:12px;font-weight:500;color:var(--dsw-alias-label-primary)}
+.dsh-tp-sample p{margin:0;font-size:12px;line-height:18px;color:var(--dsw-alias-label-secondary)}
+.dsh-tp-sample-link{color:var(--dsw-alias-link);text-decoration:underline;text-underline-offset:2px}
+.dsh-tp-sample-inline{font:11px/16px var(--ds-font-family-code, monospace);padding:1px 4px;border-radius:4px;background:var(--dsw-alias-markdown-inline-code)}
+.dsh-tp-sample-code,.dsh-tp-sample-json{margin:0;padding:8px 10px;border-radius:8px;font:11px/16px var(--ds-font-family-code, monospace);overflow:auto;background:var(--dsw-alias-markdown-code-block);color:var(--dsw-alias-label-primary);white-space:pre}
+.dsh-tp-json-prop{color:var(--dsw-alias-json-tree-property, var(--dsw-alias-label-secondary))}
+.dsh-tp-json-string{color:var(--dsw-alias-json-tree-string, var(--dsw-alias-label-secondary))}
+.dsh-tp-json-number{color:var(--dsw-alias-json-tree-number, var(--dsw-alias-label-secondary))}
+.dsh-tp-json-keyword{color:var(--dsw-alias-json-tree-keyword, var(--dsw-alias-label-secondary))}
+.dsh-tp-sample-diff{display:flex;flex-direction:column;font:11px/16px var(--ds-font-family-code, monospace);border-radius:6px;overflow:hidden}
+.dsh-tp-diff-add{padding:1px 6px;background:var(--dsw-alias-code-diff-added, rgba(34,197,94,.12))}
+.dsh-tp-diff-del{padding:1px 6px;background:var(--dsw-alias-code-diff-deleted, rgba(239,68,68,.12))}
 .dsh-tp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,196px),1fr));gap:10px}
 .dsh-tp-card{position:relative;display:flex;flex-direction:column;gap:8px;text-align:left;font:inherit;color:var(--dsw-alias-label-primary);cursor:pointer;padding:9px;border-radius:14px;border:.5px solid var(--dsw-alias-border-l4);background:transparent;transition:background .12s ease,border-color .12s ease}
 .dsh-tp-card:hover{background:var(--dsw-alias-interactive-bg-hover)}
@@ -2645,7 +2698,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.13.6：适配 dsh 0.2.2 —— 宿主构建不再声明「侧栏导航悬停」这个 token，本版把那条已失效的别名登记删掉；配色行为不变（侧栏悬停仍跟随配色），宿主契约门恢复全绿。',
+        notice: '1.13.7：JSON 树的语法色并入配色重建（温度调和封顶 8°、按树自身承载面求解 ≥5:1），黑白配色与错误态不动；契约门新增颜色覆盖与呈现器结构断言，发布链补上 tag 绑定与补包 Latest 保护。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2654,6 +2707,10 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         preview: '预览',
         sample: '试试示例',
         copyDiag: '复制诊断',
+        undo: '撤销上一次',
+        sampleTitle: '阅读样本',
+        sampleBody: '正文按你选的强度着色；下面依次是链接、行内码、代码块、工具返回的 JSON 与 diff。',
+        sampleLink: '示例链接',
         contrast: '对比度',
         contrastSub: '实测 / 目标（按承载面；※ 政策外不计硬门 · △ 物理不可达）',
         cMain: '正文',
@@ -2718,7 +2775,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.13.6：適配 dsh 0.2.2 —— 宿主建置不再宣告「側欄導覽懸停」這個 token，本版把該條已失效的別名登記刪掉；配色行為不變（側欄懸停仍跟隨配色），宿主契約門恢復全綠。',
+        notice: '1.13.7：JSON 樹的語法色併入配色重建（溫度調和封頂 8°、依樹自身承載面求解 ≥5:1），黑白配色與錯誤態不動；契約門新增顏色覆蓋與呈現器結構斷言，發佈鏈補上 tag 綁定與補包 Latest 保護。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2727,6 +2784,10 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         preview: '預覽',
         sample: '試試示例',
         copyDiag: '複製診斷',
+        undo: '撤銷上一次',
+        sampleTitle: '閱讀樣本',
+        sampleBody: '本文依你選的強度著色；下面依次是連結、行內碼、程式碼區塊、工具回傳的 JSON 與 diff。',
+        sampleLink: '範例連結',
         contrast: '對比度',
         contrastSub: '實測 / 目標（依承載面；※ 政策外不計硬門 · △ 物理不可達）',
         cMain: '正文',
@@ -2791,7 +2852,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.13.6: adapt to dsh 0.2.2 — the host build no longer declares the sidebar nav hover token, so this release drops that now-stale alias entry. Colours behave the same (sidebar hover still follows the palette) and the host contract gate is green again.',
+        notice: '1.13.7: JSON-tree syntax colours join the rebuild (temperature harmonisation capped at 8°, solved to ≥5:1 on the tree\'s own surface); mono and the host error state are untouched. The contract gate now checks colour coverage and presenter structure, and the release path binds the tag and protects Latest.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2800,6 +2861,10 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         preview: 'Preview',
         sample: 'Try a sample',
         copyDiag: 'Copy diagnostics',
+        undo: 'Undo last change',
+        sampleTitle: 'Reading sample',
+        sampleBody: 'Body text follows the strength you picked; below are a link, inline code, a code block, tool JSON and a diff.',
+        sampleLink: 'Example link',
         contrast: 'Contrast',
         contrastSub: 'measured / target per surface (※ out of policy, not gated · △ physically unreachable)',
         cMain: 'Body',
@@ -2864,7 +2929,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.13.6：dsh 0.2.2 への追従 —— ホストのビルドがサイドバーのナビ項目ホバーの token を宣言しなくなったため、失効した別名の登録を外しました。配色の挙動は変わらず（サイドバーのホバーも配色に追従）、ホスト契約ゲートは再び緑です。',
+        notice: '1.13.7：JSON ツリーの構文色を配色再構築に統合（温度調和は 8° まで、ツリー自身の面で ≥5:1 を解く）。モノクロとホストのエラー表示は変更しません。契約ゲートに色カバレッジとプレゼンター構造の検証を追加し、リリース経路に tag 固定と Latest 保護を入れました。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',
@@ -2873,6 +2938,10 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         preview: 'プレビュー',
         sample: 'サンプルを試す',
         copyDiag: '診断をコピー',
+        undo: '最後の変更を元に戻す',
+        sampleTitle: 'リーディング見本',
+        sampleBody: '本文は選んだ強さで着色されます。以下にリンク・インラインコード・コードブロック・ツールの JSON・diff を並べました。',
+        sampleLink: 'サンプルリンク',
         contrast: 'コントラスト',
         contrastSub: '実測 / 目標（面ごと；※ 対象外・△ 物理的に到達不可）',
         cMain: '本文',
@@ -2997,6 +3066,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
       const customColors = React.useSyncExternalStore(props.subscribeCustom, props.getCustomColors)
       const locale = React.useSyncExternalStore(props.subscribeLocale, props.getLocale)
       const langPref = React.useSyncExternalStore(props.subscribeLocale, props.getLangPref)
+      const hasUndo = React.useSyncExternalStore(props.subscribeUndo, props.getHasUndo)
       // section 的 lang 必须等于**这里实际渲染的文案语言**（审计 2026-10-29 P2-5）。
       // 原来 auto 时取宿主的 documentElement.lang —— 宿主是 fr 时面板标 lang="fr"，
       // 渲染的却是英文（pickLocale 的兜底），屏幕阅读器会按法语规则念英文。
@@ -3109,7 +3179,12 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
             type: 'button',
             className: 'dsh-tp-mini',
             onClick: () => props.resetCustom(),
-          }, txt.reset)),
+          }, txt.reset),
+          hasUndo && h('button', {
+            type: 'button',
+            className: 'dsh-tp-mini',
+            onClick: () => props.undoLastChange(),
+          }, txt.undo)),
         h('div', { className: 'dsh-tp-swatches' },
           ['bg', 'text', 'accent'].map((field) => {
             const name = (lb.custom && lb.custom[field]) || field
@@ -3181,6 +3256,29 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           explain.cvdRisk && h('span', null,
             fmt(txt.explainCvd, { kind: explain.cvdKind, dE: explain.cvdDeltaE })),
         ),
+      )
+
+      // 阅读样本（2026-11-22 审计建议 1）：把日常真会读到的东西放进设置页 —— 正文、链接、
+      // 行内码、代码块、工具 JSON、diff 的 +/− 行。它们全走 token，所以这里看到的就是会话里
+      // 会看到的；JSON 四色直接引用本轮新增的 json-tree token，顺带成为它们的活样例。
+      const sample = h('div', { className: 'dsh-tp-sample', role: 'group', 'aria-label': txt.sampleTitle },
+        h('div', { className: 'dsh-tp-sample-head' }, txt.sampleTitle),
+        h('p', null, txt.sampleBody),
+        h('p', null,
+          h('a', { href: '#', className: 'dsh-tp-sample-link', onClick: (e) => { if (e && e.preventDefault) e.preventDefault() } }, txt.sampleLink),
+          ' ',
+          h('code', { className: 'dsh-tp-sample-inline' }, 'npm run contract')),
+        h('pre', { className: 'dsh-tp-sample-code' }, 'await ctx.theme.overrideTokens(tokens)'),
+        h('pre', { className: 'dsh-tp-sample-json' },
+          h('span', { className: 'dsh-tp-json-prop' }, '"palette"'), ': ',
+          h('span', { className: 'dsh-tp-json-string' }, '"warm"'), ',\n',
+          h('span', { className: 'dsh-tp-json-prop' }, '"ratio"'), ': ',
+          h('span', { className: 'dsh-tp-json-number' }, '5.14'), ',\n',
+          h('span', { className: 'dsh-tp-json-prop' }, '"ok"'), ': ',
+          h('span', { className: 'dsh-tp-json-keyword' }, 'true')),
+        h('div', { className: 'dsh-tp-sample-diff' },
+          h('div', { className: 'dsh-tp-diff-add' }, '+ const token = buildTokens(...)'),
+          h('div', { className: 'dsh-tp-diff-del' }, '- const token = hostLiteral')),
       )
 
       // R1：对比度矩阵。默认折叠，与「更多选项」同节奏；展开后按前景 × 承载面给实测读数。
@@ -3515,7 +3613,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     // 必须能在测试里读到"实现里的那个数"。此前测试拿 floors() 的返回值当期望值 ——
     // 常量一改、期望值跟着改，那道门就是空转的（变异实测：CONTRAST_FLOOR 4.5→1.0 全绿）。
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, SURFACE_ALIAS_STEPS, hexToRgb, LAYER_MARK, hostPatchCss: HOST_PATCH_CSS, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_JSON_TREE, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, SURFACE_ALIAS_STEPS, hexToRgb, LAYER_MARK, hostPatchCss: HOST_PATCH_CSS, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
     }
 
     return {
@@ -3818,6 +3916,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
 
         const setPalette = (id) => {
           if (!SCHEMES.some((s) => s.id === id)) return
+          if (id !== current) snapshotForUndo()
           current = id
           writeStored(id)
           applyAll()
@@ -3862,6 +3961,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         const applyConfigCode = (code) => {
           const cfg = decodeConfig(code)
           if (!cfg) return { ok: false, hasCustom: false, persisted: false }
+          snapshotForUndo()
           current = cfg.palette
           sidebarMode = cfg.sidebar
           textMode = cfg.text
@@ -3915,13 +4015,51 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           }
         }
         /** 诊断导出：把当前配色与对比度矩阵打成可粘贴的 JSON（提 issue 用）。 */
-        const getDiagnostics = () => ({
-          plugin: 'dsh-theme-palette',
-          version: PLUGIN_VERSION,
-          settings: { palette: current, sidebar: sidebarMode, text: textMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref },
-          report: getContrastReport(),
-          coverage: getCoverageReport(),
-        })
+        /** 宿主实际计算值：只有真浏览器里才有意义，取不到就如实标记（不猜）。 */
+        const readHostLayer = () => {
+          try {
+            if (typeof document === 'undefined' || !document.body || typeof getComputedStyle !== 'function') {
+              return { ok: false, reason: 'no-dom' }
+            }
+            const cs = getComputedStyle(document.body)
+            const probe = (n) => cs.getPropertyValue(n).trim() || null
+            return {
+              ok: true,
+              canvas: probe('--dsw-alias-bg-base'),
+              tokens: {
+                labelPrimary: probe('--dsw-alias-label-primary'),
+                link: probe('--dsw-alias-link'),
+                jsonProperty: probe('--dsw-alias-json-tree-property'),
+                layerMark: probe(LAYER_MARK),
+              },
+            }
+          } catch (err) {
+            return { ok: false, reason: String((err && err.message) || err) }
+          }
+        }
+        const getDiagnostics = () => {
+          const engine = {
+            settings: { palette: current, sidebar: sidebarMode, text: textMode, scroll: scrollMode, control: controlMode, md: mdMode, hc: hcMode, lang: langPref },
+            report: getContrastReport(),
+            coverage: getCoverageReport(),
+          }
+          return {
+            plugin: 'dsh-theme-palette',
+            version: PLUGIN_VERSION,
+            // 分层（2026-11-22 审计建议 3）：engine = 本插件算出的值；host = 宿主 CSSOM 的
+            // 实际计算值；unmeasured = 这份导出测不到的项 —— 列出来，别读成"通过"。
+            layers: {
+              engine,
+              host: readHostLayer(),
+              unmeasured: [
+                '完整 DSH 窗口里树组件的计算样式（需要启动宿主）',
+                '屏幕阅读器的朗读顺序与真实焦点路径',
+                '色觉缺陷下的实际可分辨度（本插件只做数学模拟）',
+              ],
+            },
+            ...engine,
+          }
+        }
         /**
          * 运行时覆盖报告（审计建议 5）：枚举宿主样式表里的 --dsw-* 自定义属性，按四类分：
          *   ours    —— 本插件覆盖层接管（lastTokens 里）；
@@ -3996,7 +4134,30 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           scroll: 'tinted', control: 'accent', md: 'on', hc: 'off', lang: langPref,
           custom: { bg: '#f5efe6', text: '#1d1a17', accent: '#3f66a3' },
         })
+        /* 试色撤销（2026-11-22 审计建议 2）：整份覆盖取色的动作前留一份「上一次有效配置」，
+           只保留最近一次，撤销后即失效。拖动取色器是连续输入，不逐帧留快照。 */
+        let undoSnapshot = null
+        const undoListeners = new Set()
+        const emitUndo = () => { for (const fn of undoListeners) { try { fn() } catch (err) { /* 单个订阅者出错不影响全局 */ } } }
+        const subscribeUndo = (fn) => { undoListeners.add(fn); return () => { undoListeners.delete(fn) } }
+        const getHasUndo = () => undoSnapshot !== null
+        const snapshotForUndo = () => {
+          undoSnapshot = { palette: current, custom: Object.assign({}, readCustom()) }
+          emitUndo()
+        }
+        const undoLastChange = () => {
+          if (!undoSnapshot) return false
+          const snap = undoSnapshot
+          undoSnapshot = null
+          current = snap.palette
+          writeStored(current)
+          writeCustom(snap.custom)
+          applyAll('undo')
+          emit(); emitCustom(); emitUndo()
+          return true
+        }
         const resetCustom = () => {
+          snapshotForUndo()
           writeCustom(Object.assign({}, CUSTOM_DEFAULT))
           applyAll('custom:reset')
           emitCustom()
@@ -4036,6 +4197,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
           })()
           const next = deriveCustomFromAccent(readCustom().accent, pref)
           if (!next) return false
+          snapshotForUndo()
           writeCustom({ bg: next.bg, text: next.text, accent: next.accent })
           applyAll('custom:derive')
           emitCustom()
@@ -4197,6 +4359,9 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
                 setCustomColor,
                 deriveFromAccent,
                 resetCustom,
+                getHasUndo,
+                subscribeUndo,
+                undoLastChange,
                 getLangPref,
                 getLocale,
                 subscribeLocale,

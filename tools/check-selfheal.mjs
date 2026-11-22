@@ -257,6 +257,34 @@ try {
     check(false, 'ui.options 不是函数（命令注册形态不对）')
   }
 
+  // 8. 试色撤销（2026-11-22 审计建议 2）：换配色 / 恢复默认前留一份快照，撤销回到上一份，
+  //    且只用一次；同值再选不留快照。
+  if (settingsInject && typeof settingsInject.undoLastChange === 'function') {
+    const p = settingsInject
+    p.undoLastChange() // 前面场景可能已留快照，先消费掉再验"同值不留快照"
+    const first = p.getCurrent()
+    p.setPalette(first)
+    check(p.getHasUndo() === false, '同值再选不留快照')
+    const target = first === 'warm' ? 'indigo' : 'warm'
+    const customBefore = p.getCustomColors()
+    p.setPalette(target)
+    check(p.getCurrent() === target, '换配色生效')
+    check(p.getHasUndo() === true, '换配色后可撤销')
+    check(p.undoLastChange() === true, '撤销返回 true')
+    check(p.getCurrent() === first, '撤销恢复原配色')
+    check(JSON.stringify(p.getCustomColors()) === JSON.stringify(customBefore), '撤销恢复原三色')
+    check(p.getHasUndo() === false, '撤销后快照失效')
+    check(p.undoLastChange() === false, '第二次撤销不再生效')
+
+    const resetBefore = p.getCustomColors()
+    p.resetCustom()
+    check(p.getHasUndo() === true, '恢复默认后可撤销')
+    p.undoLastChange()
+    check(JSON.stringify(p.getCustomColors()) === JSON.stringify(resetBefore), '撤销恢复默认前的三色')
+  } else {
+    check(false, '未捕获 settingsInject.undoLastChange（无法验证试色撤销）')
+  }
+
   // 7. 停用后手动重启（resetHeal，2026-10-28 P0-B）→ 能重放；随后卸载不再重放
   //    旧版这一场景排在停用之后、healDisabled 已恒真，断言形同虚设 —— 现在先证明
   //    resetHeal 真的把自动恢复救活了（撤销+到期+触发 → 必须重放），再验卸载。

@@ -25,6 +25,9 @@ const scripts = [
   'tools/check-custom.mjs',
   'tools/check-ui.mjs',
   'tools/check-host-contract.mjs',
+  'tools/check-json-tree.mjs',
+  'tools/check-release-tag.mjs',
+  'tools/check-release-recovery.mjs',
   'tools/check-selfheal.mjs',
   'tools/check-colormath.mjs',
   // 五语 README 的示例短码必须仍是生产编码器的产物（审计 2026-10-29 P1-6）：

@@ -174,6 +174,8 @@ const props = {
   resetCustom: () => {},
   getLangPref: () => (LANG === 'auto' ? 'auto' : LANG), getLocale: () => (LANG === 'auto' ? 'zh-CN' : LANG),
   subscribeLocale: () => () => {}, setLangPref: () => {},
+  getHasUndo: () => false,
+  subscribeUndo: () => () => {},
   getHealth: () => ({ ok: true, checked: 5 }), subscribeHealth: () => () => {},
 }
 

@@ -8,6 +8,31 @@
 > 1.13.2 起逐节标注 —— 此前 27 个版本节看起来都能装，用户按 CHANGELOG 钉版本会撞 404
 > （2026-10-29 审计 P2-9）。
 
+### 1.13.7
+本版修的是**覆盖口径与发布链**；配色行为只在 JSON 树一处有可见变化。
+
+- **JSON 树语法色并入重建（审计 2026-11-22 P1）**：宿主把这七个角色写成固定字面量
+  （浅色 `#881391` / `#c41a16` / `#1c00cf` …），工具输出的语法高亮一直不跟配色。
+  现在 `buildTokens` 在染色配色下声明 `--dsw-alias-json-tree-{property,string,number,keyword,punctuation,icon,hover}`：
+  六个前景先做温度调和（沿用语义色的 8° 封顶 + 0.88 色度），再在**树自己的承载面**
+  （`--dsw-alias-bg-layer-1`：浅 00 / 深 875）上求解到 ≥ 5.0；悬停是 ≤8% 的强调色叠加。
+  黑白配色与宿主错误态（`.errorPayload` 在局部改写）不动。
+- **断言**：`node tools/check-host-contract.mjs --strict` 由「未覆盖 14 / exit 1」
+  变为「162 项：覆盖 140 / 间接 20 / 例外 2 / 未覆盖 0 / exit 0」。新增
+  `tools/check-json-tree.mjs`：六个前景 ≥ 5.0、角色两两 OKLab ΔE ≥ 10、黑白不声明、
+  悬停为低位 8 位 hex。隔离 Chrome 里用 asar 的真实选择器 + 生产 token 读计算样式：
+  染色配色 48 行逐行等于插件 token，60 行全部 ≥ 5（最低 5.14）。
+- **契约测量本身也修了（同批 P1）**：呈现器写入断言原先是依赖空格的源码正则，压缩代码下必然误报；
+  改成空白无关的结构匹配并加两个删除循环的负对照。颜色链遇环不再记成已覆盖；
+  `--strict` 下缺 dev 钩子 / 空期望表 / 空消费集都判失败，摘要不再截断。
+- **发布链（P1 / P2）**：`publish.yml` 按目标 tag 检出，并核对 tag → SHA → HEAD → 包版本；
+  发布前装依赖并跑 `npm run contract`；GitHub Release 只在 registry 的 latest 确实是本版本
+  （且非预发布）时晋升，补历史资产不再抢 Latest；`release.mjs --tag` 推送失败改为非零退出
+  并提示「不要重发 npm」，同名 tag 只有指向当前提交才复用。
+- **测试**：新增 `check-release-tag` / `check-release-recovery` 与三个离线回放脚本
+  （来源绑定、Latest、同版本异提交）。`npm run check` **11 / 11** 通过。
+- **未做**：没有在完整 DSH 窗口里读树组件的计算样式；也没有实跑 GitHub Actions 发布。
+
 ### 1.13.6
 本版是**宿主升级适配**，没有配色行为变化。
 
