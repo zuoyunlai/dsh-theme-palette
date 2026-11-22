@@ -322,3 +322,19 @@ npm 会用 **404** 掩盖信任配置类错误（防止枚举），CLI 侧只看
 
 **验证方式**：`node tools/check-host-contract.mjs --asar C:/nonexistent/app.asar --strict`
 强制走 node_modules 路径 —— 本机实测通过，输出会打印「取证来源」。
+
+## 发版后核对（2026-11-22 · 1.13.7）
+
+按规则发出 1.13.7 后（tag `v1.13.7` → Actions OIDC 发布），做了两步实物核对：
+
+1. **包内容 = 仓库源码**：从 registry 下载 `dsh-theme-palette-1.13.7.tgz`，
+   `package/client.js` 的 sha256 与仓库 HEAD 的 `client.js` **逐字节相同**
+   （`c181a1fa…7223a`）；包内 28 项，`tools/` 下只有 README（测试脚本不进包）。
+2. **npm 侧**：`dist-tags.latest = 1.13.7`，带 SLSA provenance v1；GitHub Release `v1.13.7`
+   非预发布，资产是 registry 官方 tarball。
+
+**坑（本机 registry 是镜像）**：`npm config get registry` = `https://registry.npmmirror.com`。
+镜像同步有延迟，发布后本机 `npm view dsh-theme-palette@1.13.7` 会报 E404，而直连
+`registry.npmjs.org` 立即 200。所以「发版后查不到版本」先看 registry，不要当成发布失败；
+要么加 `--registry=https://registry.npmjs.org`，要么等镜像同步。
+
