@@ -23,6 +23,7 @@
  *   - registry 探测改用 fetch（不再依赖 curl / shell 重定向）。
  *   - `--dry` 不产生任何副作用（只有只读 GET）。
  */
+import { existingReleaseTag } from './release-tag.mjs'
 import { execFileSync } from 'node:child_process'
 import { readFileSync, existsSync } from 'node:fs'
 import path from 'node:path'
@@ -226,10 +227,11 @@ const tagAndPush = () => {
     const signingKey = (() => { try { return git('config', '--get', 'user.signingkey').trim() } catch { return '' } })()
     const tagArgs = ['tag', '-a', tag, '-m', `${name} ${version}`]
     if (signingKey) tagArgs.splice(1, 0, '-s')
-    git(...tagArgs)
+    const reused = existingReleaseTag(git, tag)
+    if (!reused) git(...tagArgs)
     git('push', 'origin', 'main', tag)
-    ok(`已打${signingKey ? '（签名）' : ''} tag 并推送 ${tag}`)
-    if (!signingKey) warn('未配置 GPG 签名密钥，tag 是未签名注解——装了 `user.signingkey` 后会自动改用 -s')
+    ok(`已${reused ? '复用' : '创建'}并推送 ${tag}`)
+    if (!reused && !signingKey) warn('未配置 GPG 签名密钥，tag 是未签名注解——装了 `user.signingkey` 后会自动改用 -s')
     return true
   } catch (err) {
     warn('tag/推送失败：' + (err.stderr || err.message))
@@ -252,6 +254,11 @@ if (has('ci')) {
   console.log('  3. 若 CI 没被触发：查 npmjs.com 的 Trusted Publisher 是否已连上本仓库（workflow 文件名填 publish.yml）');
   console.log('');
   process.exit(0)
+}
+
+// 冲突必须在 npm 发布或修订 dist-tag 前发现。
+if (has('tag')) {
+  try { existingReleaseTag(git, tag) } catch (err) { die(err.message) }
 }
 
 // 3. 发布
@@ -296,6 +303,6 @@ else {
 }
 
 // 6. Git tag（可选）
-if (has('tag')) tagAndPush()
+if (has('tag') && !tagAndPush()) die(`npm 上已确认 ${name}@${version} 可下载，但 Git 阶段失败。不要重发 npm；核对 ${tag} 指向发布提交，检查 origin/main 和远端标签后，仅重试未完成的 Git 步骤。`)
 
 console.log(`\n完成：https://www.npmjs.com/package/${name}/v/${version}\n`)

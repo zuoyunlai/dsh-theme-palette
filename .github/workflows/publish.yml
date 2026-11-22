@@ -39,14 +39,33 @@ permissions:
   id-token: write   # OIDC → npm Trusted Publishing（这是免 token 的关键）
 
 concurrency:
-  group: publish-${{ github.ref_name }}
+  group: publish-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
+      - name: 解析并验证目标 tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then TAG="$INPUT_TAG"; else TAG="$REF_NAME"; fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::非法发布 tag：$TAG"; exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          echo "ref=refs/tags/$TAG" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.ref }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -69,17 +88,27 @@ jobs:
             console.log('npm CLI 满足 trusted publishing 要求（≥ 11.5.1）');
           "
 
-      - name: 取版本号
-        id: ver
+      - name: 确认检出的提交与 tag 指向一致
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
-          TAG="${{ inputs.tag || github.ref_name }}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          TAG_SHA=$(git rev-parse "refs/tags/$TAG^{commit}")
+          HEAD_SHA=$(git rev-parse HEAD)
+          if [ "$TAG_SHA" != "$HEAD_SHA" ]; then
+            echo "::error::检出 SHA $HEAD_SHA 与 $TAG 指向的 $TAG_SHA 不一致"; exit 1
+          fi
+          PKG_V=$(node -p "require('./package.json').version")
+          if [ "$PKG_V" != "$VERSION" ]; then
+            echo "::error::tag $TAG 要求发布 $VERSION，但 package.json 是 $PKG_V"; exit 1
+          fi
+          echo "发布来源已绑定：$TAG / $HEAD_SHA / $PKG_V"
 
       - name: 断言 tag 与 package.json 版本一致（审计 2026-10-29 P1-2）
         env:
-          TAG: ${{ steps.ver.outputs.tag }}
-          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           # 发布的是 `npm publish` 读到的 package.json，不是 tag 推导出的 VERSION。
@@ -92,16 +121,24 @@ jobs:
           fi
           echo "tag $TAG 与 package.json 版本一致：$VERSION"
 
-      - name: 门禁（工具链回归 + 两档 1080 组报表）—— 不把红版本发出去
+      - name: 安装宿主契约检查依赖
+        run: npm install --no-audit --no-fund
+
+      - name: 严格宿主契约与插件回归门
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_SHA: ${{ github.sha }}
         run: |
-          # 包内容守卫、版本一致性、包内链接自包含都在 `npm run check` 里（tools/check-all.mjs 单一清单）
+          set -euo pipefail
+          echo "发布 tag=$RELEASE_TAG sha=$(git rev-parse HEAD)"
+          npm run contract
           npm run check
           npm run report
 
       - name: 发布到 npm（Trusted Publishing：OIDC，无 token、无 OTP）
         env:
-          TAG: ${{ steps.ver.outputs.tag }}
-          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           PKG=$(node -p "require('./package.json').name")
@@ -117,7 +154,7 @@ jobs:
 
       - name: 等 registry 放出该版本（暂存审核期间会一直 404，最多 10 分钟）
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           PKG=$(node -p "require('./package.json').name")
@@ -135,8 +172,8 @@ jobs:
 
       - name: 校验 tarball 完整性并建 GitHub Release
         env:
-          TAG: ${{ steps.ver.outputs.tag }}
-          VERSION: ${{ steps.ver.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
@@ -159,21 +196,24 @@ jobs:
           node tools/release-notes.mjs "$VERSION" > release-notes.md
           test -s release-notes.md || echo "## $VERSION" > release-notes.md
 
-          # GitHub 的 latest 按**创建时间**判（不是语义版本）—— 显式 --latest 兜底，
-          # 免得补建历史 Release 时把 latest 抢到旧版本上。
+          # 仅 registry 当前 stable latest 可以晋升；历史补包不改变已有 Release 的标记。
+          registry_latest=$(npm view "$PKG" dist-tags.latest --registry=https://registry.npmjs.org)
+          test -n "$registry_latest"
+          latest=false
+          if [[ "$VERSION" == "$registry_latest" && "$VERSION" != *-* ]]; then latest=true; fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG 已存在，改为补资产"
             gh release upload "$TAG" "$TARBALL" --clobber
-            gh release edit "$TAG" --notes-file release-notes.md --latest
+            args=(--notes-file release-notes.md)
+            if [[ "$latest" == true ]]; then args+=(--latest); fi
+            gh release edit "$TAG" "${args[@]}"
           else
-            gh release create "$TAG" "$TARBALL" --notes-file release-notes.md \
-              --title "$TAG — dsh-theme-palette" --latest
+            gh release create "$TAG" "$TARBALL" --verify-tag --notes-file release-notes.md --title "$TAG — dsh-theme-palette" --latest="$latest"
           fi
           echo "Release 已就绪：$TAG"
 
       - name: 收尾核对
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
+          VERSION: ${{ steps.release.outputs.version }}
         run: |
           set -euo pipefail
           PKG=$(node -p "require('./package.json').name")

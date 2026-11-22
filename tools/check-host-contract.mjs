@@ -131,18 +131,20 @@ else {
 }
 if (!texts.layout) { console.log('  ✗ 找不到 ui-layout/lib/client.js'); failed++ }
 else {
-  const layoutText = texts.layout
-  // 1.9.8 的自愈判据（标记 token --dshtp-layer）依赖宿主 presenter 的两个行为：
-  //   a) 快照里的每个 token 都写到 body —— 标记 token 才会出现在 body 上；
-  //   b) 重写前先摘掉上一批 token —— 覆盖层被撤销时标记才会随之消失。
-  check(
-    /for \(const \[name, value\] of Object\.entries\(snapshot\.active\.tokens\)\)[\s\S]{0,160}setProperty\(name, value\)/.test(layoutText),
-    'presenter 把快照里的每个 token 都写到 body',
-  )
-  check(
-    /appliedTokens[\s\S]{0,160}removeProperty\(name\)/.test(layoutText),
-    'presenter 重写前先摘掉上一批 token',
-  )
+  // Structural evidence only: match the token loop, not an unrelated font write.
+  const compact = texts.layout.replace(/\s+/g, '')
+  const writeLoop = /for\(const\[name,value\]ofObject\.entries\(snapshot\.active\.tokens\)\)\{body\.style\.setProperty\(name,value\);?this\.appliedTokens\.push\(name\)/
+  const clearLoop = /for\(constnameofthis\.appliedTokens\)\{?body\.style\.removeProperty\(name\);?\}?this\.appliedTokens=\[\];?/
+  const writeAt = compact.search(writeLoop)
+  const clearAt = compact.search(clearLoop)
+  check(writeAt >= 0, 'presenter 源码：快照 token 写入 body 并登记')
+  check(clearAt >= 0 && writeAt > clearAt, 'presenter 源码：先清理旧 token，再写入快照')
+  if (argv.includes('--test-presenter-controls') && writeAt >= 0 && clearAt >= 0) {
+    const brokenWrite = compact.replace(writeLoop, '')
+    check(!writeLoop.test(brokenWrite), '负对照：移除写入循环后检测失败')
+    const brokenClear = compact.slice(0, writeAt).replace(clearLoop, '')
+    check(!clearLoop.test(brokenClear), '负对照：移除重写前的清除循环后检测失败')
+  }
   // 右栏底色 1.9.10 起不再接管（宿主面板是整高透明覆盖层，染色要么看不见、要么盖住主栏），
   // 所以这里也不再用 data-sidebar-right-panel 做契约 —— 依赖消失，断言一并撤除。
 }
@@ -193,6 +195,7 @@ if (texts.theme) {
   } catch (err) {
     console.log('  ! 读不到 client.js 的 SURFACE_ALIAS_STEPS，跳过别名映射核对：' + (err && err.message))
   }
+  if (STRICT) check(Boolean(expected && Object.keys(expected).length), '别名期望表非空')
   if (expected) {
     let drift = 0
     let sample = ''
@@ -223,6 +226,10 @@ if (texts.theme) {
  */
 function auditColourCoverage(texts, api) {
   if (!texts.theme || !texts.css || !api) return
+  if (argv.includes('--json-tree-css')) {
+    const rules = texts.css.match(/[^{}]+\{[^{}]*var\(\s*--(?:dsw-alias-)?json-tree-[^{}]*\}/g) || []
+    for (const rule of rules) console.log('JSON_TREE_CSS ' + rule.trim())
+  }
   const declared = new Set()
   for (const scheme of api.SCHEMES) {
     const tokens = api.buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
@@ -249,6 +256,14 @@ function auditColourCoverage(texts, api) {
   }
   const light = parse(grab('body'))
   const dark = parse(grab('body[data-ds-dark-theme]'))
+  if (argv.includes('--json-tree-css')) {
+    const pairs = api.buildTokens(api.SCHEMES.find(s => s.id === 'warm'), 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+    for (const [mode, map] of [['light', light], ['dark', dark]]) {
+      const vars = Object.fromEntries([...map].filter(([k]) => k.startsWith('--dsw-alias-json-tree-')))
+      vars['--dsw-alias-bg-layer-1'] = pairs['--dsw-alias-bg-layer-1'][mode]
+      console.log('TREE_INPUT ' + JSON.stringify({mode, vars}))
+    }
+  }
   // 宿主只在使用处给值的 token（焦点环由 [data-input-modality] 规则逐元素下发，兜底走
   // --dsw-alias-state-business-primary，已覆盖）
   const ALLOW_UNDEFINED = new Set(['--dsw-focus-ring-color'])
@@ -266,7 +281,7 @@ function auditColourCoverage(texts, api) {
 
   const classify = (name, mode, seen = new Set()) => {
     if (declared.has(name)) return 'covered'
-    if (seen.has(name)) return 'covered'
+    if (seen.has(name)) return 'cycle'
     seen.add(name)
     const map = mode === 'dark' ? dark : light
     const value = map.get(name)
@@ -275,29 +290,35 @@ function auditColourCoverage(texts, api) {
     if (refs.length === 0) return /#|rgb|hsl|color-mix/.test(value) ? 'literal' : 'undefined'
     const kinds = refs.map((ref) => classify(ref, mode, new Set(seen)))
     if (kinds.every((k) => k === 'covered')) return 'indirect'
+    if (kinds.includes('cycle')) return 'cycle'
     if (kinds.includes('literal')) return 'literal'
     if (kinds.includes('undefined')) return 'undefined'
     return 'indirect'
   }
 
+  if (STRICT) check(used.length > 0 && declared.size > 0, '消费集与声明集非空')
+  const counts = { covered: 0, indirect: 0, exception: 0 }
   const leaks = []
   for (const name of used) {
     const modes = [classify(name, 'light'), classify(name, 'dark')]
     for (const [i, kind] of modes.entries()) {
       const mode = i === 0 ? 'light' : 'dark'
-      if (kind === 'covered' || kind === 'indirect') continue
-      if (kind === 'literal' && ALLOW_LITERAL.has(name)) continue
-      if (kind === 'undefined' && ALLOW_UNDEFINED.has(name)) continue
+      if (kind === 'covered' || kind === 'indirect') { counts[kind]++; continue }
+      if ((kind === 'literal' && ALLOW_LITERAL.has(name)) || (kind === 'undefined' && ALLOW_UNDEFINED.has(name))) {
+        counts.exception++
+        continue
+      }
       leaks.push(`${name}（${mode}: ${kind}）`)
     }
   }
+  console.log('  token×模式: ' + JSON.stringify({ total: used.length * 2, ...counts, unresolved: leaks.length }))
   check(leaks.length === 0,
-    `构建 CSS 消费的 ${used.length} 个颜色 token 全部能落到插件声明上`
-    + (leaks.length ? `：漏 ${leaks.length} 处 → ${[...new Set(leaks)].slice(0, 8).join('、')}` : ''))
+    `构建 CSS 消费的 ${used.length} 个颜色 token：检查未批准的例外`
+    + (leaks.length ? `：漏 ${leaks.length} 处 → ${[...new Set(leaks)].join('、')}` : ''))
 }
 
 if (typeof globalThis.__api === 'object' && globalThis.__api) auditColourCoverage(texts, globalThis.__api)
-else console.log('  ! 读不到 client.js 的 dev 钩子，跳过颜色覆盖守卫')
+else check(!STRICT, '无法取得 dev 钩子，颜色覆盖未验证')
 
 console.log(failed === 0 ? '\n契约检查通过' : `\n${failed} 项契约失效`)
 process.exit(failed === 0 ? 0 : 1)
