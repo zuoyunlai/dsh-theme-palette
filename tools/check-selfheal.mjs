@@ -285,6 +285,20 @@ try {
     check(false, '未捕获 settingsInject.undoLastChange（无法验证试色撤销）')
   }
 
+  // 9. 诊断分层（2026-11-22 审计建议 3）：host 段必须真的从 CSSOM 读到值，取不到才写 ok:false。
+  if (settingsInject && typeof settingsInject.getDiagnostics === 'function') {
+    const d = settingsInject.getDiagnostics()
+    check(!!(d.layers && d.layers.engine && d.layers.host && Array.isArray(d.layers.unmeasured)),
+      '诊断含 engine / host / unmeasured 三段')
+    check(d.layers.host.ok === true, '宿主层 ok=true（假 DOM 提供 getComputedStyle）')
+    check(typeof d.layers.host.tokens.link === 'string' && d.layers.host.tokens.link.length > 0,
+      '宿主层读到 link 的计算值（实得 ' + String(d.layers.host.tokens.link) + '）')
+    check(!!d.report && !!d.coverage && !!d.settings, '旧字段仍在顶层（向后兼容）')
+    check(d.layers.unmeasured.length >= 2, '未测量项显式列出（实得 ' + d.layers.unmeasured.length + ' 条）')
+  } else {
+    check(false, '未捕获 settingsInject.getDiagnostics（无法验证诊断分层）')
+  }
+
   // 7. 停用后手动重启（resetHeal，2026-10-28 P0-B）→ 能重放；随后卸载不再重放
   //    旧版这一场景排在停用之后、healDisabled 已恒真，断言形同虚设 —— 现在先证明
   //    resetHeal 真的把自动恢复救活了（撤销+到期+触发 → 必须重放），再验卸载。
