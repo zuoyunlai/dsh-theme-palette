@@ -15,7 +15,8 @@
   （浅色 `#881391` / `#c41a16` / `#1c00cf` …），工具输出的语法高亮一直不跟配色。
   现在 `buildTokens` 在染色配色下声明 `--dsw-alias-json-tree-{property,string,number,keyword,punctuation,icon,hover}`：
   六个前景先做温度调和（沿用语义色的 8° 封顶 + 0.88 色度），再在**树自己的承载面**
-  （`--dsw-alias-bg-layer-1`：浅 00 / 深 875）上求解到 ≥ 5.0；悬停是 ≤8% 的强调色叠加。
+  （`--dsw-alias-bg-layer-1`：浅 00 / 深 875）上求解到 ≥ 5.0，高对比档 ≥ 7（与三级文字 HC 同档）；
+  悬停是 ≤8% 的强调色叠加。
   黑白配色与宿主错误态（`.errorPayload` 在局部改写）不动。
 - **断言**：`node tools/check-host-contract.mjs --strict` 由「未覆盖 14 / exit 1」
   变为「162 项：覆盖 140 / 间接 20 / 例外 2 / 未覆盖 0 / exit 0」。新增

@@ -39,7 +39,9 @@ const check = (ok, msg) => { if (ok) console.log('  ✓ ' + msg); else { failed+
 const ROLES = ['property', 'string', 'number', 'keyword', 'punctuation', 'icon']
 const HOVER = '--dsw-alias-json-tree-hover'
 const tokenOf = (role) => '--dsw-alias-json-tree-' + role
-const build = (scheme) => api.buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+const build = (scheme, hc = false) => api.buildTokens(scheme, 'deep', 'tinted', 'tinted', 'accent', 'on', hc)
+const floorOf = (hc) => (hc ? api.MIN_JSON_TREE_HC : api.MIN_JSON_TREE)
+check(api.MIN_JSON_TREE === 5 && api.MIN_JSON_TREE_HC === 7, '下限常量未漂移（标准 5 / 高对比 7）')
 const HEX = /^#[0-9a-f]{6}$/i
 const HEX8 = /^#[0-9a-f]{8}$/i
 
@@ -48,7 +50,8 @@ check(tinted.length >= 4, '染色配色样本 ≥ 4 套（实得 ' + tinted.leng
 
 let worst = { ratio: Infinity, where: '' }
 for (const scheme of tinted) {
-  const t = build(scheme)
+ for (const hc of [false, true]) {
+  const t = build(scheme, hc)
   const bg = {
     light: t['--dsw-static-neutral-bluish-00'] && t['--dsw-static-neutral-bluish-00'].light,
     dark: t['--dsw-static-neutral-bluish-875'] && t['--dsw-static-neutral-bluish-875'].dark,
@@ -59,15 +62,17 @@ for (const scheme of tinted) {
       const v = t[tokenOf(role)] && t[tokenOf(role)][mode]
       check(HEX.test(v || ''), scheme.id + ' / ' + mode + '：' + role + ' 已声明（' + v + '）')
       const ratio = HEX.test(v || '') && HEX.test(bg[mode] || '') ? api.contrast(v, bg[mode]) : 0
-      check(ratio >= api.MIN_JSON_TREE - 1e-9,
-        scheme.id + ' / ' + mode + '：' + role + ' 对树承载面 ' + Number(ratio.toFixed(2)) + ' ≥ ' + api.MIN_JSON_TREE)
-      if (ratio < worst.ratio) worst = { ratio, where: scheme.id + '/' + mode + '/' + role }
+      const floor = floorOf(hc)
+      check(ratio >= floor - 1e-9,
+        scheme.id + (hc ? '（高对比）' : '') + ' / ' + mode + '：' + role + ' 对树承载面 ' + Number(ratio.toFixed(2)) + ' ≥ ' + floor)
+      if (ratio < worst.ratio) worst = { ratio, where: scheme.id + (hc ? '/hc' : '') + '/' + mode + '/' + role }
     }
   }
   const hover = t[HOVER]
   check(HEX8.test(hover && hover.light || '') && HEX8.test(hover && hover.dark || ''), scheme.id + '：悬停色是 8 位 hex')
   const alphaOf = (v) => parseInt(String(v).slice(7, 9), 16)
   check(alphaOf(hover.light) <= 0x26 && alphaOf(hover.dark) <= 0x26, scheme.id + '：悬停透明度 ≤ 0.15')
+ }
 }
 
 // 角色区分度：接管颜色不等于允许把语法高亮抹成一片

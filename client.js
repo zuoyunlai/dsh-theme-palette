@@ -356,6 +356,8 @@ window.__ModuleLoader__.load({
     /* JSON 树（工具输出里的语法高亮）是 12px 等宽小字，按正常文本 AA 再留一档余量。
        它有自己的承载面（--dsw-alias-bg-layer-1：浅 00 / 深 875），不套用正文的 12 / 10。 */
     const MIN_JSON_TREE = 5
+    /* 高对比档把树前景抬到 7 —— 与三级文字 HC 下限同一档；黑白配色仍不重建。 */
+    const MIN_JSON_TREE_HC = 7
 
     /* ---------- 深色侧单独一套文字下限（审计 3.1）----------
      * WCAG 2.x 的比值是「相对亮度之比」，它在暗底上系统性高估可读性：
@@ -2100,7 +2102,7 @@ window.__ModuleLoader__.load({
           for (const mode of ['light', 'dark']) {
             const bg = treeBg[mode]
             const tuned = harmonizeSemantic(base[mode], params.hue, 0.88)
-            pair[mode] = bg ? solveForeground({ base: tuned }, 'base', bg, MIN_JSON_TREE, 0.08) : tuned
+            pair[mode] = bg ? solveForeground({ base: tuned }, 'base', bg, hc ? MIN_JSON_TREE_HC : MIN_JSON_TREE, 0.08) : tuned
           }
           pairs['--dsw-alias-json-tree-' + role] = pair
         }
@@ -3613,7 +3615,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
     // 必须能在测试里读到"实现里的那个数"。此前测试拿 floors() 的返回值当期望值 ——
     // 常量一改、期望值跟着改，那道门就是空转的（变异实测：CONTRAST_FLOOR 4.5→1.0 全绿）。
     if (DEV_OPT_IN && typeof window !== 'undefined' && typeof window.__DSH_THEME_PALETTE_DEV__ === 'function') {
-      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_JSON_TREE, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, SURFACE_ALIAS_STEPS, hexToRgb, LAYER_MARK, hostPatchCss: HOST_PATCH_CSS, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
+      window.__DSH_THEME_PALETTE_DEV__({ buildTokens, SCHEMES, SIDEBAR_MODES, TEXT_MODES, SCROLL_MODES, CONTROL_MODES, MD_MODES, HC_MODES, contrast, toOklch, fromOklch, flatten, luminance, withAlpha, mixHex, harmonize, deltaE, simulateCvd, rampsFor, floors, floorsDark, apcaContrast, raiseToLc, solveForeground, pickLocale, hostLocale, encodeConfig, decodeConfig, customScheme, deriveCustomFromAccent, readCustom, writeCustom, CONTRAST_SURFACES, CONTRAST_ROLES, buildContrastReport, devContrastReport, CONTRAST_TARGETS, CONTRAST_EXEMPT, CONTRAST_FLOOR, CONTRAST_SOLVER_MARGIN, MIN_MAIN, MIN_SECONDARY, MIN_TERTIARY, MIN_LINK, MIN_LINK_DARK, MIN_JSON_TREE, MIN_JSON_TREE_HC, MIN_SECONDARY_DARK, MIN_TERTIARY_DARK, FLOORS_HC, FLOORS_HC_DARK, RAMP_MIN_GAP, RAMP_ORDER, SURFACE_ALIAS_STEPS, hexToRgb, LAYER_MARK, hostPatchCss: HOST_PATCH_CSS, settingsCss: SETTINGS_CSS, markdownCss: MARKDOWN_CSS, cardColors })
     }
 
     return {
