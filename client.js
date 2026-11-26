@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
     const React = require('react')
     const h = React.createElement
 
-    const PLUGIN_VERSION = '1.13.7'
+    const PLUGIN_VERSION = '1.13.8'
     const STORE_KEY = 'dsh-theme-palette.v1'
     const OVERRIDE_SOURCE = 'dsh-theme-palette'
 
@@ -1810,6 +1810,25 @@ window.__ModuleLoader__.load({
       }
       const sidebar = sidebarTokens(ramps, sidebarMode, params.tinted, params)
       for (const [name, pair] of Object.entries(sidebar)) pairs[name] = pair
+      // 分段控件选中段（2026-11-26 用户回执：浅色下选中段与侧栏同色，看不出选中）。
+      // 宿主把选中态写死成 background:var(--dsw-alias-bg-layer-1)，而浅色 layer-1 就是画布
+      // 最亮那一档，于是「选中」与「未选中」只差一个弱阴影。这里给一档明确的高低差：
+      // 浅色比侧栏/画布深（00 → 100），深色比侧栏亮（875 → 800），黑白配色不声明、保持宿主原貌。
+      if (params.tinted) {
+        // 基准取「侧栏底色」而不是画布：用户看到的就是「选中段 vs 侧栏」这一对。
+        // 同色相、同色度只挪明度 —— 浅色再压深 0.032、深色再提亮 0.024，任何侧栏档位
+        // （更浅/同色/更深）都能拉开高低差，同时白/深字对比仍 ≥ 9。
+        const segFrom = (hex, delta) => {
+          if (!hex) return null
+          const [L, C, h] = toOklch(hex)
+          return fromOklch(clamp(L + delta, 0.02, 0.99), C, h)
+        }
+        const sideFill = sidebar['--dsw-specific-sidebar-fill']
+        pairs['--dsh-tp-segment-active-bg'] = {
+          light: segFrom(sideFill && sideFill.light, -0.032) || ramps.bluish['100'],
+          dark: segFrom(sideFill && sideFill.dark, 0.024) || ramps.bluish['800'],
+        }
+      }
       // 右栏底色：**给具体色值，不给 var() 引用**（1.9.10）。面板里要把 --dsw-alias-bg-base
       // 重映射成这个 token，若此处再写 var(--dsw-alias-bg-base) 就是自定义属性自引用环，
       // 值在计算时退化为 unset，面板内所有 bg-base 表面一起失效 —— 正是「设了像没设」的形态。
@@ -2209,6 +2228,10 @@ return pairs
     const HOST_PATCH_CSS = `
 /* 宿主悬停卡：--dsw-hovercard-bg 是宿主写死的 #2C2C2E；这里接回配色的暗面（见 buildTokens 的 --dsh-tp-hovercard-bg） */
 *{--dsw-hovercard-bg:var(--dsh-tp-hovercard-bg,#2c2c2e)!important}
+/* 分段控件选中段：类名是 CSS Modules 的 _<hash>_segment，用「含 _segment」+ aria-checked 做钩子
+   （与 _markdown_ 同一套做法，比整串哈希耐版本）。宿主原值是 var(--dsw-alias-bg-layer-1)，
+   浅色下等于画布 → 选中段看不出来；这里换成配色给的一档高低差，黑白配色未声明时回落原值。 */
+[class*="_segment"][aria-checked="true"]{background:var(--dsh-tp-segment-active-bg,var(--dsw-alias-bg-layer-1))!important}
 `
     /* ================= 设置页样式（head 里第四条 CSS） ================= */
     const SETTINGS_STYLE_ID = 'dsh-theme-palette/settings.css'
@@ -2700,7 +2723,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用当前强调色的色相与色度推导底色与文字（明暗跟随当前模式）',
         deriveNote: '「由主色派生」以强调色为唯一输入，自动算出底色与文字 —— 会覆盖你手动设置的底色与文字；派生之后仍可逐项手改。',
-        notice: '1.13.7：JSON 树的语法色并入配色重建（温度调和封顶 8°、按树自身承载面求解 ≥5:1），黑白配色与错误态不动；契约门新增颜色覆盖与呈现器结构断言，发布链补上 tag 绑定与补包 Latest 保护。',
+        notice: '1.13.8：分段控件（任务 / 定时这类）的选中段，浅色下比侧栏深一档、深色下更亮一档，不再和侧栏同色；黑白配色保持宿主原貌。',
         dismiss: '知道了',
         explainClamp: '强调色已归一化：{from} → {to}（保证按钮与勾选可读）',
         explainLink: '链接已为可读性压暗：{ratio}:1（目标 {target}:1）',
@@ -2777,7 +2800,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: '由主色派生',
         deriveHint: '用目前強調色的色相與彩度推導底色與文字（明暗跟隨目前模式）',
         deriveNote: '「由主色派生」以強調色為唯一輸入，自動算出底色與文字 —— 會覆蓋你手動設置的底色與文字；派生之後仍可逐項手改。',
-        notice: '1.13.7：JSON 樹的語法色併入配色重建（溫度調和封頂 8°、依樹自身承載面求解 ≥5:1），黑白配色與錯誤態不動；契約門新增顏色覆蓋與呈現器結構斷言，發佈鏈補上 tag 綁定與補包 Latest 保護。',
+        notice: '1.13.8：分段控制項（任務 / 定時這類）的選取段，淺色下比側欄深一檔、深色下更亮一檔，不再和側欄同色；黑白配色保持宿主原貌。',
         dismiss: '知道了',
         explainClamp: '強調色已正規化：{from} → {to}（確保按鈕與勾選可讀）',
         explainLink: '連結已為可讀性壓暗：{ratio}:1（目標 {target}:1）',
@@ -2854,7 +2877,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'Derive from accent',
         deriveHint: 'Derive background and text from the current accent hue and chroma (follows the current light/dark mode)',
         deriveNote: '"Derive from accent" takes the accent as its only input and computes background and text from it — this overwrites the background and text you set by hand; you can still edit each of them afterwards.',
-        notice: '1.13.7: JSON-tree syntax colours join the rebuild (temperature harmonisation capped at 8°, solved to ≥5:1 on the tree\'s own surface); mono and the host error state are untouched. The contract gate now checks colour coverage and presenter structure, and the release path binds the tag and protects Latest.',
+        notice: '1.13.8: the selected segment of a segmented control (Task / Schedule and similar) now sits one step deeper than the sidebar in light mode and one step brighter in dark mode, so it no longer matches the sidebar; mono keeps the host default.',
         dismiss: 'Got it',
         explainClamp: 'Accent normalised: {from} → {to} (keeps buttons and checks readable)',
         explainLink: 'Link darkened for readability: {ratio}:1 (target {target}:1)',
@@ -2931,7 +2954,7 @@ body[data-ds-dark-theme] .dsh-tp{color-scheme:dark}
         derive: 'メイン色から生成',
         deriveHint: '現在のアクセント色の色相と彩度から背景色と文字色を生成します（明暗は現在のモードに従います）',
         deriveNote: '「メイン色から生成」はアクセント色だけを入力として背景色と文字色を自動計算します。手動で設定した背景色と文字色は上書きされます（生成後に個別に変更できます）。',
-        notice: '1.13.7：JSON ツリーの構文色を配色再構築に統合（温度調和は 8° まで、ツリー自身の面で ≥5:1 を解く）。モノクロとホストのエラー表示は変更しません。契約ゲートに色カバレッジとプレゼンター構造の検証を追加し、リリース経路に tag 固定と Latest 保護を入れました。',
+        notice: '1.13.8：セグメントコントロール（タスク / 定期など）の選択中セグメントは、ライトではサイドバーより一段深く、ダークでは一段明るくなり、サイドバーと同色にならなくなりました。モノクロはホスト既定のままです。',
         dismiss: '了解',
         explainClamp: 'アクセント色を正規化しました：{from} → {to}（ボタンとチェックの可読性のため）',
         explainLink: 'リンクを可読性のため暗くしました：{ratio}:1（目標 {target}:1）',

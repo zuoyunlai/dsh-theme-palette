@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-11-22T09:41:23.295Z",
-  "pluginVersion": "1.13.7",
-  "chrome": "Chrome/157.0.8103.80",
+  "generatedAt": "2026-11-26T09:10:48.424Z",
+  "pluginVersion": "1.13.8",
+  "chrome": "Chrome/158.0.8127.89",
   "width": 620,
   "scale": 1,
   "images": [
@@ -14,13 +14,13 @@
         "--adv",
         "0"
       ],
-      "htmlSha256": "dee00e06623c7696e6c607dfafd943d39d661fa5ff4a7faa9262bba57a7a8669",
+      "htmlSha256": "e9c4f784d4f527ffc108ec9863b809999d14c181388894dfccef88d1f7d0b38b",
       "cssWidth": 620,
       "cssHeight": 888,
       "width": 620,
       "height": 888,
-      "bytes": 47477,
-      "sha256": "7c4c29cd59e3dd8d74369ccada99ce845bae67e71ab4f63ecd45370670ebc20d"
+      "bytes": 47521,
+      "sha256": "458230e27b683f795873bb9d70c700d4313dd8cc42dbbb43f869e6fb7929d5ed"
     },
     {
       "file": "assets/screenshot-settings-dark.png",
@@ -31,13 +31,13 @@
         "--adv",
         "0"
       ],
-      "htmlSha256": "a0a7f5110fbfbe3cac885c86307a0fcb0910b2261e5a466da7246e72267298a6",
+      "htmlSha256": "c54bfd0bfcadbeddc318f031d60eea2075a8c5c5303340088139e89458349ff7",
       "cssWidth": 620,
       "cssHeight": 888,
       "width": 620,
       "height": 888,
-      "bytes": 47783,
-      "sha256": "2e610df1da88744642f918f34da826b220bd1e54d91bb69800c40b27bba2c915"
+      "bytes": 47840,
+      "sha256": "32571e4abbe35f0c5b28dafd5b5991400e161dc52b6ed234e6531e8f88a906f9"
     },
     {
       "file": "assets/screenshot-settings-custom.png",
@@ -50,13 +50,13 @@
         "--out",
         "customadv"
       ],
-      "htmlSha256": "053816786315b015fb7412f69c1a8e5933317452009e2897e6ffc8a45c468a69",
+      "htmlSha256": "acc70cd51ea6b81d09cfe50bf6e2e7b72467dbad89bd4127075dad3d078caae7",
       "cssWidth": 620,
       "cssHeight": 1771,
       "width": 620,
       "height": 1771,
-      "bytes": 118709,
-      "sha256": "1d982ae982c808d53809464c0b7c8aff3247b6fbd1bedc1bd3c9167e35940be2"
+      "bytes": 118749,
+      "sha256": "cd0b41a9b90e1dcb53501d404841b6f11c292e9ca3d65d345eb4854a190bda30"
     },
     {
       "file": "assets/screenshot-settings-hc.png",
@@ -69,13 +69,13 @@
         "--out",
         "hcadv"
       ],
-      "htmlSha256": "958650f641ba04f67808bc7c4ede368929ff50f1a4092ce7beae7f3531b47062",
+      "htmlSha256": "2cb6219026becd041c63a73b00d8affd125f57e253957963446bae22db6d8bee",
       "cssWidth": 620,
       "cssHeight": 1463,
       "width": 620,
       "height": 1463,
-      "bytes": 94760,
-      "sha256": "79d8f4804e08a12808bb55549c0e98e0e65bbd168ab7b26b84f575df46e64d20"
+      "bytes": 94814,
+      "sha256": "46373bec3d014c3dddd65bb289a3be1d64016707738957f32aec56ad764014ba"
     }
   ]
 }

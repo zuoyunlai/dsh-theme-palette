@@ -987,5 +987,32 @@ console.log('\n30) 自定义配色的「底色」当真的底色用（2026-10-30
   check(Math.abs(canvasL(light, 'light') - toOklch('#f5efe6')[0]) <= 0.03, '浅色底色成为浅色画布（默认自定义色的行为不变）')
 }
 
+console.log('\n31) 分段控件选中段：浅色比侧栏深、深色比侧栏亮（2026-11-26 用户回执）')
+{
+  const api = globalThis.__api
+  const L = (hex) => api.toOklch(hex)[0]
+  const token = '--dsh-tp-segment-active-bg'
+  let bad = 0
+  for (const scheme of api.SCHEMES.filter((s) => s.tinted)) {
+    for (const sidebarMode of ['light', 'match', 'deep']) {
+      const t = api.buildTokens(scheme, sidebarMode, 'tinted', 'tinted', 'accent', 'on', false)
+      const seg = t[token]
+      const side = t['--dsw-specific-sidebar-fill']
+      const label = t['--dsw-alias-label-primary']
+      if (!seg || !side || !label) { bad++; console.log('  ✗ ' + scheme.id + '/' + sidebarMode + ' 缺 token'); continue }
+      for (const mode of ['light', 'dark']) {
+        const dL = L(seg[mode]) - L(side[mode])
+        const want = mode === 'light' ? dL <= -0.02 : dL >= 0.02
+        if (!want) { bad++; console.log('  ✗ ' + scheme.id + '/' + sidebarMode + '/' + mode + ' 与侧栏差 ' + dL.toFixed(3)) }
+        const ratio = api.contrast(label[mode], seg[mode])
+        if (ratio < 7) { bad++; console.log('  ✗ ' + scheme.id + '/' + sidebarMode + '/' + mode + ' 文字对比 ' + ratio.toFixed(2) + ' < 7') }
+      }
+    }
+  }
+  const mono = api.buildTokens(api.SCHEMES.find((s) => s.id === 'mono'), 'deep', 'tinted', 'tinted', 'accent', 'on', false)
+  if (mono[token] !== undefined) { bad++; console.log('  ✗ 黑白配色不应声明 ' + token) }
+  if (bad === 0) console.log('  （4 套染色配色 × 三档侧栏 × 明暗：与侧栏有明确高低差，文字 ≥ 7:1）')
+  failed += bad
+}
 console.log(failed === 0 ? '\n全部通过' : `\n${failed} 项失败`)
 process.exit(failed === 0 ? 0 : 1)
