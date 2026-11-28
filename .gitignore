@@ -16,3 +16,5 @@ tools/baseline/
 
 # 主题包导出产物（可重建）
 dist/
+# dsh project-memory 缓存（不入库）
+.dsh-project-memory/
